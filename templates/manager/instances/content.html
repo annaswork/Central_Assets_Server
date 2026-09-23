@@ -1,0 +1,681 @@
+{% extends "manager/base.html" %}
+
+{% block title %}{{ instance.name }} Working Set — Manager Portal{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+  <a href="/manager/instances" style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
+    ← Back to App Instances
+  </a>
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+    <div>
+      <div style="display:flex; align-items:center; gap:0.75rem;">
+        <h1 style="margin:0;">{{ instance.name }}</h1>
+        {% if is_owner %}
+          <span class="badge badge-primary">Owner</span>
+        {% else %}
+          <span class="badge badge-secondary">Granted Access</span>
+        {% endif %}
+      </div>
+      <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem; margin:0.25rem 0 0 0;">
+        Package: <code>{{ instance.package_name or '—' }}</code> | Instance ID: <code>{{ instance.id }}</code>
+      </p>
+    </div>
+
+    <div>
+      <button type="button" class="btn btn-primary" onclick="openImportModal()" style="display:inline-flex; align-items:center; gap:0.5rem;">
+        <span>📥</span>
+        <span>Import from Central Library</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Tabs: Categories & Subcategories vs Assets -->
+<div style="display:flex; gap:0.5rem; margin-bottom:1.5rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.75rem;">
+  <button type="button" id="tabBtnFolders" class="btn {% if active_section != 'assets' %}btn-primary{% else %}btn-outlined{% endif %}" onclick="switchTab('folders')">
+    📁 Categories & Subcategories ({{ categories|length }})
+  </button>
+  <button type="button" id="tabBtnAssets" class="btn {% if active_section == 'assets' %}btn-primary{% else %}btn-outlined{% endif %}" onclick="switchTab('assets')">
+    🖼️ Referenced Assets ({{ assets|length }})
+  </button>
+</div>
+
+<!-- SECTION 1: FOLDERS & HIERARCHY -->
+<div id="sectionFolders" style="display:{% if active_section == 'assets' %}none{% else %}block{% endif %};">
+  {% if categories and categories|length > 0 %}
+    <div id="managerCategoriesContainer" style="display:flex; flex-direction:column; gap:1.25rem;">
+      {% for cat in categories %}
+        <div class="card manager-cat-card" data-cat-id="{{ cat.id }}" draggable="true" style="padding:1.25rem; border:1px solid var(--md-sys-color-outline-variant); cursor:default;">
+          <!-- Category Folder Header -->
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; padding-bottom:0.75rem; border-bottom:1px solid var(--md-sys-color-outline-variant);">
+            <div style="display:flex; align-items:center; gap:0.75rem;">
+              <span class="cat-drag-handle" style="cursor:grab; font-size:1.25rem; color:var(--md-sys-color-on-surface-variant); padding:2px; user-select:none;" title="Drag to reorder folder">⠿</span>
+              <div style="width:44px; height:44px; border-radius:8px; overflow:hidden; background:var(--md-sys-color-surface-container); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                {% if cat.thumbnail_url %}
+                  <img src="{{ cat.thumbnail_url }}" alt="{{ cat.name }}" style="width:100%; height:100%; object-fit:cover;">
+                {% else %}
+                  <span style="font-size:1.4rem;">📁</span>
+                {% endif %}
+              </div>
+              <div>
+                <h3 style="margin:0 0 0.25rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                  {{ cat.name }}
+                  <span class="badge badge-secondary cat-seq-badge" style="font-size:0.75rem;">#{{ loop.index }}</span>
+                  <span class="badge badge-secondary" style="font-size:0.75rem;">Category Folder</span>
+                </h3>
+                <div style="display:flex; gap:0.5rem; font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
+                  <span>📂 {{ cat.subcategories_count | default(0) }} Sub-folders</span>
+                  <span>•</span>
+                  <span>🖼️ {{ cat.assets_count | default(0) }} Assets</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <form method="POST" action="/manager/instances/{{ instance.id }}/remove-reference" onsubmit="return confirm('Remove category {{ cat.name }} and all its contents from this app?');" style="margin:0;">
+                <input type="hidden" name="content_type" value="category">
+                <input type="hidden" name="reference_id" value="{{ cat.id }}">
+                <button type="submit" class="btn btn-outlined btn-sm" style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);">
+                  Remove Category
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <!-- Nested Sub-folders in this Category -->
+          <div style="margin-top:0.85rem; padding-left:1.5rem; border-left:2px solid var(--md-sys-color-surface-container-high);">
+            <div style="font-size:0.8rem; font-weight:600; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.6rem; text-transform:uppercase; letter-spacing:0.5px;">
+              Sub-folders in {{ cat.name }}
+            </div>
+            {% set cat_source_id = cat.sourceId or cat.id %}
+            {% set matching_subs = [] %}
+            {% for sub in all_subcategories %}
+              {% if sub.categoryId == cat_source_id or sub.categoryId == cat.id %}
+                {% set _ = matching_subs.append(sub) %}
+              {% endif %}
+            {% endfor %}
+
+            {% if matching_subs|length > 0 %}
+              <div class="subcategories-grid" data-parent-cat-id="{{ cat.id }}" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:0.75rem;">
+                {% for sub in matching_subs %}
+                  <div class="card manager-sub-card" data-sub-id="{{ sub.id }}" draggable="true" style="padding:0.75rem 1rem; background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center; gap:0.5rem; cursor:grab;">
+                    <div style="display:flex; align-items:center; gap:0.65rem;">
+                      <span class="sub-drag-handle" style="cursor:grab; font-size:1.15rem; color:var(--md-sys-color-on-surface-variant); padding:0 2px; user-select:none;" title="Drag to reorder sub-folder">⠿</span>
+                      <div style="width:36px; height:36px; border-radius:6px; overflow:hidden; background:var(--md-sys-color-surface); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                        {% if sub.thumbnail_url %}
+                          <img src="{{ sub.thumbnail_url }}" alt="{{ sub.name }}" style="width:100%; height:100%; object-fit:cover;">
+                        {% else %}
+                          <span style="font-size:1.15rem;">📂</span>
+                        {% endif %}
+                      </div>
+                      <div>
+                        <div style="display:flex; align-items:center; gap:0.35rem;">
+                          <strong style="font-size:0.9rem;">{{ sub.name }}</strong>
+                          <span class="badge badge-secondary sub-seq-badge" style="font-size:0.7rem;">#{{ loop.index }}</span>
+                        </div>
+                        <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">
+                          🖼️ {{ sub.assets_count | default(0) }} Assets
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style="display:flex; align-items:center; gap:0.35rem;">
+                      <form method="POST" action="/manager/instances/{{ instance.id }}/remove-reference" onsubmit="return confirm('Remove sub-folder {{ sub.name }} from this instance?');" style="margin:0;">
+                        <input type="hidden" name="content_type" value="subcategory">
+                        <input type="hidden" name="reference_id" value="{{ sub.id }}">
+                        <button type="submit" class="btn btn-outlined btn-sm" style="font-size:0.75rem; padding:0.2rem 0.45rem; color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);">
+                          ✕
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); padding:0.35rem 0;">
+                No sub-folders in this category.
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="card" style="text-align:center; padding:3.5rem 1rem; color:var(--md-sys-color-on-surface-variant);">
+      <div style="font-size:2.5rem; margin-bottom:0.5rem;">📁</div>
+      <div style="font-size:1.1rem; font-weight:600;">No folders referenced in this app yet</div>
+      <div style="font-size:0.9rem; margin-top:0.25rem; margin-bottom:1rem;">
+        Import folders from the central library to populate this app instance.
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" onclick="openImportModal()">
+        📥 Import Central Folders
+      </button>
+    </div>
+  {% endif %}
+</div>
+
+<!-- SECTION 2: REFERENCED ASSETS -->
+<div id="sectionAssets" style="display:{% if active_section == 'assets' %}block{% else %}none{% endif %};">
+  {% if assets and assets|length > 0 %}
+    <div class="table-responsive card" style="padding:0; margin-bottom:2rem; border:1px solid var(--md-sys-color-outline-variant);">
+      <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+        <div>
+          <h3 style="margin:0; font-size:1.1rem;">Referenced Creative Assets ({{ assets|length }})</h3>
+          <span style="font-size:0.82rem; color:var(--md-sys-color-on-surface-variant);">
+            Configure sequence order, enabled state, and premium tier for this app instance.
+          </span>
+        </div>
+      </div>
+
+      <table class="data-table" id="managerAssetTable">
+        <thead>
+          <tr>
+            <th style="width:65px; text-align:center;">Seq</th>
+            <th style="width:60px;">Thumb</th>
+            <th>Asset Name</th>
+            <th>Category</th>
+            <th>Subcategory</th>
+            <th style="width:85px; text-align:center;">Enabled</th>
+            <th style="width:85px; text-align:center;">Premium</th>
+            <th style="text-align:right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="managerAssetTbody">
+          {% for asset in assets %}
+            <tr data-asset-id="{{ asset.id }}" class="manager-asset-row" draggable="true" style="cursor:default;">
+              <td style="text-align:center;">
+                <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
+                  <span class="asset-drag-handle" style="cursor:grab; font-size:1.15rem; color:var(--md-sys-color-on-surface-variant); user-select:none;" title="Drag to reorder asset">⠿</span>
+                  <input type="number" class="input asset-seq-input" min="1" max="{{ assets|length }}" value="{{ loop.index }}" style="width:58px; min-height:30px; padding:2px 4px; text-align:center; font-weight:600;" onchange="handleAssetSeqChange('{{ asset.id }}', parseInt(this.value))">
+                </div>
+              </td>
+              <td>
+                <div style="width:40px; height:40px; border-radius:6px; overflow:hidden; background:var(--md-sys-color-surface-container); display:flex; align-items:center; justify-content:center;">
+                  {% if asset.thumbnail_url or asset.thumbnailUrl %}
+                    <img src="{{ asset.thumbnail_url or asset.thumbnailUrl }}" alt="{{ asset.name }}" style="width:100%; height:100%; object-fit:cover;">
+                  {% else %}
+                    <span>🖼️</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td>
+                <strong style="font-size:0.9rem;">{{ asset.name }}</strong>
+              </td>
+              <td>
+                <span class="badge" style="background:var(--md-sys-color-surface-container-high); font-size:0.8rem;">
+                  {{ asset.category_name or asset.categoryName or '—' }}
+                </span>
+              </td>
+              <td>
+                <span class="badge" style="background:var(--md-sys-color-surface-container-high); font-size:0.8rem;">
+                  {{ asset.subcategory_name or asset.subCategoryName or '—' }}
+                </span>
+              </td>
+              <td style="text-align:center;">
+                <input type="checkbox" {% if asset.isEnabled is not defined or asset.isEnabled or (asset.is_enabled is not defined or asset.is_enabled) %}checked{% endif %} onchange="updateAssetOverride('{{ asset.id }}', 'is_enabled', this.checked)">
+              </td>
+              <td style="text-align:center;">
+                <input type="checkbox" {% if asset.isPremium or asset.is_premium %}checked{% endif %} onchange="updateAssetOverride('{{ asset.id }}', 'is_premium', this.checked)">
+              </td>
+              <td style="text-align:right;">
+                <form method="POST" action="/manager/instances/{{ instance.id }}/remove-reference" onsubmit="return confirm('Remove asset {{ asset.name }} from your instance?');" style="margin:0; display:inline;">
+                  <input type="hidden" name="content_type" value="asset">
+                  <input type="hidden" name="reference_id" value="{{ asset.id }}">
+                  <button type="submit" class="btn btn-outlined btn-sm" style="font-size:0.75rem; color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);">
+                    Remove
+                  </button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="card" style="text-align:center; padding:3.5rem 1rem; color:var(--md-sys-color-on-surface-variant);">
+      <div style="font-size:2.5rem; margin-bottom:0.5rem;">🖼️</div>
+      <div style="font-size:1.1rem; font-weight:600;">No assets imported into this instance</div>
+      <div style="font-size:0.9rem; margin-top:0.25rem; margin-bottom:1rem;">
+        Select central categories or subcategories to import their assets.
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" onclick="openImportModal()">
+        📥 Import Central Assets
+      </button>
+    </div>
+  {% endif %}
+</div>
+
+<!-- Central Library Import Modal (Scoped Selection) -->
+<div id="importModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; padding:1.5rem;">
+  <div class="card" style="width:100%; max-width:640px; max-height:85vh; display:flex; flex-direction:column; padding:0; overflow:hidden; box-shadow:var(--md-sys-elevation-4);">
+    <div style="padding:1.25rem 1.5rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <h3 style="margin:0; font-size:1.2rem;">Import from Central Library</h3>
+        <p style="margin:0.25rem 0 0 0; font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">
+          Select categories to link into <strong>{{ instance.name }}</strong>. Central records are not modified.
+        </p>
+      </div>
+      <button type="button" onclick="closeImportModal()" style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:var(--md-sys-color-on-surface-variant);">✕</button>
+    </div>
+
+    <div style="padding:1.25rem 1.5rem; overflow-y:auto; flex:1;">
+      <h4 style="margin:0 0 0.75rem 0; font-size:0.95rem;">Available Central Categories:</h4>
+      {% if central_categories and central_categories|length > 0 %}
+        <div style="display:flex; flex-direction:column; gap:0.5rem;">
+          {% for c in central_categories %}
+            <label style="display:flex; align-items:center; gap:0.75rem; padding:0.65rem 0.85rem; border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--radius-sm); cursor:pointer;">
+              <input type="checkbox" name="selected_categories" value="{{ c.id }}" style="width:18px; height:18px;">
+              <span style="font-size:1.25rem;">📁</span>
+              <div style="flex:1;">
+                <div style="font-weight:600; font-size:0.9rem;">{{ c.name }}</div>
+                <div style="font-size:0.75rem; color:var(--md-sys-color-outline);">{{ c.subcategory_count or 0 }} sub-folders • {{ c.asset_count or 0 }} assets in catalog</div>
+              </div>
+            </label>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div style="text-align:center; padding:2rem; color:var(--md-sys-color-on-surface-variant);">
+          No central categories available.
+        </div>
+      {% endif %}
+    </div>
+
+    <div style="padding:1rem 1.5rem; border-top:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); display:flex; justify-content:flex-end; gap:0.75rem;">
+      <button type="button" class="btn btn-outlined" onclick="closeImportModal()">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="submitImport()">Import Selected into Instance</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const instanceId = '{{ instance.id }}';
+
+  function switchTab(tab) {
+    document.getElementById('sectionFolders').style.display = tab === 'folders' ? 'block' : 'none';
+    document.getElementById('sectionAssets').style.display = tab === 'assets' ? 'block' : 'none';
+    document.getElementById('tabBtnFolders').className = tab === 'folders' ? 'btn btn-primary' : 'btn btn-outlined';
+    document.getElementById('tabBtnAssets').className = tab === 'assets' ? 'btn btn-primary' : 'btn btn-outlined';
+  }
+
+  function openImportModal() {
+    const m = document.getElementById('importModal');
+    m.style.display = 'flex';
+  }
+
+  function closeImportModal() {
+    const m = document.getElementById('importModal');
+    m.style.display = 'none';
+  }
+
+  async function submitImport() {
+    const checkboxes = document.querySelectorAll('input[name="selected_categories"]:checked');
+    const selectedIds = Array.from(checkboxes).map(cb => cb.value);
+
+    if (selectedIds.length === 0) {
+      alert('Please select at least one category to import.');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/manager/instances/${instanceId}/import`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ category_ids: selectedIds })
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        alert('Import failed: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Network error while importing.');
+    }
+  }
+
+  // Floating Toast Notification Helper
+  function showToast(msg, type = 'info') {
+    let toast = document.getElementById('managerInstanceToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'managerInstanceToast';
+      toast.style.cssText = 'position:fixed; bottom:24px; right:24px; z-index:99999; padding:0.75rem 1.25rem; border-radius:8px; font-size:0.875rem; font-weight:600; box-shadow:0 6px 20px rgba(0,0,0,0.4); pointer-events:none; transition:opacity 0.2s ease;';
+      document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.display = 'block';
+    toast.style.opacity = '1';
+    if (type === 'success') {
+      toast.style.background = '#10b981';
+      toast.style.color = '#ffffff';
+    } else if (type === 'error') {
+      toast.style.background = '#ef4444';
+      toast.style.color = '#ffffff';
+    } else {
+      toast.style.background = '#2563eb';
+      toast.style.color = '#ffffff';
+    }
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => {
+      toast.style.opacity = '0';
+      setTimeout(() => { toast.style.display = 'none'; }, 200);
+    }, 2500);
+  }
+
+  // Asset Overrides: is_enabled, is_premium, sequence
+  async function updateAssetOverride(assetId, field, value) {
+    const payload = {};
+    payload[field] = value;
+    showToast(`Saving asset ${field.replace('_', ' ')}...`, 'info');
+    try {
+      const res = await fetch(`/manager/instances/${instanceId}/assets/${assetId}/override`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to update asset override');
+      showToast('✓ Asset updated successfully', 'success');
+    } catch (err) {
+      showToast('Error updating asset: ' + err.message, 'error');
+    }
+  }
+
+  // Handle typing sequence number directly into asset Seq input
+  window.handleAssetSeqChange = function(assetId, newPosition) {
+    const tbody = document.getElementById('managerAssetTbody');
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll('.manager-asset-row'));
+    const fromIndex = rows.findIndex(r => r.dataset.assetId === assetId);
+    if (fromIndex === -1) return;
+
+    const targetIndex = Math.max(0, Math.min(newPosition - 1, rows.length - 1));
+    const movingRow = rows[fromIndex];
+    const targetRow = rows[targetIndex];
+
+    if (fromIndex < targetIndex) {
+      targetRow.after(movingRow);
+    } else if (fromIndex > targetIndex) {
+      targetRow.before(movingRow);
+    }
+
+    // Renumber all rows to natural 1, 2, 3...
+    const newRows = tbody.querySelectorAll('.manager-asset-row');
+    const orderedIds = [];
+    newRows.forEach((r, idx) => {
+      const inp = r.querySelector('.asset-seq-input');
+      if (inp) inp.value = idx + 1;
+      if (r.dataset.assetId) orderedIds.push(r.dataset.assetId);
+    });
+
+    saveAssetOrder(orderedIds);
+  };
+
+  async function saveAssetOrder(orderedIds) {
+    if (!orderedIds || orderedIds.length === 0) return;
+    showToast('Saving asset sequence order...', 'info');
+    try {
+      const res = await fetch(`/manager/instances/${instanceId}/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'asset',
+          ordered_ids: orderedIds
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to save asset order');
+      showToast('✓ Asset sequence updated', 'success');
+    } catch (err) {
+      showToast('Error saving asset order: ' + err.message, 'error');
+    }
+  }
+
+  // Category Reordering (Up/Down)
+  window.moveCategory = function(catId, direction) {
+    const container = document.getElementById('managerCategoriesContainer');
+    if (!container) return;
+    const cards = Array.from(container.querySelectorAll('.manager-cat-card'));
+    const idx = cards.findIndex(c => c.dataset.catId === catId);
+    if (idx === -1) return;
+
+    const targetIdx = idx + direction;
+    if (targetIdx < 0 || targetIdx >= cards.length) return;
+
+    const movingCard = cards[idx];
+    const targetCard = cards[targetIdx];
+
+    if (direction > 0) {
+      targetCard.after(movingCard);
+    } else {
+      targetCard.before(movingCard);
+    }
+
+    // Update badges
+    const updatedCards = container.querySelectorAll('.manager-cat-card');
+    const orderedIds = [];
+    updatedCards.forEach((c, i) => {
+      const badge = c.querySelector('.cat-seq-badge');
+      if (badge) badge.textContent = `#${i + 1}`;
+      if (c.dataset.catId) orderedIds.push(c.dataset.catId);
+    });
+
+    saveCategoryOrder(orderedIds);
+  };
+
+  async function saveCategoryOrder(orderedIds) {
+    if (!orderedIds || orderedIds.length === 0) return;
+    showToast('Saving category sequence...', 'info');
+    try {
+      const res = await fetch(`/manager/instances/${instanceId}/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'category',
+          ordered_ids: orderedIds
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to save category order');
+      showToast('✓ Category sequence updated', 'success');
+    } catch (err) {
+      showToast('Error saving category order: ' + err.message, 'error');
+    }
+  }
+
+  // Subcategory Reordering (Up/Down)
+  window.moveSubcategory = function(subId, parentCatId, direction) {
+    const grid = document.querySelector(`.subcategories-grid[data-parent-cat-id="${parentCatId}"]`);
+    if (!grid) return;
+    const cards = Array.from(grid.querySelectorAll('.manager-sub-card'));
+    const idx = cards.findIndex(c => c.dataset.subId === subId);
+    if (idx === -1) return;
+
+    const targetIdx = idx + direction;
+    if (targetIdx < 0 || targetIdx >= cards.length) return;
+
+    const movingCard = cards[idx];
+    const targetCard = cards[targetIdx];
+
+    if (direction > 0) {
+      targetCard.after(movingCard);
+    } else {
+      targetCard.before(movingCard);
+    }
+
+    // Update badges
+    const updatedCards = grid.querySelectorAll('.manager-sub-card');
+    const orderedIds = [];
+    updatedCards.forEach((c, i) => {
+      const badge = c.querySelector('.sub-seq-badge');
+      if (badge) badge.textContent = `#${i + 1}`;
+      if (c.dataset.subId) orderedIds.push(c.dataset.subId);
+    });
+
+    saveSubcategoryOrder(orderedIds);
+  };
+
+  async function saveSubcategoryOrder(orderedIds) {
+    if (!orderedIds || orderedIds.length === 0) return;
+    showToast('Saving subcategory sequence...', 'info');
+    try {
+      const res = await fetch(`/manager/instances/${instanceId}/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'subcategory',
+          ordered_ids: orderedIds
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to save subcategory order');
+      showToast('✓ Subcategory sequence updated', 'success');
+    } catch (err) {
+      showToast('Error saving subcategory order: ' + err.message, 'error');
+    }
+  }
+
+  // 1. Drag & Drop for Asset Table Rows
+  function initAssetDragDrop() {
+    const tbody = document.getElementById('managerAssetTbody');
+    if (!tbody) return;
+    let draggedRow = null;
+
+    tbody.querySelectorAll('.manager-asset-row').forEach(row => {
+      row.addEventListener('dragstart', function(e) {
+        draggedRow = this;
+        this.style.opacity = '0.4';
+        this.style.background = 'var(--md-sys-color-surface-container-high, #334155)';
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', this.dataset.assetId || '');
+      });
+
+      row.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (!draggedRow || draggedRow === this) return;
+
+        const bounding = this.getBoundingClientRect();
+        const offset = bounding.y + (bounding.height / 2);
+        if (e.clientY - offset > 0) {
+          this.after(draggedRow);
+        } else {
+          this.before(draggedRow);
+        }
+      });
+
+      row.addEventListener('dragend', function() {
+        this.style.opacity = '1';
+        this.style.background = '';
+        draggedRow = null;
+
+        const rows = tbody.querySelectorAll('.manager-asset-row');
+        const orderedIds = [];
+        rows.forEach((r, idx) => {
+          const inp = r.querySelector('.asset-seq-input');
+          if (inp) inp.value = idx + 1;
+          if (r.dataset.assetId) orderedIds.push(r.dataset.assetId);
+        });
+
+        saveAssetOrder(orderedIds);
+      });
+    });
+  }
+
+  // 2. Drag & Drop for Category Folders
+  function initCategoryDragDrop() {
+    const container = document.getElementById('managerCategoriesContainer');
+    if (!container) return;
+    let draggedCat = null;
+
+    container.querySelectorAll('.manager-cat-card').forEach(card => {
+      card.addEventListener('dragstart', function(e) {
+        draggedCat = this;
+        this.style.opacity = '0.4';
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', this.dataset.catId || '');
+      });
+
+      card.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (!draggedCat || draggedCat === this) return;
+
+        const bounding = this.getBoundingClientRect();
+        const offset = bounding.y + (bounding.height / 2);
+        if (e.clientY - offset > 0) {
+          this.after(draggedCat);
+        } else {
+          this.before(draggedCat);
+        }
+      });
+
+      card.addEventListener('dragend', function() {
+        this.style.opacity = '1';
+        draggedCat = null;
+
+        const cards = container.querySelectorAll('.manager-cat-card');
+        const orderedIds = [];
+        cards.forEach((c, idx) => {
+          const badge = c.querySelector('.cat-seq-badge');
+          if (badge) badge.textContent = `#${idx + 1}`;
+          if (c.dataset.catId) orderedIds.push(c.dataset.catId);
+        });
+
+        saveCategoryOrder(orderedIds);
+      });
+    });
+  }
+
+  // 3. Drag & Drop for Subcategories within Grid
+  function initSubcategoryDragDrop() {
+    document.querySelectorAll('.subcategories-grid').forEach(grid => {
+      let draggedSub = null;
+
+      grid.querySelectorAll('.manager-sub-card').forEach(card => {
+        card.addEventListener('dragstart', function(e) {
+          draggedSub = this;
+          this.style.opacity = '0.4';
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', this.dataset.subId || '');
+        });
+
+        card.addEventListener('dragover', function(e) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          if (!draggedSub || draggedSub === this) return;
+
+          const bounding = this.getBoundingClientRect();
+          const offset = bounding.y + (bounding.height / 2);
+          if (e.clientY - offset > 0) {
+            this.after(draggedSub);
+          } else {
+            this.before(draggedSub);
+          }
+        });
+
+        card.addEventListener('dragend', function() {
+          this.style.opacity = '1';
+          draggedSub = null;
+
+          const cards = grid.querySelectorAll('.manager-sub-card');
+          const orderedIds = [];
+          cards.forEach((c, idx) => {
+            const badge = c.querySelector('.sub-seq-badge');
+            if (badge) badge.textContent = `#${idx + 1}`;
+            if (c.dataset.subId) orderedIds.push(c.dataset.subId);
+          });
+
+          saveSubcategoryOrder(orderedIds);
+        });
+      });
+    });
+  }
+
+  // Initialize all drag & drop on load
+  initAssetDragDrop();
+  initCategoryDragDrop();
+  initSubcategoryDragDrop();
+</script>
+{% endblock %}

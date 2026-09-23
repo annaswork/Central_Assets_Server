@@ -1,0 +1,188 @@
+{% extends "manager/base.html" %}
+
+{% block title %}API Keys — Manager Portal{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
+  <div>
+    <h1 style="margin:0;">API Access Keys</h1>
+    <p style="color:var(--md-sys-color-on-surface-variant); margin:0.25rem 0 0 0;">
+      Generate and manage API keys for your applications.
+    </p>
+  </div>
+  <div>
+    <button type="button" class="btn btn-primary" onclick="openCreateKeyModal()" style="display:inline-flex; align-items:center; gap:0.5rem;">
+      <span>🔑</span>
+      <span>Generate API Key</span>
+    </button>
+  </div>
+</div>
+
+<!-- API Keys Table -->
+<div class="card" style="padding:0; overflow:hidden;">
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Key Prefix</th>
+          <th>Description</th>
+          <th>App Instance</th>
+          <th style="width:140px; text-align:center;">Rate Limit</th>
+          <th style="width:120px; text-align:center;">Status</th>
+          <th style="width:150px;">Created</th>
+          <th style="width:180px; text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if keys and keys|length > 0 %}
+          {% for k in keys %}
+            <tr>
+              <td>
+                <code style="font-weight:700;">{{ k.key_prefix }}...</code>
+              </td>
+              <td>
+                <div style="font-weight:600;">{{ k.name }}</div>
+              </td>
+              <td>
+                <span class="badge" style="background:var(--md-sys-color-surface-container-high);">
+                  📱 {{ k.app_name }}
+                </span>
+              </td>
+              <td style="text-align:center;">
+                <span style="font-weight:600;">{{ k.rate_limit_per_min or 60 }}</span>
+                <span style="font-size:0.8rem; color:var(--md-sys-color-outline);">/min</span>
+              </td>
+              <td style="text-align:center;">
+                {% if k.is_revoked %}
+                  <span class="badge badge-error">Revoked</span>
+                {% elif k.is_active %}
+                  <span class="badge badge-success">Active</span>
+                {% else %}
+                  <span class="badge badge-warning">Inactive</span>
+                {% endif %}
+              </td>
+              <td style="color:var(--md-sys-color-on-surface-variant); font-size:0.85rem;">
+                {{ k.created_at|format_datetime }}
+              </td>
+              <td style="text-align:right;">
+                <div style="display:inline-flex; gap:0.35rem; align-items:center;">
+                  <!-- Rate Limit Modal Trigger -->
+                  <button type="button" class="btn btn-outlined btn-sm" onclick="openRateLimitModal('{{ k.id }}', '{{ k.name }}', {{ k.rate_limit_per_min or 60 }})" title="Change Rate Limit">
+                    ⚙️
+                  </button>
+
+                  <!-- Revoke -->
+                  {% if not k.is_revoked %}
+                    <form method="POST" action="/manager/keys/{{ k.id }}/revoke" style="display:inline; margin:0;" onsubmit="return confirm('Revoke key \'{{ k.name }}\'? It will immediately cease functioning.');">
+                      <button type="submit" class="btn btn-outlined btn-sm" style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);" title="Revoke Key">
+                        Revoke
+                      </button>
+                    </form>
+                  {% endif %}
+
+                  <!-- Delete -->
+                  <form method="POST" action="/manager/keys/{{ k.id }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete key \'{{ k.name }}\'?');">
+                    <button type="submit" class="btn btn-outlined btn-sm" style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);" title="Delete Key">
+                      🗑️
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="7" style="text-align:center; padding:3rem 1rem; color:var(--md-sys-color-on-surface-variant);">
+              <div style="font-size:2rem; margin-bottom:0.5rem;">🔑</div>
+              <div style="font-weight:600;">No API keys issued yet</div>
+              <div style="font-size:0.9rem; margin-top:0.25rem;">Generate an API key to allow client applications to consume assets.</div>
+              <div style="margin-top:1rem;">
+                <button type="button" class="btn btn-primary btn-sm" onclick="openCreateKeyModal()">+ Generate API Key</button>
+              </div>
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal: Generate API Key -->
+<div id="createKeyModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; padding:1.5rem;">
+  <div class="card" style="width:100%; max-width:520px; box-shadow:var(--md-sys-elevation-4); padding:0; overflow:hidden;">
+    <div style="padding:1.25rem 1.5rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0; font-size:1.15rem;">Generate New API Key</h3>
+      <button type="button" onclick="closeCreateKeyModal()" style="background:none; border:none; font-size:1.25rem; cursor:pointer;">✕</button>
+    </div>
+
+    <form method="POST" action="/manager/keys" style="padding:1.5rem;">
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="keyName">Key Name / Description *</label>
+        <input type="text" id="keyName" name="name" class="input" required placeholder="e.g. Mobile Production App Key">
+      </div>
+
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="appInstSelect">Target App Instance *</label>
+        <select id="appInstSelect" name="app_instance_id" class="select" required>
+          {% for inst in instances %}
+            <option value="{{ inst.id }}">{{ inst.name }} ({{ inst.package_name or 'No package' }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-bottom:1.5rem;">
+        <label class="form-label" for="rateLimit">Rate Limit (Requests / Minute)</label>
+        <input type="number" id="rateLimit" name="rate_limit_per_min" class="input" value="60" min="1" max="10000" required>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+        <button type="button" class="btn btn-outlined" onclick="closeCreateKeyModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Generate Key</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Edit Rate Limit -->
+<div id="rateLimitModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; padding:1.5rem;">
+  <div class="card" style="width:100%; max-width:440px; box-shadow:var(--md-sys-elevation-4); padding:0; overflow:hidden;">
+    <div style="padding:1.25rem 1.5rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0; font-size:1.15rem;">Update Rate Limit</h3>
+      <button type="button" onclick="closeRateLimitModal()" style="background:none; border:none; font-size:1.25rem; cursor:pointer;">✕</button>
+    </div>
+
+    <form id="rateLimitForm" method="POST" action="" style="padding:1.5rem;">
+      <p id="rateLimitKeyName" style="font-weight:600; margin-top:0;"></p>
+      <div class="form-group" style="margin-bottom:1.5rem;">
+        <label class="form-label" for="newRateLimit">Requests Per Minute (1 - 10000)</label>
+        <input type="number" id="newRateLimit" name="rate_limit" class="input" min="1" max="10000" required>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+        <button type="button" class="btn btn-outlined" onclick="closeRateLimitModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Rate Limit</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function openCreateKeyModal() {
+    document.getElementById('createKeyModal').style.display = 'flex';
+  }
+  function closeCreateKeyModal() {
+    document.getElementById('createKeyModal').style.display = 'none';
+  }
+
+  function openRateLimitModal(keyId, keyName, currentRate) {
+    const form = document.getElementById('rateLimitForm');
+    form.action = `/manager/keys/${keyId}/rate-limit`;
+    document.getElementById('rateLimitKeyName').innerText = `Key: ${keyName}`;
+    document.getElementById('newRateLimit').value = currentRate;
+    document.getElementById('rateLimitModal').style.display = 'flex';
+  }
+  function closeRateLimitModal() {
+    document.getElementById('rateLimitModal').style.display = 'none';
+  }
+</script>
+{% endblock %}

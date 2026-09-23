@@ -1,0 +1,52 @@
+{% extends "manager/base.html" %}
+
+{% block title %}Emergency Backup Codes — Manager Settings{% endblock %}
+
+{% block content %}
+<div style="max-width:640px; margin:2rem auto;">
+  <div class="alert alert-success" style="margin-bottom:1.5rem;">
+    <span>✓</span>
+    <span><strong>Two-Factor Authentication is now enabled!</strong></span>
+  </div>
+
+  <div class="card" style="padding:2rem;">
+    <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+      <span style="font-size:1.5rem;">📋</span>
+      <h2 style="margin:0;">Emergency Backup Codes</h2>
+    </div>
+    <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem; margin-bottom:1.5rem;">
+      Save these backup recovery codes in a secure location (e.g. password manager). Each code can only be used once if you lose access to your authenticator device.
+    </p>
+
+    <div style="background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--radius-md); padding:1.25rem; margin-bottom:1.5rem;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; font-family:monospace; font-size:1.1rem; font-weight:700; text-align:center;">
+        {% for code in backup_codes %}
+          <div style="background:var(--md-sys-color-surface); padding:0.5rem; border-radius:var(--radius-sm); border:1px solid var(--md-sys-color-outline-variant);">
+            {{ code }}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+      <button type="button" class="btn btn-outlined" onclick="copyAllCodes()" id="copyAllBtn">
+        📋 Copy All Codes
+      </button>
+      <a href="/manager/settings" class="btn btn-primary">
+        I Have Saved My Codes →
+      </a>
+    </div>
+  </div>
+</div>
+
+<script>
+const codesText = `{{ backup_codes|join('\n') }}`;
+function copyAllCodes() {
+  navigator.clipboard.writeText(codesText).then(() => {
+    const btn = document.getElementById('copyAllBtn');
+    btn.textContent = '✓ Copied All!';
+    setTimeout(() => { btn.textContent = '📋 Copy All Codes'; }, 2000);
+  });
+}
+</script>
+{% endblock %}

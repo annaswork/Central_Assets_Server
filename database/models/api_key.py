@@ -11,6 +11,8 @@ from utils.ids import PyObjectId
 class ApiKeyCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
     app_instance_id: str | None = None
+    owner_id: str | None = None
+    owner_role: str | None = "admin"
     scopes: list[str] = Field(default_factory=list)
     rate_limit_per_min: int = Field(default=60, ge=1, le=10000)
     expires_at: datetime | None = None
@@ -21,6 +23,8 @@ class ApiKeyOut(MongoModel):
     name: str
     key_prefix: str
     app_instance_id: str | None = None
+    owner_id: str | None = None
+    owner_role: str | None = "admin"
     scopes: list[str]
     rate_limit_per_min: int
     is_active: bool
@@ -38,6 +42,8 @@ class ApiKeyInDB(MongoInDBModel, TimestampMixin):
     key_prefix: str
     secret_hash: str
     app_instance_id: PyObjectId | None = None
+    owner_id: PyObjectId | str | None = None
+    owner_role: str | None = "admin"
     scopes: list[str] = Field(default_factory=list)
     rate_limit_per_min: int = 60
     is_active: bool = True

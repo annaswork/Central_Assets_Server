@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Manager Portal — Asset Platform{% endblock %}</title>
+
+  <script>
+    (function() {
+      var storedTheme = localStorage.getItem('ui.theme');
+      var theme = storedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+
+      var storedSidebar = localStorage.getItem('ui.sidebar_collapsed');
+      if (storedSidebar === 'true') {
+        document.documentElement.classList.add('sidebar-collapsed');
+      }
+    })();
+  </script>
+
+  <link rel="stylesheet" href="/admin-assets/css/tokens.css?v=3">
+  <link rel="stylesheet" href="/admin-assets/css/base.css?v=3">
+  <link rel="stylesheet" href="/admin-assets/css/components.css?v=4">
+  <link rel="stylesheet" href="/admin-assets/css/responsive.css?v=3">
+  <link rel="stylesheet" href="/admin-assets/css/admin.css?v=3">
+
+  <script defer src="/admin-assets/js/theme.js"></script>
+  <script defer src="/admin-assets/js/sidebar.js"></script>
+  <script defer src="/admin-assets/js/dialogs.js"></script>
+  <script defer src="/admin-assets/js/live_badges.js"></script>
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  <div class="app-container">
+    {% if session %}
+      <!-- Manager Navigation Drawer -->
+      <nav class="nav-drawer" id="navDrawer" aria-label="Manager Navigation">
+        <div class="nav-brand">
+          <a href="/manager/dashboard" class="brand-content" title="Manager Portal">
+            <span class="brand-icon">⚡</span>
+            <span class="brand-text">Manager Portal</span>
+          </a>
+          <button type="button" class="sidebar-collapse-btn" id="sidebarCollapseBtn" aria-label="Collapse Sidebar">
+            <svg class="collapse-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="10 3 5 8 10 13"/>
+            </svg>
+          </button>
+        </div>
+
+        <ul class="nav-links">
+          <li>
+            <a href="/manager/dashboard" class="nav-link {% if active_tab == 'dashboard' %}active{% endif %}" title="Dashboard">
+              <span class="nav-icon">📊</span>
+              <span class="nav-text">Dashboard</span>
+            </a>
+          </li>
+
+          <li class="nav-section-header" style="padding:0.5rem 1rem 0.25rem; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--md-sys-color-on-surface-variant); opacity:0.75;">
+            Central Data (Read-Only)
+          </li>
+          <li>
+            <a href="/manager/categories" class="nav-link {% if active_tab == 'categories' %}active{% endif %}" title="Browse Categories">
+              <span class="nav-icon">📁</span>
+              <span class="nav-text">Categories</span>
+            </a>
+          </li>
+          <li>
+            <a href="/manager/subcategories" class="nav-link {% if active_tab == 'subcategories' %}active{% endif %}" title="Browse Subcategories">
+              <span class="nav-icon">📂</span>
+              <span class="nav-text">Subcategories</span>
+            </a>
+          </li>
+          <li>
+            <a href="/manager/assets" class="nav-link {% if active_tab == 'assets' %}active{% endif %}" title="Browse Assets">
+              <span class="nav-icon">🖼️</span>
+              <span class="nav-text">Assets</span>
+            </a>
+          </li>
+
+          <li class="nav-section-header" style="padding:0.5rem 1rem 0.25rem; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--md-sys-color-on-surface-variant); opacity:0.75;">
+            My Workspace
+          </li>
+          <li>
+            <a href="/manager/instances" class="nav-link {% if active_tab == 'instances' %}active{% endif %}" title="App Instances">
+              <span class="nav-icon">📱</span>
+              <span class="nav-text">App Instances</span>
+            </a>
+          </li>
+          <li>
+            <a href="/manager/keys" class="nav-link {% if active_tab == 'keys' %}active{% endif %}" title="API Keys">
+              <span class="nav-icon">🔑</span>
+              <span class="nav-text">API Keys</span>
+            </a>
+          </li>
+          <li>
+            <a href="/manager/messages" class="nav-link {% if active_tab == 'messages' %}active{% endif %}" title="Messages & Proposals">
+              <span class="nav-icon">
+                💬
+                <span class="nav-icon-badge nav-badge-messages {% if not request.state.manager_unread_messages_count or request.state.manager_unread_messages_count <= 0 %}badge-hidden{% endif %}">{{ request.state.manager_unread_messages_count or 0 }}</span>
+              </span>
+              <span class="nav-text">Messages</span>
+              <span class="badge nav-badge-messages nav-pill-badge {% if not request.state.manager_unread_messages_count or request.state.manager_unread_messages_count <= 0 %}badge-hidden{% endif %}" id="navBadgeMessages" style="font-size:0.72rem; padding:0.12rem 0.45rem; border-radius:10px; background:var(--md-sys-color-error, #ba1a1a); color:#fff; font-weight:700; margin-left:auto;">{{ request.state.manager_unread_messages_count or 0 }}</span>
+            </a>
+          </li>
+          <li>
+            <a href="/manager/analytics" class="nav-link {% if active_tab == 'analytics' %}active{% endif %}" title="Scoped Analytics">
+              <span class="nav-icon">📈</span>
+              <span class="nav-text">Analytics</span>
+            </a>
+          </li>
+        </ul>
+
+        <!-- Bottom Actions: Single Row containing Profile Pic / Initial + Name + Upward Dropdown Menu -->
+        <div class="nav-drawer-footer" style="position:relative;">
+          <!-- Upward Dropdown Menu (Bottom to Top) -->
+          <div class="nav-user-dropdown-menu" id="navUserDropdownMenu">
+            <a href="/manager/settings" class="nav-dropdown-item" title="Account Settings">
+              <span style="font-size:1.1rem;">⚙️</span>
+              <span>Settings</span>
+            </a>
+            <a href="/manager/profile" class="nav-dropdown-item" title="Update Profile">
+              <span style="font-size:1.1rem;">👤</span>
+              <span>Update Profile</span>
+            </a>
+            <button type="button" class="nav-dropdown-item theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle Theme" title="Toggle Theme">
+              <span id="themeIcon" style="font-size:1.1rem;">🌙</span>
+              <span id="themeText">Theme</span>
+            </button>
+            <div style="height:1px; background:var(--md-sys-color-outline-variant, #334155); margin:0.3rem 0;"></div>
+            <a href="/manager/logout" class="nav-dropdown-item" style="color:var(--md-sys-color-error, #ef4444);" title="Sign Out">
+              <span style="font-size:1.1rem;">🚪</span>
+              <span>Logout</span>
+            </a>
+          </div>
+
+          <!-- Single Row: Circle Avatar + Display Name (Not Username) + Dropdown Option -->
+          <div class="nav-user-row" id="navUserRow" onclick="toggleUserDropdown(event)" title="Account options">
+            <div style="display:flex; align-items:center; gap:0.65rem; min-width:0; overflow:hidden;">
+              <div class="nav-user-avatar-circle" title="{{ (request.state.current_user.name if request.state.current_user else session.username) }}">
+                {% if request.state.current_user and request.state.current_user.profile_picture %}
+                  <img src="{{ request.state.current_user.profile_picture }}" alt="Avatar">
+                {% else %}
+                  {{ (request.state.current_user.initial if request.state.current_user else (session.username[:1] if session and session.username else 'M'))|upper }}
+                {% endif %}
+              </div>
+              <div class="nav-user-name">
+                {{ (request.state.current_user.name if request.state.current_user else (session.username if session else 'Manager')) }}
+              </div>
+            </div>
+            <button type="button" class="nav-dropdown-trigger" aria-label="Open menu">
+              <span class="nav-dropdown-caret">▲</span>
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Tablet Navigation Rail -->
+      <nav class="nav-rail" aria-label="Tablet Navigation">
+        <div style="font-size:1.5rem; margin-bottom:0.75rem;">⚡</div>
+        {% if session and session.username %}
+        <div class="nav-user-avatar" title="{{ (request.state.current_user.name if request.state.current_user else session.username) }}" style="margin-bottom:1rem; width:30px; height:30px; border-radius:50%; overflow:hidden; font-size:0.75rem; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+          {% if request.state.current_user and request.state.current_user.profile_picture %}
+            <img src="{{ request.state.current_user.profile_picture }}" alt="Avatar" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">
+          {% else %}
+            {{ (request.state.current_user.initial if request.state.current_user else (session.username[:1] if session and session.username else 'M'))|upper }}
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <a href="/manager/dashboard" title="Dashboard" class="nav-link {% if active_tab == 'dashboard' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📊</a>
+        <a href="/manager/categories" title="Categories" class="nav-link {% if active_tab == 'categories' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📁</a>
+        <a href="/manager/subcategories" title="Subcategories" class="nav-link {% if active_tab == 'subcategories' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📂</a>
+        <a href="/manager/assets" title="Assets" class="nav-link {% if active_tab == 'assets' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">🖼️</a>
+        <a href="/manager/instances" title="App Instances" class="nav-link {% if active_tab == 'instances' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📱</a>
+        <a href="/manager/keys" title="API Keys" class="nav-link {% if active_tab == 'keys' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">🔑</a>
+        <a href="/manager/messages" title="Messages" class="nav-link {% if active_tab == 'messages' %}active{% endif %}" style="padding:0.75rem; justify-content:center; position:relative;">
+          💬
+          <span class="rail-badge-messages" id="railBadgeMessages" style="{% if not request.state.manager_unread_messages_count or request.state.manager_unread_messages_count <= 0 %}display:none;{% endif %} position:absolute; top:4px; right:4px; width:8px; height:8px; border-radius:50%; background:var(--md-sys-color-error, #ba1a1a);"></span>
+        </a>
+        <a href="/manager/analytics" title="Analytics" class="nav-link {% if active_tab == 'analytics' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📈</a>
+
+        <div style="margin-top:auto; display:flex; flex-direction:column; gap:0.5rem; align-items:center; padding-bottom:1rem;">
+          <a href="/manager/profile" title="Profile" class="nav-link {% if active_tab == 'profile' %}active{% endif %}" style="padding:0.5rem; justify-content:center; text-decoration:none; font-size:1.1rem;">👤</a>
+          <button type="button" class="theme-toggle-btn" title="Toggle Theme" style="border:none; width:34px; height:34px; font-size:1.1rem;">
+            <span>🌙</span>
+          </button>
+          <a href="/manager/logout" title="Sign Out" style="font-size:1.1rem; text-decoration:none;">🚪</a>
+        </div>
+      </nav>
+    {% endif %}
+
+    <div class="main-content">
+      {% set toast_text = request.query_params.get('msg') or toast_message %}
+      {% if toast_text %}
+        <div id="toastNotification" style="position:fixed; top:1.5rem; right:1.5rem; z-index:9999; background:var(--md-sys-color-primary, #0066cc); color:#fff; padding:0.85rem 1.4rem; border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,0.25); display:flex; align-items:center; gap:0.75rem; font-weight:600; font-size:0.92rem;">
+          <span style="font-size:1.2rem;">✓</span>
+          <span>{{ toast_text }}</span>
+          <button type="button" onclick="this.parentElement.remove()" style="background:none; border:none; color:inherit; font-size:1.2rem; cursor:pointer; margin-left:0.5rem; opacity:0.8;">&times;</button>
+        </div>
+        <script>
+          setTimeout(function() {
+            var t = document.getElementById('toastNotification');
+            if (t) {
+              t.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+              t.style.opacity = '0';
+              t.style.transform = 'translateY(-10px)';
+              setTimeout(function() { if (t) t.remove(); }, 400);
+            }
+          }, 3500);
+        </script>
+      {% endif %}
+      <main class="content-body" id="mainContent">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+</body>
+</html>

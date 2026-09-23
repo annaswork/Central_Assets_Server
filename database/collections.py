@@ -23,9 +23,13 @@ INSTANCE_CONTENT_COLLECTIONS: Final[set[str]] = {
     INSTANCE_ASSETS,
 }
 
-# Authorization & Admin
+# Authorization, Admin & Manager
 API_KEYS: Final[str] = "api_keys"
 ADMIN_USERS: Final[str] = "admin_users"
+MANAGERS: Final[str] = "managers"
+APP_INSTANCE_ACCESS: Final[str] = "app_instance_access"
+APP_INSTANCE_ACCESS_REQUESTS: Final[str] = "app_instance_access_requests"
+MESSAGES: Final[str] = "messages"
 
 # Analytics
 MONITORED_ENDPOINTS: Final[str] = "monitored_endpoints"

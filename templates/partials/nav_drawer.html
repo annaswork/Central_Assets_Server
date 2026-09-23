@@ -55,33 +55,75 @@
         <span class="nav-text">Analytics</span>
       </a>
     </li>
+    <li>
+      <a href="/admin/managers" class="nav-link {% if active_tab == 'managers' %}active{% endif %}" title="Managers">
+        <span class="nav-icon">👥</span>
+        <span class="nav-text">Managers</span>
+      </a>
+    </li>
+    <li>
+      <a href="/admin/messages" class="nav-link {% if active_tab == 'messages' %}active{% endif %}" title="Messages">
+        <span class="nav-icon">
+          💬
+          <span class="nav-icon-badge nav-badge-messages {% if not request.state.admin_unread_messages_count or request.state.admin_unread_messages_count <= 0 %}badge-hidden{% endif %}">{{ request.state.admin_unread_messages_count or 0 }}</span>
+        </span>
+        <span class="nav-text">Messages</span>
+        <span class="badge nav-badge-messages nav-pill-badge {% if not request.state.admin_unread_messages_count or request.state.admin_unread_messages_count <= 0 %}badge-hidden{% endif %}" id="navBadgeMessages" style="font-size:0.72rem; padding:0.12rem 0.45rem; border-radius:10px; background:var(--md-sys-color-error, #ba1a1a); color:#fff; font-weight:700; margin-left:auto;">{{ request.state.admin_unread_messages_count or 0 }}</span>
+      </a>
+    </li>
+    <li>
+      <a href="/admin/access-requests" class="nav-link {% if active_tab == 'access_requests' %}active{% endif %}" title="Access Requests">
+        <span class="nav-icon">
+          📥
+          <span class="nav-icon-badge nav-badge-requests {% if not request.state.admin_pending_requests_count or request.state.admin_pending_requests_count <= 0 %}badge-hidden{% endif %}">{{ request.state.admin_pending_requests_count or 0 }}</span>
+        </span>
+        <span class="nav-text">Access Requests</span>
+        <span class="badge nav-badge-requests nav-pill-badge {% if not request.state.admin_pending_requests_count or request.state.admin_pending_requests_count <= 0 %}badge-hidden{% endif %}" id="navBadgeAccessRequests" style="font-size:0.72rem; padding:0.12rem 0.45rem; border-radius:10px; background:#eab308; color:#000; font-weight:700; margin-left:auto;">{{ request.state.admin_pending_requests_count or 0 }}</span>
+      </a>
+    </li>
   </ul>
 
-  <!-- Bottom Actions: User Info, Settings, Theme Toggle & Logout -->
-  <div class="nav-drawer-footer">
-    {% if session and session.username %}
-    <div class="nav-user-section" title="Logged in as {{ session.username }}">
-      <div class="nav-user-avatar">
-        {{ (session.username[:1] if session and session.username else 'A')|upper }}
-      </div>
-      <div class="nav-user-details">
-        <span class="nav-username">{{ session.username }}</span>
-        <span class="nav-user-badge">Administrator</span>
-      </div>
+  <!-- Bottom Actions: Single Row containing Profile Pic / Initial + Name + Upward Dropdown Menu -->
+  <div class="nav-drawer-footer" style="position:relative;">
+    <!-- Upward Dropdown Menu (Bottom to Top) -->
+    <div class="nav-user-dropdown-menu" id="navUserDropdownMenu">
+      <a href="/admin/settings" class="nav-dropdown-item" title="System Settings">
+        <span style="font-size:1.1rem;">⚙️</span>
+        <span>Settings</span>
+      </a>
+      <a href="/admin/profile" class="nav-dropdown-item" title="Update Profile & Security">
+        <span style="font-size:1.1rem;">👤</span>
+        <span>Update Profile</span>
+      </a>
+      <button type="button" class="nav-dropdown-item theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle Theme" title="Toggle Theme">
+        <span id="themeIcon" style="font-size:1.1rem;">🌙</span>
+        <span id="themeText">Theme</span>
+      </button>
+      <div style="height:1px; background:var(--md-sys-color-outline-variant, #334155); margin:0.3rem 0;"></div>
+      <a href="/admin/logout" class="nav-dropdown-item" style="color:var(--md-sys-color-error, #ef4444);" title="Sign Out">
+        <span style="font-size:1.1rem;">🚪</span>
+        <span>Logout</span>
+      </a>
     </div>
-    {% endif %}
-    <a href="/admin/settings" class="nav-footer-action {% if active_tab == 'settings' %}active{% endif %}" title="Settings" style="text-decoration:none;">
-      <span class="nav-icon">⚙️</span>
-      <span class="nav-text" style="text-decoration:none;">Settings</span>
-    </a>
-    <button type="button" class="nav-footer-action theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle Theme" title="Toggle Theme" style="text-decoration:none;">
-      <span class="nav-icon" id="themeIcon">🌙</span>
-      <span class="nav-text" id="themeText" style="text-decoration:none;">Theme</span>
-    </button>
-    <a href="/admin/logout" class="nav-footer-action nav-logout-action" title="Sign Out" style="text-decoration:none;">
-      <span class="nav-icon">🚪</span>
-      <span class="nav-text" style="text-decoration:none;">Logout</span>
-    </a>
+
+    <!-- Single Row: Circle Avatar + Display Name (Not Username) + Dropdown Option -->
+    <div class="nav-user-row" id="navUserRow" onclick="toggleUserDropdown(event)" title="Account options">
+      <div style="display:flex; align-items:center; gap:0.65rem; min-width:0; overflow:hidden;">
+        <div class="nav-user-avatar-circle" title="{{ (request.state.current_user.name if request.state.current_user else session.username) }}">
+          {% if request.state.current_user and request.state.current_user.profile_picture %}
+            <img src="{{ request.state.current_user.profile_picture }}" alt="Avatar">
+          {% else %}
+            {{ (request.state.current_user.initial if request.state.current_user else (session.username[:1] if session and session.username else 'A'))|upper }}
+          {% endif %}
+        </div>
+        <div class="nav-user-name">
+          {{ (request.state.current_user.name if request.state.current_user else (session.username if session else 'Admin')) }}
+        </div>
+      </div>
+      <button type="button" class="nav-dropdown-trigger" aria-label="Open menu">
+        <span class="nav-dropdown-caret">▲</span>
+      </button>
+    </div>
   </div>
 </nav>
 <div class="sidebar-backdrop" id="sidebarBackdrop"></div>

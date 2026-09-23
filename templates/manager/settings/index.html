@@ -1,0 +1,164 @@
+{% extends "manager/base.html" %}
+
+{% block title %}Settings — Manager Portal{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+  <h1 style="margin:0;">Manager Settings</h1>
+  <p style="color:var(--md-sys-color-on-surface-variant); margin:0.25rem 0 0 0;">
+    Manage security credentials, two-factor authentication, and portal appearance.
+  </p>
+</div>
+
+{% if error %}
+  <div class="alert alert-error" style="margin-bottom:1.5rem; max-width:850px;">
+    <span>⚠️</span>
+    <span>{{ error }}</span>
+  </div>
+{% endif %}
+
+{% if success %}
+  <div class="alert alert-success" style="margin-bottom:1.5rem; max-width:850px;">
+    <span>✓</span>
+    <span>{{ success }}</span>
+  </div>
+{% endif %}
+
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(380px, 1fr)); gap:1.5rem; max-width:850px;">
+  <!-- Two-Factor Authentication Security Card -->
+  <div class="card" style="grid-column: 1 / -1; border-left: 4px solid {% if manager.is_2fa_enabled %}var(--md-sys-color-primary){% else %}var(--md-sys-color-outline){% endif %};">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem;">
+      <div>
+        <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.35rem;">
+          <span style="font-size:1.35rem;">🔐</span>
+          <h3 style="margin:0;">Two-Factor Authentication (TOTP)</h3>
+          {% if manager.is_2fa_enabled %}
+            <span class="badge badge-success" style="font-size:0.75rem;">Active & Protected</span>
+          {% else %}
+            <span class="badge badge-warning" style="font-size:0.75rem;">Disabled</span>
+          {% endif %}
+        </div>
+        <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem; margin:0; max-width:550px;">
+          Protect your manager account with a 6-digit TOTP code from Google Authenticator, 1Password, or Authy.
+        </p>
+      </div>
+
+      <div>
+        {% if manager.is_2fa_enabled %}
+          <button type="button" class="btn btn-outlined" onclick="toggleDisable2Fa()" style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);">
+            Disable 2FA
+          </button>
+        {% else %}
+          <a href="/manager/settings/2fa/setup" class="btn btn-primary">
+            🛡️ Enable 2FA
+          </a>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if manager.is_2fa_enabled %}
+      <div id="disable2FaBox" style="display:none; margin-top:1.25rem; padding-top:1.25rem; border-top:1px solid var(--md-sys-color-outline-variant);">
+        <form method="POST" action="/manager/settings/2fa/disable" style="display:flex; gap:0.75rem; align-items:flex-end; max-width:440px;">
+          <div class="form-group" style="flex:1; margin-bottom:0;">
+            <label class="form-label" for="disable_password" style="font-size:0.85rem;">Enter password to disable 2FA</label>
+            <input type="password" id="disable_password" name="password" class="input" required placeholder="Current password">
+          </div>
+          <button type="submit" class="btn btn-primary" style="background:var(--md-sys-color-error); border-color:var(--md-sys-color-error);">Confirm Disable</button>
+          <button type="button" class="btn btn-outlined" onclick="toggleDisable2Fa()">Cancel</button>
+        </form>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Appearance & Theme Card -->
+  <div class="card">
+    <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.75rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.5rem;">
+      <span style="font-size:1.25rem;">🎨</span>
+      <h3 style="margin:0;">Appearance & Theme</h3>
+    </div>
+
+    <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem; margin-bottom:1.25rem;">
+      Customize your visual experience across the Manager Portal. Choose between Dark and Light color palettes.
+    </p>
+
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:0.85rem 1rem; border-radius:10px; background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant);">
+      <div>
+        <div style="font-weight:600; font-size:0.95rem;">Active Color Scheme</div>
+        <div id="themeStatusLabel" style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">Dark Theme</div>
+      </div>
+      <button type="button" class="btn btn-outlined" id="settingsThemeToggleBtn" onclick="toggleSettingsTheme()" style="display:inline-flex; align-items:center; gap:0.45rem;">
+        <span id="settingsThemeIcon" style="font-size:1.1rem;">☀️</span>
+        <span id="settingsThemeBtnText">Switch Theme</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Manager Account Overview Card -->
+  <div class="card">
+    <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.75rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.5rem;">
+      <span style="font-size:1.25rem;">👤</span>
+      <h3 style="margin:0;">Account Overview</h3>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:0.6rem; font-size:0.9rem; margin-bottom:1.25rem;">
+      <div style="display:flex; justify-content:space-between;">
+        <span style="color:var(--md-sys-color-on-surface-variant);">Username:</span>
+        <code>{{ manager.username }}</code>
+      </div>
+      <div style="display:flex; justify-content:space-between;">
+        <span style="color:var(--md-sys-color-on-surface-variant);">Display Name:</span>
+        <strong>{{ manager.display_name or manager.username }}</strong>
+      </div>
+      <div style="display:flex; justify-content:space-between;">
+        <span style="color:var(--md-sys-color-on-surface-variant);">Role:</span>
+        <span class="badge badge-primary">Platform Manager</span>
+      </div>
+    </div>
+
+    <div style="border-top:1px solid var(--md-sys-color-outline-variant); padding-top:0.85rem; display:flex; justify-content:flex-end;">
+      <a href="/manager/profile" class="btn btn-outlined btn-sm" style="display:inline-flex; align-items:center; gap:0.35rem;">
+        <span>✏️</span>
+        <span>Edit Profile & Password</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleDisable2Fa() {
+    const box = document.getElementById('disable2FaBox');
+    if (box) {
+      box.style.display = box.style.display === 'none' ? 'block' : 'none';
+    }
+  }
+
+  function updateSettingsThemeDisplay() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const label = document.getElementById('themeStatusLabel');
+    const icon = document.getElementById('settingsThemeIcon');
+    const btnText = document.getElementById('settingsThemeBtnText');
+    if (label) label.textContent = isDark ? 'Dark Theme (Active)' : 'Light Theme (Active)';
+    if (icon) icon.textContent = isDark ? '☀️' : '🌙';
+    if (btnText) btnText.textContent = isDark ? 'Switch to Light' : 'Switch to Dark';
+  }
+
+  function toggleSettingsTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    const next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+    updateSettingsThemeDisplay();
+
+    // Also sync the sidebar theme toggle button if present
+    const sbBtn = document.getElementById('themeToggleBtn');
+    if (sbBtn) {
+      const sbIcon = document.getElementById('themeIcon');
+      const sbText = document.getElementById('themeText');
+      if (sbIcon) sbIcon.textContent = next === 'dark' ? '☀️' : '🌙';
+      if (sbText) sbText.textContent = next === 'dark' ? 'Light Theme' : 'Dark Theme';
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', updateSettingsThemeDisplay);
+</script>
+{% endblock %}

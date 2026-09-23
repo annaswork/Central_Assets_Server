@@ -1,0 +1,56 @@
+{% extends "manager/base.html" %}
+
+{% block title %}API Key Generated — Manager Portal{% endblock %}
+
+{% block content %}
+<div style="max-width:680px; margin:2rem auto;">
+  <div class="alert alert-warning" style="margin-bottom:1.5rem; border-left:4px solid var(--md-sys-color-error);">
+    <strong style="display:block; margin-bottom:0.25rem;">⚠️ Save this API key now</strong>
+    This is the only time the full unhashed secret key will be shown. If lost, you will need to revoke it and generate a new one.
+  </div>
+
+  <div class="card" style="padding:2rem; box-shadow:var(--md-sys-elevation-2);">
+    <h2 style="margin-top:0; margin-bottom:0.5rem; color:var(--md-sys-color-primary);">API Key Created Successfully</h2>
+    <p style="color:var(--md-sys-color-on-surface-variant); margin-bottom:1.5rem;">
+      Key Description: <strong>{{ key.name }}</strong>
+    </p>
+
+    <div class="form-group" style="margin-bottom:1.5rem;">
+      <label class="form-label" for="fullApiKeyInput">Full Secret Key</label>
+      <div style="display:flex; gap:0.5rem;">
+        <input
+          type="text"
+          id="fullApiKeyInput"
+          class="input"
+          readonly
+          value="{{ key.full_key }}"
+          style="font-family:monospace; font-weight:600; background:var(--md-sys-color-surface-container); letter-spacing:0.02em;"
+        >
+        <button type="button" class="btn btn-primary" onclick="copyKey()">Copy</button>
+      </div>
+      <span id="copyConfirm" style="color:var(--md-sys-color-primary); font-size:0.85rem; display:none; margin-top:0.35rem; font-weight:600;">✓ Copied to clipboard!</span>
+    </div>
+
+    <div style="background:var(--md-sys-color-surface-container-low); padding:1rem; border-radius:var(--radius-sm); margin-bottom:1.5rem; font-size:0.85rem;">
+      <div><strong>Rate Limit:</strong> {{ key.rate_limit_per_min }} requests/minute</div>
+      <div style="margin-top:0.25rem;"><strong>App Scoped:</strong> {{ key.app_instance_id }}</div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end;">
+      <a href="/manager/keys" class="btn btn-primary">Done & Return to Keys</a>
+    </div>
+  </div>
+</div>
+
+<script>
+function copyKey() {
+  const input = document.getElementById('fullApiKeyInput');
+  input.select();
+  navigator.clipboard.writeText(input.value).then(() => {
+    const msg = document.getElementById('copyConfirm');
+    msg.style.display = 'block';
+    setTimeout(() => { msg.style.display = 'none'; }, 2500);
+  });
+}
+</script>
+{% endblock %}

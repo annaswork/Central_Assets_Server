@@ -14,18 +14,38 @@ _database: AsyncIOMotorDatabase | None = None
 
 def get_client() -> AsyncIOMotorClient:
     """Return the global Motor client instance, creating it if needed."""
-    global _client
+    global _client, _database
+    reset_needed = False
+    if _client is not None:
+        try:
+            client_loop = _client.get_io_loop()
+            if client_loop is None or client_loop.is_closed():
+                reset_needed = True
+            else:
+                import asyncio
+                try:
+                    current_loop = asyncio.get_running_loop()
+                    if client_loop is not current_loop:
+                        reset_needed = True
+                except RuntimeError:
+                    pass
+        except Exception:
+            reset_needed = True
+
+    if reset_needed:
+        _client = None
+        _database = None
+
     if _client is None:
         _client = AsyncIOMotorClient(settings.MONGODB_URI)
+        _database = _client[settings.MONGODB_DB_NAME]
     return _client
 
 
 def get_database() -> AsyncIOMotorDatabase:
     """Return the global Motor database instance."""
     global _database
-    if _database is None:
-        client = get_client()
-        _database = client[settings.MONGODB_DB_NAME]
+    get_client()
     return _database
 
 

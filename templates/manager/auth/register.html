@@ -1,0 +1,165 @@
+{% extends "manager/base.html" %}
+
+{% block title %}Create Manager Account — Asset Platform{% endblock %}
+
+{% block content %}
+<div style="min-height:85vh; display:flex; align-items:center; justify-content:center; padding:1.5rem 1rem;">
+  <div class="card" style="width:100%; max-width:440px; box-shadow:var(--md-sys-elevation-3);">
+    <div style="text-align:center; margin-bottom:1.5rem;">
+      <div style="font-size:2.5rem; margin-bottom:0.25rem;">⚡</div>
+      <h1 style="font-size:1.6rem; margin-bottom:0.25rem;">Create Manager Account</h1>
+      <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem;">
+        Tenant-scoped creative asset workspace
+      </p>
+    </div>
+
+    {% if error %}
+      <div class="alert alert-error" style="margin-bottom:1.25rem;">
+        <span>⚠️</span>
+        <span>{{ error }}</span>
+      </div>
+    {% endif %}
+
+    <form method="POST" action="/manager/register" id="registerForm">
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="username">Username</label>
+        <input
+          type="text"
+          id="username"
+          name="username"
+          class="input"
+          value="{{ username or '' }}"
+          required
+          minlength="3"
+          maxlength="50"
+          autocomplete="username"
+          autofocus
+          placeholder="e.g. creative_lead"
+        >
+        <div id="usernameStatus" style="font-size:0.8rem; margin-top:0.35rem; min-height:1.2rem;"></div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="email">Email Address <span style="font-size:0.8rem; color:var(--md-sys-color-outline); font-weight:normal;">(optional)</span></label>
+        <input
+          type="email"
+          id="email"
+          name="email"
+          class="input"
+          value="{{ email or '' }}"
+          autocomplete="email"
+          placeholder="manager@example.com"
+        >
+      </div>
+
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="password">Password</label>
+        <input
+          type="password"
+          id="password"
+          name="password"
+          class="input"
+          required
+          minlength="8"
+          autocomplete="new-password"
+          placeholder="Minimum 8 characters"
+        >
+      </div>
+
+      <div class="form-group" style="margin-bottom:1.5rem;">
+        <label class="form-label" for="confirm_password">Confirm Password</label>
+        <input
+          type="password"
+          id="confirm_password"
+          name="confirm_password"
+          class="input"
+          required
+          minlength="8"
+          autocomplete="new-password"
+          placeholder="Repeat password"
+        >
+        <div id="pwMatchStatus" style="font-size:0.8rem; margin-top:0.35rem; min-height:1.2rem;"></div>
+      </div>
+
+      <button type="submit" id="submitBtn" class="btn btn-primary" style="width:100%; padding:0.75rem; font-size:1rem;">
+        Create Account
+      </button>
+
+      <div style="margin-top:1.5rem; padding-top:1rem; border-top:1px solid var(--md-sys-color-outline-variant); text-align:center; font-size:0.9rem;">
+        Already have a Manager account?
+        <a href="/manager/login" style="color:var(--md-sys-color-primary); font-weight:600; text-decoration:none; margin-left:0.25rem;">
+          Sign In
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  const usernameInput = document.getElementById('username');
+  const usernameStatus = document.getElementById('usernameStatus');
+  const submitBtn = document.getElementById('submitBtn');
+  const pwInput = document.getElementById('password');
+  const confirmPwInput = document.getElementById('confirm_password');
+  const pwMatchStatus = document.getElementById('pwMatchStatus');
+
+  let checkTimer = null;
+  let isUsernameAvailable = true;
+
+  // Live async username availability check
+  usernameInput.addEventListener('input', function() {
+    const val = this.value.trim();
+    clearTimeout(checkTimer);
+
+    if (val.length < 3) {
+      usernameStatus.innerHTML = '<span style="color:var(--md-sys-color-outline);">Must be at least 3 characters.</span>';
+      usernameInput.style.borderColor = '';
+      return;
+    }
+
+    usernameStatus.innerHTML = '<span style="color:var(--md-sys-color-on-surface-variant); opacity:0.8;">⏳ Checking availability...</span>';
+
+    checkTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/manager/check-username?u=${encodeURIComponent(val)}`);
+        const data = await res.json();
+
+        if (data.available) {
+          usernameStatus.innerHTML = '<span style="color:var(--md-sys-color-primary, #00875a); font-weight:600;">✓ ' + data.message + '</span>';
+          usernameInput.style.borderColor = 'var(--md-sys-color-primary, #00875a)';
+          isUsernameAvailable = true;
+          submitBtn.disabled = false;
+        } else {
+          usernameStatus.innerHTML = '<span style="color:var(--md-sys-color-error, #de350b); font-weight:600;">✗ ' + data.message + '</span>';
+          usernameInput.style.borderColor = 'var(--md-sys-color-error, #de350b)';
+          isUsernameAvailable = false;
+          submitBtn.disabled = true;
+        }
+      } catch (err) {
+        usernameStatus.innerHTML = '';
+        isUsernameAvailable = true;
+      }
+    }, 350);
+  });
+
+  // Password confirmation validation
+  function validatePasswords() {
+    if (!confirmPwInput.value) {
+      pwMatchStatus.innerHTML = '';
+      return;
+    }
+    if (pwInput.value !== confirmPwInput.value) {
+      pwMatchStatus.innerHTML = '<span style="color:var(--md-sys-color-error, #de350b); font-weight:600;">✗ Passwords do not match</span>';
+      confirmPwInput.style.borderColor = 'var(--md-sys-color-error, #de350b)';
+      submitBtn.disabled = true;
+    } else {
+      pwMatchStatus.innerHTML = '<span style="color:var(--md-sys-color-primary, #00875a); font-weight:600;">✓ Passwords match</span>';
+      confirmPwInput.style.borderColor = 'var(--md-sys-color-primary, #00875a)';
+      if (isUsernameAvailable) submitBtn.disabled = false;
+    }
+  }
+
+  pwInput.addEventListener('input', validatePasswords);
+  confirmPwInput.addEventListener('input', validatePasswords);
+</script>
+{% endblock %}

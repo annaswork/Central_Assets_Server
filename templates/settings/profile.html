@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}My Profile — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+  <div style="display:flex; align-items:center; gap:0.75rem;">
+    <a href="/admin/settings" style="color:var(--md-sys-color-primary); text-decoration:none; font-size:1.1rem;" title="Back to Settings">←</a>
+    <h1 style="margin:0;">Administrator Profile</h1>
+  </div>
+  <p style="color:var(--md-sys-color-on-surface-variant); margin-top:0.25rem;">
+    Manage your administrator name, profile avatar photo, and account security.
+  </p>
+</div>
+
+{% if error %}
+  <div class="alert alert-error" style="margin-bottom:1.5rem; max-width:800px;">
+    <span>⚠️</span>
+    <span>{{ error }}</span>
+  </div>
+{% endif %}
+
+{% if success %}
+  <div class="alert alert-success" style="margin-bottom:1.5rem; max-width:800px;">
+    <span>✓</span>
+    <span>{{ success }}</span>
+  </div>
+{% endif %}
+
+<div class="grid grid-2" style="max-width:850px; gap:1.5rem;">
+  <!-- Profile Information Form -->
+  <div class="card">
+    <h3 style="margin-top:0; margin-bottom:1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.5rem;">
+      Profile Details
+    </h3>
+
+    <form method="POST" action="/admin/profile" enctype="multipart/form-data">
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="adminUsername">Username</label>
+        <input
+          type="text"
+          id="adminUsername"
+          class="input"
+          value="{{ user.username }}"
+          disabled
+          style="opacity:0.65; cursor:not-allowed;"
+        >
+      </div>
+
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="adminFullName">Full Name / Display Name</label>
+        <input
+          type="text"
+          id="adminFullName"
+          name="full_name"
+          class="input"
+          value="{{ user.full_name or user.display_name or '' }}"
+          placeholder="e.g. Annas Asif"
+          required
+        >
+      </div>
+
+      <div class="form-group" style="margin-bottom:1.5rem;">
+        <label class="form-label" for="adminAvatarInput">Profile Picture</label>
+        <div style="display:flex; align-items:center; gap:1.25rem; margin-top:0.5rem;">
+          <div id="adminAvatarPreview" style="width:58px; height:58px; border-radius:50%; background:var(--md-sys-color-primary-container); color:var(--md-sys-color-on-primary-container); display:flex; align-items:center; justify-content:center; font-size:1.4rem; font-weight:700; overflow:hidden; flex-shrink:0; border:2px solid var(--md-sys-color-outline-variant);">
+            {% if user.profile_picture %}
+              <img src="{{ user.profile_picture }}" alt="Avatar" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">
+            {% else %}
+              {{ ((user.full_name or user.display_name or user.username)[:1])|upper }}
+            {% endif %}
+          </div>
+          <div style="flex:1;">
+            <input type="file" id="adminAvatarInput" name="avatar_file" accept="image/*" class="input" style="padding:0.4rem; font-size:0.85rem;">
+            <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.35rem;">
+              Selecting an image opens a square popup cropper with transparency preservation.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end;">
+        <button type="submit" class="btn btn-primary">Save Profile</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Change Password Form -->
+  <div class="card">
+    <h3 style="margin-top:0; margin-bottom:1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.5rem;">
+      Security & Password
+    </h3>
+
+    <form method="POST" action="/admin/profile">
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="adminCurPassword">Current Password</label>
+        <input type="password" id="adminCurPassword" name="current_password" class="input" required autocomplete="current-password">
+      </div>
+
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="adminNewPassword">New Password</label>
+        <input type="password" id="adminNewPassword" name="new_password" class="input" required minlength="8" autocomplete="new-password">
+      </div>
+
+      <div class="form-group" style="margin-bottom:1.5rem;">
+        <label class="form-label" for="adminConfPassword">Confirm New Password</label>
+        <input type="password" id="adminConfPassword" name="confirm_password" class="input" required minlength="8" autocomplete="new-password">
+      </div>
+
+      <div style="display:flex; justify-content:flex-end;">
+        <button type="submit" class="btn btn-secondary">Update Password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/admin-assets/js/avatar_cropper.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    setupAvatarCropper('#adminAvatarInput', '#adminAvatarPreview');
+  });
+</script>
+{% endblock %}

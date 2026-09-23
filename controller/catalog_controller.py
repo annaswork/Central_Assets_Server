@@ -279,12 +279,31 @@ async def get_resolved_assets(
                 "as": "sub_inst",
             }
         },
+        # Lookup category and subcategory via central asset as fallback
+        {
+            "$lookup": {
+                "from": CATEGORIES,
+                "localField": "central.category_id",
+                "foreignField": "_id",
+                "as": "cat_via_central",
+            }
+        },
+        {
+            "$lookup": {
+                "from": SUBCATEGORIES,
+                "localField": "central.sub_category_id",
+                "foreignField": "_id",
+                "as": "sub_via_central",
+            }
+        },
         # Preserve assets created directly in instance without a central link
         {"$unwind": {"path": "$central", "preserveNullAndEmptyArrays": True}},
         {"$unwind": {"path": "$cat_central", "preserveNullAndEmptyArrays": True}},
         {"$unwind": {"path": "$cat_inst", "preserveNullAndEmptyArrays": True}},
         {"$unwind": {"path": "$sub_central", "preserveNullAndEmptyArrays": True}},
         {"$unwind": {"path": "$sub_inst", "preserveNullAndEmptyArrays": True}},
+        {"$unwind": {"path": "$cat_via_central", "preserveNullAndEmptyArrays": True}},
+        {"$unwind": {"path": "$sub_via_central", "preserveNullAndEmptyArrays": True}},
         {
             "$match": {
                 "$or": [
@@ -303,18 +322,38 @@ async def get_resolved_assets(
                         {"$toString": "$_id"},
                     ]
                 },
-                "categoryId": {"$toString": "$category_id"},
-                "subCategoryId": {"$toString": "$sub_category_id"},
+                "categoryId": {
+                    "$ifNull": [
+                        {"$toString": "$category_id"},
+                        {"$toString": "$central.category_id"}
+                    ]
+                },
+                "subCategoryId": {
+                    "$ifNull": [
+                        {"$toString": "$sub_category_id"},
+                        {"$toString": "$central.sub_category_id"}
+                    ]
+                },
                 "category_name": {
                     "$ifNull": [
                         "$cat_inst.name",
-                        {"$ifNull": ["$cat_central.name", "—"]}
+                        {
+                            "$ifNull": [
+                                "$cat_central.name",
+                                {"$ifNull": ["$cat_via_central.name", "—"]}
+                            ]
+                        }
                     ]
                 },
                 "subcategory_name": {
                     "$ifNull": [
                         "$sub_inst.name",
-                        {"$ifNull": ["$sub_central.name", "—"]}
+                        {
+                            "$ifNull": [
+                                "$sub_central.name",
+                                {"$ifNull": ["$sub_via_central.name", "—"]}
+                            ]
+                        }
                     ]
                 },
                 "is_enabled": {

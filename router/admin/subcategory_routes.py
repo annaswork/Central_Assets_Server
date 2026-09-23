@@ -81,11 +81,25 @@ async def admin_list_subcategories(
     # Attach live asset count to each subcategory for critical warning checks
     for item in data.get("items", []):
         try:
-            item["asset_count"] = await db[ASSETS].count_documents(
-                {"sub_category_id": to_object_id(item["id"]), "deleted_at": None}
+            sub_oid = to_object_id(item["id"])
+            cnt = await db[ASSETS].count_documents(
+                {
+                    "$or": [
+                        {"sub_category_id": sub_oid},
+                        {"sub_category_id": str(item["id"])},
+                        {"subCategoryId": sub_oid},
+                        {"subCategoryId": str(item["id"])},
+                        {"subcategory_id": sub_oid},
+                        {"subcategory_id": str(item["id"])},
+                    ],
+                    "deleted_at": {"$in": [None, False]},
+                }
             )
+            item["asset_count"] = cnt
+            item["assets_count"] = cnt
         except Exception:
             item["asset_count"] = 0
+            item["assets_count"] = 0
 
     toast_message = (
         f"Subcategory '{name}' and associated assets were deleted." if deleted and name else None

@@ -11,12 +11,16 @@ from database.collections import (
     ANALYTICS_EVENTS,
     ANALYTICS_HOURLY,
     API_KEYS,
+    APP_INSTANCE_ACCESS,
+    APP_INSTANCE_ACCESS_REQUESTS,
     APP_INSTANCES,
     ASSETS,
     CATEGORIES,
     INSTANCE_ASSETS,
     INSTANCE_CATEGORIES,
     INSTANCE_SUBCATEGORIES,
+    MANAGERS,
+    MESSAGES,
     MONITORED_ENDPOINTS,
     SUBCATEGORIES,
 )
@@ -192,6 +196,7 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
             IndexModel([("key_prefix", ASCENDING)], unique=True, name="uniq_api_key_prefix"),
             IndexModel([("is_active", ASCENDING)], name="idx_api_key_active"),
             IndexModel([("app_instance_id", ASCENDING)], name="idx_api_key_app_instance"),
+            IndexModel([("owner_id", ASCENDING)], name="idx_api_key_owner"),
         ]
     )
 
@@ -202,7 +207,48 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
         ]
     )
 
-    # 10. Monitored Endpoints
+    # 10. Manager Users
+    await db[MANAGERS].create_indexes(
+        [
+            IndexModel([("username", ASCENDING)], unique=True, name="uniq_manager_username"),
+            IndexModel([("status", ASCENDING)], name="idx_manager_status"),
+            IndexModel([("email", ASCENDING)], name="idx_manager_email"),
+        ]
+    )
+
+    # 11. App Instance Access Grants
+    await db[APP_INSTANCE_ACCESS].create_indexes(
+        [
+            IndexModel(
+                [("manager_id", ASCENDING), ("app_instance_id", ASCENDING)],
+                unique=True,
+                name="uniq_manager_instance_access",
+            ),
+            IndexModel([("manager_id", ASCENDING)], name="idx_access_manager_id"),
+            IndexModel([("app_instance_id", ASCENDING)], name="idx_access_app_instance_id"),
+        ]
+    )
+
+    # 12. App Instance Access Requests
+    await db[APP_INSTANCE_ACCESS_REQUESTS].create_indexes(
+        [
+            IndexModel([("requesting_manager_id", ASCENDING)], name="idx_req_manager_id"),
+            IndexModel([("app_instance_id", ASCENDING)], name="idx_req_app_instance_id"),
+            IndexModel([("status", ASCENDING)], name="idx_req_status"),
+            IndexModel([("created_at", DESCENDING)], name="idx_req_created_at"),
+        ]
+    )
+
+    # 13. Messages (Manager ↔ Admin)
+    await db[MESSAGES].create_indexes(
+        [
+            IndexModel([("manager_id", ASCENDING), ("created_at", ASCENDING)], name="idx_msg_manager_created"),
+            IndexModel([("status", ASCENDING)], name="idx_msg_status"),
+            IndexModel([("payload_type", ASCENDING)], name="idx_msg_payload_type"),
+        ]
+    )
+
+    # 14. Monitored Endpoints
     await db[MONITORED_ENDPOINTS].create_indexes(
         [
             IndexModel(
@@ -213,7 +259,7 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
         ]
     )
 
-    # 11. Analytics Events (TTL index on ts default 30 days = 2592000s)
+    # 15. Analytics Events (TTL index on ts default 30 days = 2592000s)
     await db[ANALYTICS_EVENTS].create_indexes(
         [
             IndexModel(
@@ -228,7 +274,7 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
         ]
     )
 
-    # 12. Hourly Rollups
+    # 16. Hourly Rollups
     await db[ANALYTICS_HOURLY].create_indexes(
         [
             IndexModel(

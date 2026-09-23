@@ -25,11 +25,20 @@ async def list_app_instances(
     page: int = 1,
     page_size: int = 20,
     search: str | None = None,
+    instance_ids: list[str] | None = None,
+    owner_id: str | None = None,
 ) -> dict[str, Any]:
-    """List app instances with pagination."""
+    """List app instances with pagination, optionally scoped by IDs or owner."""
     query: dict[str, Any] = {}
     if search and search.strip():
         query["name"] = {"$regex": search.strip(), "$options": "i"}
+
+    if instance_ids is not None:
+        query["_id"] = {"$in": [to_object_id(i) for i in instance_ids]}
+
+    if owner_id:
+        m_oid = to_object_id(owner_id)
+        query["$or"] = [{"owner_id": m_oid}, {"owner_id": str(m_oid)}]
 
     skip = (page - 1) * page_size
     total = await db[APP_INSTANCES].count_documents(query)
@@ -68,6 +77,7 @@ async def create_app_instance(db: AsyncIOMotorDatabase, data: AppInstanceCreate)
     doc: dict[str, Any] = {
         "name": name_clean,
         "app_icon": data.app_icon,
+        "owner_id": to_object_id(data.owner_id) if data.owner_id else None,
         "created_at": now,
         "updated_at": now,
     }

@@ -70,37 +70,55 @@
       backdrop.addEventListener("click", closeMobileDrawer);
     }
 
-    // Close mobile drawer on Esc key
+    // Close mobile drawer and dropdown on Esc key
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") {
         closeMobileDrawer();
+        const menu = document.getElementById("navUserDropdownMenu");
+        if (menu) menu.classList.remove("show");
       }
     });
 
     // Close mobile drawer when clicking a nav-link inside it
     const drawerLinks = document.querySelectorAll(".nav-drawer .nav-link");
     drawerLinks.forEach(function (link) {
-      link.addEventListener("click", function (e) {
+      link.addEventListener("click", function () {
         if (window.innerWidth < 600) {
           closeMobileDrawer();
-        }
-        // When collapsed, expand sidebar instead of navigating
-        if (isCollapsed()) {
-          e.preventDefault();
-          setSidebarCollapsed(false);
         }
       });
     });
 
-    // Also expand sidebar when clicking footer actions (Settings, Theme, Logout) while collapsed
-    const footerActions = document.querySelectorAll(".nav-drawer .nav-footer-action");
-    footerActions.forEach(function (action) {
-      action.addEventListener("click", function (e) {
+    // Uncollapse sidebar when collapsed and any icon/link in nav-drawer is clicked
+    const navDrawer = document.getElementById("navDrawer") || document.querySelector(".nav-drawer");
+    if (navDrawer) {
+      navDrawer.addEventListener("click", function (e) {
         if (isCollapsed()) {
-          e.preventDefault();
+          if (e.target.closest("#sidebarCollapseBtn")) return;
           setSidebarCollapsed(false);
         }
       });
+    }
+
+    // Close dropdown menu when clicking anywhere outside
+    document.addEventListener("click", function (e) {
+      const menu = document.getElementById("navUserDropdownMenu");
+      const row = document.getElementById("navUserRow");
+      if (menu && menu.classList.contains("show")) {
+        if (row && row.contains(e.target)) return;
+        if (!menu.contains(e.target)) {
+          menu.classList.remove("show");
+        }
+      }
     });
   });
+
+  // Upward User Dropdown Menu Toggle
+  window.toggleUserDropdown = function (e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById("navUserDropdownMenu");
+    if (menu) {
+      menu.classList.toggle("show");
+    }
+  };
 })();

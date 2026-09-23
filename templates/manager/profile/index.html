@@ -1,0 +1,120 @@
+{% extends "manager/base.html" %}
+
+{% block title %}Update Profile — Manager Portal{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+  <h1 style="margin:0;">Update Profile</h1>
+  <p style="color:var(--md-sys-color-on-surface-variant); margin:0.25rem 0 0 0;">
+    Manage your personal details, profile picture, and account password.
+  </p>
+</div>
+
+{% if error %}
+  <div class="alert alert-error" style="margin-bottom:1.5rem; max-width:850px;">
+    <span>⚠️</span>
+    <span>{{ error }}</span>
+  </div>
+{% endif %}
+
+{% if success %}
+  <div class="alert alert-success" style="margin-bottom:1.5rem; max-width:850px;">
+    <span>✓</span>
+    <span>{{ success }}</span>
+  </div>
+{% endif %}
+
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(380px, 1fr)); gap:1.5rem; max-width:850px;">
+  <!-- Profile Information Form -->
+  <div class="card">
+    <h3 style="margin-top:0; margin-bottom:1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.5rem;">
+      Profile Information
+    </h3>
+
+    <form method="POST" action="/manager/profile" enctype="multipart/form-data">
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="profUsername">Username <span style="font-size:0.75rem; color:var(--md-sys-color-outline);">(Non-editable)</span></label>
+        <input
+          type="text"
+          id="profUsername"
+          class="input"
+          value="{{ manager.username }}"
+          disabled
+          readonly
+          style="background:var(--md-sys-color-surface-container); opacity:0.85; cursor:not-allowed;"
+        >
+      </div>
+
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="profDisplayName">Display Name</label>
+        <input
+          type="text"
+          id="profDisplayName"
+          name="display_name"
+          class="input"
+          value="{{ manager.display_name or manager.username }}"
+          placeholder="Display Name"
+        >
+      </div>
+
+      <div class="form-group" style="margin-bottom:1.5rem;">
+        <label class="form-label" for="managerAvatarInput">Profile Picture</label>
+        <div style="display:flex; align-items:center; gap:1.25rem; margin-top:0.5rem;">
+          <div id="managerAvatarPreview" style="width:58px; height:58px; border-radius:50%; background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container); display:flex; align-items:center; justify-content:center; font-size:1.4rem; font-weight:700; overflow:hidden; flex-shrink:0; border:2px solid var(--md-sys-color-outline-variant);">
+            {% if manager.profile_picture %}
+              <img src="{{ manager.profile_picture }}" alt="Avatar" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">
+            {% else %}
+              {{ ((manager.display_name or manager.username)[:1])|upper }}
+            {% endif %}
+          </div>
+          <div style="flex:1;">
+            <input type="file" id="managerAvatarInput" name="avatar_file" accept="image/*" class="input" style="padding:0.4rem; font-size:0.85rem;">
+            <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.35rem;">
+              Selecting an image opens a square popup cropper with transparency preservation.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end;">
+        <button type="submit" class="btn btn-primary">Save Profile</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Change Password Form -->
+  <div class="card">
+    <h3 style="margin-top:0; margin-bottom:1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.5rem;">
+      Change Password
+    </h3>
+
+    <form method="POST" action="/manager/profile">
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="curPassword">Current Password</label>
+        <input type="password" id="curPassword" name="current_password" class="input" required autocomplete="current-password">
+      </div>
+
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="newPassword">New Password</label>
+        <input type="password" id="newPassword" name="new_password" class="input" required minlength="8" autocomplete="new-password">
+      </div>
+
+      <div class="form-group" style="margin-bottom:1.5rem;">
+        <label class="form-label" for="confPassword">Confirm New Password</label>
+        <input type="password" id="confPassword" name="confirm_password" class="input" required minlength="8" autocomplete="new-password">
+      </div>
+
+      <div style="display:flex; justify-content:flex-end;">
+        <button type="submit" class="btn btn-outlined">Update Password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/admin-assets/js/avatar_cropper.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    setupAvatarCropper('#managerAvatarInput', '#managerAvatarPreview');
+  });
+</script>
+{% endblock %}

@@ -60,6 +60,23 @@ from database.models.more_fields import (
     VideoItem,
     VideoListBlock,
 )
+from database.models.manager_models import (
+    AppInstanceAccessGrant,
+    AppInstanceAccessInDB,
+    AppInstanceAccessRequestCreate,
+    AppInstanceAccessRequestInDB,
+    AppInstanceAccessRequestOut,
+    MessageCreate,
+    MessageInDB,
+    MessageOut,
+)
+from database.models.manager_user import (
+    ManagerProfileUpdate,
+    ManagerUserCreate,
+    ManagerUserInDB,
+    ManagerUserOut,
+    ManagerUserUpdate,
+)
 from database.models.subcategory import (
     SubcategoryCreate,
     SubcategoryInDB,

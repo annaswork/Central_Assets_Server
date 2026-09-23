@@ -1,0 +1,119 @@
+{% extends "manager/base.html" %}
+
+{% block title %}Dashboard — Manager Portal{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:2rem;">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem;">
+    <div>
+      <h1 style="margin:0 0 0.25rem 0; font-size:1.85rem;">Welcome, {{ manager.display_name or manager.username }}</h1>
+      <p style="color:var(--md-sys-color-on-surface-variant); margin:0;">
+        Manage your tenant app instances and consume central creative assets.
+      </p>
+    </div>
+    <div>
+      <a href="/manager/instances" class="btn btn-outlined" style="display:inline-flex; align-items:center; gap:0.5rem;">
+        <span>📱</span>
+        <span>View Apps & Request Access</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Scoped KPI Cards -->
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:1.25rem; margin-bottom:2rem;">
+  <!-- Accessible App Instances -->
+  <div class="card" style="display:flex; align-items:center; gap:1.25rem; padding:1.25rem;">
+    <div style="width:48px; height:48px; border-radius:12px; background:var(--md-sys-color-primary-container); color:var(--md-sys-color-on-primary-container); display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+      📱
+    </div>
+    <div>
+      <div style="font-size:1.85rem; font-weight:700; line-height:1.2;">{{ counts.instances }}</div>
+      <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">App Instances</div>
+    </div>
+  </div>
+
+  <!-- Referenced Categories -->
+  <div class="card" style="display:flex; align-items:center; gap:1.25rem; padding:1.25rem;">
+    <div style="width:48px; height:48px; border-radius:12px; background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container); display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+      📁
+    </div>
+    <div>
+      <div style="font-size:1.85rem; font-weight:700; line-height:1.2;">{{ counts.categories }}</div>
+      <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">Referenced Categories</div>
+    </div>
+  </div>
+
+  <!-- Referenced Subcategories -->
+  <div class="card" style="display:flex; align-items:center; gap:1.25rem; padding:1.25rem;">
+    <div style="width:48px; height:48px; border-radius:12px; background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container); display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+      📂
+    </div>
+    <div>
+      <div style="font-size:1.85rem; font-weight:700; line-height:1.2;">{{ counts.subcategories }}</div>
+      <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">Referenced Subcategories</div>
+    </div>
+  </div>
+
+  <!-- Referenced Assets -->
+  <div class="card" style="display:flex; align-items:center; gap:1.25rem; padding:1.25rem;">
+    <div style="width:48px; height:48px; border-radius:12px; background:var(--md-sys-color-surface-container-high); color:var(--md-sys-color-primary); display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+      🖼️
+    </div>
+    <div>
+      <div style="font-size:1.85rem; font-weight:700; line-height:1.2;">{{ counts.assets }}</div>
+      <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">Referenced Assets</div>
+    </div>
+  </div>
+</div>
+
+<div class="alert alert-info" style="margin-bottom:2rem; background:var(--md-sys-color-surface-container-low); border-left:4px solid var(--md-sys-color-primary);">
+  <span>💡</span>
+  <span>
+    <strong>Scoped Counts:</strong> Category, Subcategory, and Asset numbers reflect records imported or referenced by your accessible App Instances. Central data remains pristine and managed by Administrator.
+  </span>
+</div>
+
+<!-- Quick Navigation Cards -->
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:1.5rem;">
+  <a href="/manager/instances" class="card" style="text-decoration:none; color:inherit; transition:transform 0.2s, box-shadow 0.2s; cursor:pointer;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+    <div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.75rem;">
+      <span style="font-size:1.75rem;">📱</span>
+      <h3 style="margin:0; font-size:1.15rem;">Manage App Instances</h3>
+    </div>
+    <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem; margin:0;">
+      Create and configure your apps, import central assets, and request access to shared apps.
+    </p>
+  </a>
+
+  <a href="/manager/categories" class="card" style="text-decoration:none; color:inherit; transition:transform 0.2s, box-shadow 0.2s; cursor:pointer;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+    <div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.75rem;">
+      <span style="font-size:1.75rem;">🎨</span>
+      <h3 style="margin:0; font-size:1.15rem;">Browse Central Library</h3>
+    </div>
+    <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem; margin:0;">
+      Explore read-only central creative assets, categories, and frames available for your apps.
+    </p>
+  </a>
+
+  <a href="/manager/keys" class="card" style="text-decoration:none; color:inherit; transition:transform 0.2s, box-shadow 0.2s; cursor:pointer;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+    <div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.75rem;">
+      <span style="font-size:1.75rem;">🔑</span>
+      <h3 style="margin:0; font-size:1.15rem;">API Key Management</h3>
+    </div>
+    <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem; margin:0;">
+      Generate scoped client API keys for your applications with configurable rate limits.
+    </p>
+  </a>
+
+  <a href="/manager/messages" class="card" style="text-decoration:none; color:inherit; transition:transform 0.2s, box-shadow 0.2s; cursor:pointer;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+    <div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.75rem;">
+      <span style="font-size:1.75rem;">💬</span>
+      <h3 style="margin:0; font-size:1.15rem;">Admin Messages & Proposals</h3>
+    </div>
+    <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem; margin:0;">
+      Chat with system administrators or propose new central assets for review.
+    </p>
+  </a>
+</div>
+{% endblock %}

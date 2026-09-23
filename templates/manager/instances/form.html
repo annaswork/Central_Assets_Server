@@ -1,0 +1,65 @@
+{% extends "manager/base.html" %}
+
+{% block title %}Create App Instance — Manager Portal{% endblock %}
+
+{% block content %}
+<div style="max-width:600px; margin:0 auto;">
+  <div style="margin-bottom:1.5rem;">
+    <a href="/manager/instances" style="text-decoration:none; color:var(--md-sys-color-primary); font-size:0.9rem; display:inline-flex; align-items:center; gap:0.25rem;">
+      ← Back to App Instances
+    </a>
+    <h1 style="margin:0.5rem 0 0.25rem 0;">Create App Instance</h1>
+    <p style="color:var(--md-sys-color-on-surface-variant); margin:0;">
+      Register a new application instance scoped to your manager account.
+    </p>
+  </div>
+
+  {% if error %}
+    <div class="alert alert-error" style="margin-bottom:1.5rem;">
+      <span>⚠️</span>
+      <span>{{ error }}</span>
+    </div>
+  {% endif %}
+
+  <div class="card" style="box-shadow:var(--md-sys-elevation-2);">
+    <form method="POST" action="/manager/instances/new">
+      <div class="form-group" style="margin-bottom:1.25rem;">
+        <label class="form-label" for="name">Application Name</label>
+        <input
+          type="text"
+          id="name"
+          name="name"
+          class="input"
+          value="{{ instance.name if instance else '' }}"
+          required
+          autofocus
+          placeholder="e.g. Photo Frames Pro"
+        >
+        <div style="font-size:0.8rem; color:var(--md-sys-color-outline); margin-top:0.25rem;">
+          Unique name identifying this application.
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:1.5rem;">
+        <label class="form-label" for="package_name">Package Name / Bundle ID <span style="font-size:0.8rem; color:var(--md-sys-color-outline); font-weight:normal;">(optional)</span></label>
+        <input
+          type="text"
+          id="package_name"
+          name="package_name"
+          class="input"
+          value="{{ instance.package_name if instance else '' }}"
+          placeholder="e.g. com.example.photoframes"
+        >
+        <div style="font-size:0.8rem; color:var(--md-sys-color-outline); margin-top:0.25rem;">
+          Must follow reverse domain format (e.g. com.mycompany.app).
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:0.75rem; border-top:1px solid var(--md-sys-color-outline-variant); padding-top:1.25rem;">
+        <a href="/manager/instances" class="btn btn-outlined">Cancel</a>
+        <button type="submit" class="btn btn-primary">Create Instance & Configure</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

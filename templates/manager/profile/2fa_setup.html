@@ -1,0 +1,111 @@
+{% extends "manager/base.html" %}
+
+{% block title %}Set Up Two-Factor Authentication — Manager Portal{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+  <a href="/manager/profile" style="color:var(--md-sys-color-primary); text-decoration:none; font-size:0.9rem; display:inline-flex; align-items:center; gap:0.25rem;">
+    ← Back to Profile
+  </a>
+  <h1 style="margin:0.5rem 0 0.25rem 0;">Set Up Two-Factor Authentication</h1>
+  <p style="color:var(--md-sys-color-on-surface-variant); margin:0;">
+    Add an extra layer of security using Google Authenticator or any TOTP application.
+  </p>
+</div>
+
+<div class="grid grid-2" style="max-width:920px; gap:1.5rem; align-items:start;">
+  <!-- Step 1: QR Code -->
+  <div class="card">
+    <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem;">
+      <span class="badge badge-primary" style="font-weight:700; width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; border-radius:50%;">1</span>
+      <h3 style="margin:0;">Scan QR Code</h3>
+    </div>
+
+    <p style="font-size:0.9rem; color:var(--md-sys-color-on-surface-variant); margin-bottom:1.25rem;">
+      Open <strong>Google Authenticator</strong> (or Authy, 1Password) on your mobile device and scan this code:
+    </p>
+
+    <div style="text-align:center; padding:1rem; background:#FFFFFF; border-radius:var(--radius-md); width:fit-content; margin:0 auto 1.25rem; border:1px solid var(--md-sys-color-outline-variant);">
+      <img src="{{ setup.qr_code_url }}" alt="2FA QR Code" style="width:200px; height:200px; display:block; image-rendering:pixelated;" />
+    </div>
+
+    <div style="border-top:1px solid var(--md-sys-color-outline-variant); padding-top:1rem;">
+      <div style="font-size:0.85rem; font-weight:600; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.35rem;">
+        Can't scan? Enter secret manually:
+      </div>
+      <div style="display:flex; gap:0.5rem; align-items:center;">
+        <input type="text" id="manualSecret" value="{{ setup.secret }}" readonly class="input" style="font-family:monospace; font-weight:700; font-size:0.95rem; letter-spacing:0.1em; background:var(--md-sys-color-surface-container-low);" />
+        <button type="button" class="btn btn-outlined" onclick="copySecret()" id="copyBtn">
+          📋 Copy
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Confirm Code -->
+  <div class="card">
+    <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem;">
+      <span class="badge badge-primary" style="font-weight:700; width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; border-radius:50%;">2</span>
+      <h3 style="margin:0;">Enter Verification Code</h3>
+    </div>
+
+    <p style="font-size:0.9rem; color:var(--md-sys-color-on-surface-variant); margin-bottom:1.25rem;">
+      Type the 6-digit code shown in your authenticator app to confirm enrollment:
+    </p>
+
+    {% if error %}
+      <div class="alert alert-error" style="margin-bottom:1.25rem;">
+        <span>⚠️</span>
+        <span>{{ error }}</span>
+      </div>
+    {% endif %}
+
+    <form method="POST" action="/manager/profile/2fa/confirm" id="confirmForm">
+      <div class="form-group" style="margin-bottom:1.5rem;">
+        <input
+          type="text"
+          id="code"
+          name="code"
+          class="input"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          placeholder="000000"
+          maxlength="6"
+          required
+          autofocus
+          style="text-align:center; font-size:1.6rem; letter-spacing:0.3em; font-family:monospace; padding:0.75rem; font-weight:700;"
+        />
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width:100%; padding:0.75rem;">
+        Verify & Activate 2FA
+      </button>
+
+      <div style="margin-top:1rem; text-align:center;">
+        <a href="/manager/profile" style="color:var(--md-sys-color-on-surface-variant); text-decoration:none; font-size:0.85rem;">
+          Cancel
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function copySecret() {
+  const input = document.getElementById('manualSecret');
+  input.select();
+  navigator.clipboard.writeText(input.value).then(() => {
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = '✓ Copied';
+    setTimeout(() => { btn.textContent = '📋 Copy'; }, 2000);
+  });
+}
+
+document.getElementById('code')?.addEventListener('input', function(e) {
+  const val = e.target.value.replace(/\D/g, '');
+  if (val.length === 6) {
+    document.getElementById('confirmForm').submit();
+  }
+});
+</script>
+{% endblock %}

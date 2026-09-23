@@ -12,6 +12,7 @@ class AppInstanceCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
     package_name: str | None = Field(default=None, max_length=150)
     app_icon: str | None = None
+    owner_id: str | None = None
 
     @field_validator("package_name")
     @classmethod
@@ -49,6 +50,7 @@ class AppInstanceOut(MongoModel):
     name: str
     package_name: str | None = None
     app_icon: str | None = None
+    owner_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -57,3 +59,4 @@ class AppInstanceInDB(MongoInDBModel, TimestampMixin):
     name: str
     package_name: str | None = None
     app_icon: str | None = None
+    owner_id: str | None = None

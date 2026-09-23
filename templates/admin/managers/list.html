@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Manager Accounts — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
+  <div>
+    <h1 style="margin:0;">Manager Accounts</h1>
+    <p style="color:var(--md-sys-color-on-surface-variant); margin:0.25rem 0 0 0;">
+      Manage tenant manager users, grant or revoke application access, and manage accounts.
+    </p>
+  </div>
+</div>
+
+<div class="card" style="padding:0; overflow:hidden;">
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Manager</th>
+          <th>Status</th>
+          <th style="width:140px; text-align:center;">Owned Apps</th>
+          <th>Granted App Access</th>
+          <th style="width:160px;">Registered</th>
+          <th style="width:180px; text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if managers and managers|length > 0 %}
+          {% for m in managers %}
+            <tr>
+              <td>
+                <div style="display:flex; align-items:center; gap:0.75rem;">
+                  <div style="width:38px; height:38px; border-radius:50%; background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container); display:flex; align-items:center; justify-content:center; font-weight:700;">
+                    {{ (m.username[:1])|upper }}
+                  </div>
+                  <div>
+                    <div style="font-weight:600; font-size:0.95rem;">{{ m.username }}</div>
+                    <div style="font-size:0.8rem; color:var(--md-sys-color-outline);">
+                      {{ m.email or 'No email' }} {% if m.display_name %} • {{ m.display_name }}{% endif %}
+                    </div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                {% if m.status == 'active' and m.is_active %}
+                  <span class="badge badge-success">Active</span>
+                {% elif m.status == 'pending' %}
+                  <span class="badge badge-warning">Pending</span>
+                {% else %}
+                  <span class="badge badge-error">Disabled</span>
+                {% endif %}
+              </td>
+              <td style="text-align:center;">
+                <span class="badge" style="background:var(--md-sys-color-surface-container-high);">
+                  {{ m.owned_instances_count or 0 }} apps
+                </span>
+              </td>
+              <td>
+                <div style="display:flex; flex-wrap:wrap; gap:0.35rem; align-items:center;">
+                  {% if m.granted_instances and m.granted_instances|length > 0 %}
+                    {% for gi in m.granted_instances %}
+                      <span class="badge" style="background:var(--md-sys-color-surface-container-high); display:inline-flex; align-items:center; gap:0.35rem; padding:0.25rem 0.5rem;">
+                        <span>📱 {{ gi.name }}</span>
+                        <form method="POST" action="/admin/managers/{{ m.id }}/revoke-access" style="display:inline; margin:0;" onsubmit="return confirm('Revoke access to {{ gi.name }}?');">
+                          <input type="hidden" name="app_instance_id" value="{{ gi.id }}">
+                          <button type="submit" style="background:none; border:none; cursor:pointer; color:var(--md-sys-color-error); font-size:0.85rem; padding:0; line-height:1;" title="Revoke access">×</button>
+                        </form>
+                      </span>
+                    {% endfor %}
+                  {% else %}
+                    <span style="font-size:0.85rem; color:var(--md-sys-color-outline);">None</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td style="color:var(--md-sys-color-on-surface-variant); font-size:0.85rem;">
+                {{ m.created_at|format_datetime }}
+              </td>
+              <td style="text-align:right;">
+                <div style="display:inline-flex; gap:0.5rem; align-items:center;">
+                  <!-- Grant Access Modal Button -->
+                  <button type="button" class="btn btn-outlined btn-sm" onclick="openGrantModal('{{ m.id }}', '{{ m.username }}')" title="Grant App Access">
+                    + Grant App
+                  </button>
+
+                  <!-- Delete Manager -->
+                  <form method="POST" action="/admin/managers/{{ m.id }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete manager \'{{ m.username }}\'? This will remove their account and all owned app instances.');">
+                    <button type="submit" class="btn btn-outlined btn-sm" style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);" title="Delete Manager">
+                      🗑️
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" style="text-align:center; padding:3.5rem 1rem; color:var(--md-sys-color-on-surface-variant);">
+              <div style="font-size:2rem; margin-bottom:0.5rem;">👥</div>
+              <div style="font-weight:600;">No managers registered yet</div>
+              <div style="font-size:0.9rem; margin-top:0.25rem;">New accounts will appear here after registering at <code>/manager/register</code>.</div>
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal: Grant App Instance Access -->
+<div id="grantModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; padding:1.5rem;">
+  <div class="card" style="width:100%; max-width:480px; box-shadow:var(--md-sys-elevation-4); padding:0; overflow:hidden;">
+    <div style="padding:1.25rem 1.5rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0; font-size:1.15rem;">Grant App Access</h3>
+      <button type="button" onclick="closeGrantModal()" style="background:none; border:none; font-size:1.25rem; cursor:pointer;">✕</button>
+    </div>
+
+    <form id="grantForm" method="POST" action="" style="padding:1.5rem;">
+      <p id="grantTargetName" style="font-weight:600; margin-top:0; color:var(--md-sys-color-primary);"></p>
+
+      <div class="form-group" style="margin-bottom:1.5rem;">
+        <label class="form-label" for="grantAppSelect">Select App Instance *</label>
+        <select id="grantAppSelect" name="app_instance_id" class="select" required>
+          {% for inst in all_instances %}
+            <option value="{{ inst.id }}">{{ inst.name }} ({{ inst.package_name or 'No package' }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+        <button type="button" class="btn btn-outlined" onclick="closeGrantModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Grant Access</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function openGrantModal(managerId, managerName) {
+    const form = document.getElementById('grantForm');
+    form.action = `/admin/managers/${managerId}/grant-access`;
+    document.getElementById('grantTargetName').innerText = `Granting access to manager: ${managerName}`;
+    document.getElementById('grantModal').style.display = 'flex';
+  }
+  function closeGrantModal() {
+    document.getElementById('grantModal').style.display = 'none';
+  }
+</script>
+{% endblock %}

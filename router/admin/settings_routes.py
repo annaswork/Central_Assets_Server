@@ -1,6 +1,6 @@
 """Admin panel routes for API key issuance and system settings."""
 
-from fastapi import APIRouter, Depends, Form, Request, Response
+from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -249,3 +249,109 @@ async def admin_2fa_disable(
         return RedirectResponse(
             url=f"/admin/settings?error={err.message}", status_code=303
         )
+
+
+@router.get("/profile")
+async def admin_profile_page(
+    request: Request,
+    error: str | None = None,
+    success: str | None = None,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    session = get_current_admin_session(request)
+    if not session:
+        return RedirectResponse(url="/admin/login", status_code=303)
+
+    from controller.authorization_controller import get_admin_user_by_id
+
+    user = await get_admin_user_by_id(db, session["user_id"])
+    return templates.TemplateResponse(
+        request=request,
+        name="settings/profile.html",
+        context={
+            "session": session,
+            "user": user,
+            "error": error,
+            "success": success,
+            "active_tab": "profile",
+        },
+    )
+
+
+@router.post("/profile")
+async def admin_profile_update(
+    request: Request,
+    full_name: str | None = Form(default=None),
+    avatar_file: UploadFile | None = File(default=None),
+    current_password: str | None = Form(default=None),
+    new_password: str | None = Form(default=None),
+    confirm_password: str | None = Form(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    session = get_current_admin_session(request)
+    if not session:
+        return RedirectResponse(url="/admin/login", status_code=303)
+
+    from authorization.encryption import hash_password, verify_password
+    from controller.authorization_controller import get_admin_user_by_id
+    from controller.media_controller import handle_upload
+    from database.collections import ADMIN_USERS
+    from utils.datetimes import utc_now_iso
+    from utils.ids import to_object_id
+
+    user_id = session["user_id"]
+    oid = to_object_id(user_id)
+    user = await get_admin_user_by_id(db, user_id)
+    if not user:
+        return RedirectResponse(url="/admin/login", status_code=303)
+
+    error = None
+    update_fields = {"updated_at": utc_now_iso()}
+
+    if full_name and full_name.strip():
+        update_fields["full_name"] = full_name.strip()
+
+    if avatar_file and avatar_file.filename:
+        try:
+            content = await avatar_file.read()
+            if content:
+                uploaded = await handle_upload(
+                    file_bytes=content,
+                    filename=avatar_file.filename,
+                    target_subdir="avatars",
+                )
+                if uploaded.get("url"):
+                    update_fields["profile_picture"] = uploaded["url"]
+        except Exception as e:
+            error = f"Failed to upload avatar: {str(e)}"
+
+    if current_password or new_password:
+        if not current_password or not new_password:
+            error = "Both current and new password are required to change password."
+        elif new_password != confirm_password:
+            error = "New passwords do not match."
+        elif len(new_password) < 8:
+            error = "New password must be at least 8 characters long."
+        elif not verify_password(current_password, user.get("password_hash", "")):
+            error = "Incorrect current password."
+        else:
+            update_fields["password_hash"] = hash_password(new_password)
+
+    if not error:
+        await db[ADMIN_USERS].update_one({"_id": oid}, {"$set": update_fields})
+        return RedirectResponse(url="/admin/dashboard?msg=Profile+Updated+Successfully", status_code=303)
+
+    # Re-fetch user in case of error
+    user = await get_admin_user_by_id(db, user_id)
+    return templates.TemplateResponse(
+        request=request,
+        name="settings/profile.html",
+        context={
+            "session": session,
+            "user": user,
+            "error": error,
+            "success": None,
+            "active_tab": "profile",
+        },
+    )
+

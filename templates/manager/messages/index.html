@@ -1,0 +1,222 @@
+{% extends "manager/base.html" %}
+
+{% block title %}Messages & Proposals — Manager Portal{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
+  <div>
+    <h1 style="margin:0;">Messages & Central Proposals</h1>
+    <p style="color:var(--md-sys-color-on-surface-variant); margin:0.25rem 0 0 0;">
+      Communicate directly with Platform Administrators or propose new central assets.
+    </p>
+  </div>
+  <div>
+    <button type="button" class="btn btn-outlined" onclick="openProposalModal()" style="display:inline-flex; align-items:center; gap:0.5rem;">
+      <span>💡</span>
+      <span>Propose Central Data</span>
+    </button>
+  </div>
+</div>
+
+<div class="card" style="padding:0; overflow:hidden; display:flex; flex-direction:column; height:70vh; min-height:500px; box-shadow:var(--md-sys-elevation-2);">
+  <!-- Message Thread Header -->
+  <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); display:flex; align-items:center; justify-content:space-between; gap:0.75rem;">
+    <div style="display:flex; align-items:center; gap:0.75rem;">
+      <div style="width:36px; height:36px; border-radius:50%; background:var(--md-sys-color-primary-container); color:var(--md-sys-color-on-primary-container); display:flex; align-items:center; justify-content:center; font-size:1.1rem;">
+        🛡️
+      </div>
+      <div>
+        <div style="font-weight:600; font-size:0.95rem;">System Administration</div>
+        <div style="font-size:0.8rem; color:var(--md-sys-color-outline);">Direct communications thread</div>
+      </div>
+    </div>
+    {% if messages and messages|length > 0 %}
+      <form method="POST" action="/manager/messages/clear" onsubmit="return confirm('Are you sure you want to clear this conversation? All messages will be permanently removed.');" style="margin:0;">
+        <button type="submit" class="btn btn-outlined btn-sm" title="Clear conversation history" style="display:inline-flex; align-items:center; gap:0.35rem; font-size:0.8rem; color:var(--md-sys-color-error, #ba1a1a); border-color:var(--md-sys-color-error, #ba1a1a);">
+          <span>🧹</span>
+          <span>Clear Conversation</span>
+        </button>
+      </form>
+    {% endif %}
+  </div>
+
+  <!-- Messages History Scroll Container -->
+  <div id="messagesHistory" style="flex:1; overflow-y:auto; padding:1.25rem; display:flex; flex-direction:column; gap:1rem; background:var(--md-sys-color-surface);">
+    {% if messages and messages|length > 0 %}
+      {% for msg in messages %}
+        {% set is_me = (msg.sender_role == 'manager') %}
+        <div style="display:flex; flex-direction:column; align-items:{% if is_me %}flex-end{% else %}flex-start{% endif %}; max-width:75%; {% if is_me %}margin-left:auto;{% endif %}">
+          <div style="font-size:0.75rem; color:var(--md-sys-color-outline); margin-bottom:0.25rem;">
+            {{ msg.sender_name }} • {{ msg.created_at|format_datetime }}
+          </div>
+
+          <div style="padding:0.85rem 1rem; border-radius:12px; background:{% if is_me %}var(--md-sys-color-primary-container){% else %}var(--md-sys-color-surface-container-high){% endif %}; color:{% if is_me %}var(--md-sys-color-on-primary-container){% else %}var(--md-sys-color-on-surface){% endif %};">
+            {% if msg.subject %}
+              <div style="font-weight:700; margin-bottom:0.25rem; font-size:0.9rem;">
+                {{ msg.subject }}
+              </div>
+            {% endif %}
+
+            <div style="white-space:pre-wrap; font-size:0.9rem; line-height:1.4;">{{ msg.content }}</div>
+
+            <!-- Structured Proposal Card (if attached) -->
+            {% if msg.payload_type and msg.data_payload %}
+              <div style="margin-top:0.75rem; padding:0.75rem; border-radius:8px; background:rgba(0,0,0,0.06); border:1px dashed var(--md-sys-color-outline);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
+                  <span style="font-weight:700; font-size:0.8rem; text-transform:uppercase;">
+                    📦 Proposed {{ msg.payload_type|capitalize }}
+                  </span>
+                  {% if msg.status == 'applied' %}
+                    <span class="badge badge-success" style="font-size:0.75rem;">✓ Applied to Central Data</span>
+                  {% else %}
+                    <span class="badge badge-warning" style="font-size:0.75rem;">Under Admin Review</span>
+                  {% endif %}
+                </div>
+                <div style="font-size:0.85rem;">
+                  <strong>Name:</strong> {{ msg.data_payload.name }}
+                </div>
+                {% if msg.data_payload.thumbnail_url %}
+                  <div style="font-size:0.8rem; color:var(--md-sys-color-outline); margin-top:0.2rem;">
+                    Media: {{ msg.data_payload.thumbnail_url }}
+                  </div>
+                {% endif %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div style="text-align:center; padding:3rem 1rem; color:var(--md-sys-color-on-surface-variant); margin:auto;">
+        <div style="font-size:2rem; margin-bottom:0.5rem;">💬</div>
+        <div style="font-weight:600;">No messages yet</div>
+        <div style="font-size:0.85rem; margin-top:0.25rem;">Send a message to Admin or submit a creative proposal below.</div>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Message Composer -->
+  <div style="padding:1rem 1.25rem; border-top:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low);">
+    <form method="POST" action="/manager/messages" style="display:flex; gap:0.75rem; align-items:center;">
+      <input
+        type="text"
+        name="content"
+        class="input"
+        placeholder="Type a message to Administrator..."
+        required
+        autocomplete="off"
+        style="flex:1;"
+      >
+      <button type="submit" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:0.35rem;">
+        <span>Send</span>
+        <span>➤</span>
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Structured Central Data Proposal -->
+<div id="proposalModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; padding:1.5rem;">
+  <div class="card" style="width:100%; max-width:540px; box-shadow:var(--md-sys-elevation-4); padding:0; overflow:hidden;">
+    <div style="padding:1.25rem 1.5rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <h3 style="margin:0; font-size:1.15rem;">Propose Data for Central Server</h3>
+        <p style="margin:0.25rem 0 0 0; font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
+          Admins review submissions and can manually approve into central collections.
+        </p>
+      </div>
+      <button type="button" onclick="closeProposalModal()" style="background:none; border:none; font-size:1.25rem; cursor:pointer;">✕</button>
+    </div>
+
+    <form method="POST" action="/manager/messages" id="proposalForm" style="padding:1.5rem;">
+      <input type="hidden" name="data_payload_json" id="dataPayloadJson">
+
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="propType">Proposal Type</label>
+        <select id="propType" name="payload_type" class="select" onchange="switchProposalType(this.value)">
+          <option value="category">Category Proposal</option>
+          <option value="subcategory">Subcategory Proposal</option>
+          <option value="asset">Asset Proposal</option>
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="propName">Proposed Item Name *</label>
+        <input type="text" id="propName" class="input" required placeholder="e.g. Vintage Neon Frames">
+      </div>
+
+      <!-- Subcategory specific parent category picker -->
+      <div id="subcatParentGroup" class="form-group" style="display:none; margin-bottom:1rem;">
+        <label class="form-label" for="propParentCat">Parent Category *</label>
+        <select id="propParentCat" class="select">
+          {% for c in categories %}
+            <option value="{{ c.id }}">{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="propThumb">Media / Thumbnail URL <span style="font-size:0.8rem; color:var(--md-sys-color-outline);">(optional)</span></label>
+        <input type="url" id="propThumb" class="input" placeholder="https://example.com/image.png">
+      </div>
+
+      <div class="form-group" style="margin-bottom:1.5rem;">
+        <label class="form-label" for="propNote">Message / Note to Admin *</label>
+        <textarea id="propNote" name="content" class="input" rows="3" required placeholder="Why should this be added to the central library?"></textarea>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+        <button type="button" class="btn btn-outlined" onclick="closeProposalModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="submitProposal()">Submit Proposal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function openProposalModal() {
+    document.getElementById('proposalModal').style.display = 'flex';
+  }
+  function closeProposalModal() {
+    document.getElementById('proposalModal').style.display = 'none';
+  }
+
+  function switchProposalType(type) {
+    const subGroup = document.getElementById('subcatParentGroup');
+    if (type === 'subcategory' || type === 'asset') {
+      subGroup.style.display = 'block';
+    } else {
+      subGroup.style.display = 'none';
+    }
+  }
+
+  function submitProposal() {
+    const type = document.getElementById('propType').value;
+    const name = document.getElementById('propName').value.trim();
+    const note = document.getElementById('propNote').value.trim();
+    const thumb = document.getElementById('propThumb').value.trim();
+
+    if (!name || !note) {
+      alert('Please fill out the item name and note.');
+      return;
+    }
+
+    const payload = {
+      name: name,
+      thumbnail_url: thumb || null
+    };
+
+    if (type === 'subcategory' || type === 'asset') {
+      payload.category_id = document.getElementById('propParentCat').value;
+    }
+
+    document.getElementById('dataPayloadJson').value = JSON.stringify(payload);
+    document.getElementById('proposalForm').submit();
+  }
+
+  // Scroll to bottom of message thread
+  window.addEventListener('load', () => {
+    const c = document.getElementById('messagesHistory');
+    if (c) c.scrollTop = c.scrollHeight;
+  });
+</script>
+{% endblock %}

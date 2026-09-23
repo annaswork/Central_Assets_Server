@@ -1,0 +1,126 @@
+{% extends "manager/base.html" %}
+
+{% block title %}Scoped Analytics — Manager Portal{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
+  <div>
+    <div style="display:flex; align-items:center; gap:0.5rem;">
+      <h1 style="margin:0;">Application Analytics</h1>
+      <span class="badge badge-primary" style="font-size:0.75rem;">Scoped to My Apps</span>
+    </div>
+    <p style="color:var(--md-sys-color-on-surface-variant); margin:0.25rem 0 0 0;">
+      Real-time performance and request metrics for your accessible app instances.
+    </p>
+  </div>
+</div>
+
+<!-- Scope Filter Bar -->
+<div class="card" style="padding:0.85rem 1rem; margin-bottom:1.5rem;">
+  <form method="GET" action="/manager/analytics" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
+    <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+      <label for="appSelect" style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">App Filter:</label>
+      <select id="appSelect" name="app_id" class="select" onchange="this.form.submit()" style="min-width:200px;">
+        <option value="">All Accessible Apps ({{ instances|length }})</option>
+        {% for inst in instances %}
+          <option value="{{ inst.id }}" {% if selected_app_id == inst.id %}selected{% endif %}>
+            {{ inst.name }}
+          </option>
+        {% endfor %}
+      </select>
+
+      <label for="hoursSelect" style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); margin-left:0.5rem;">Window:</label>
+      <select id="hoursSelect" name="hours" class="select" onchange="this.form.submit()">
+        <option value="1" {% if hours == 1 %}selected{% endif %}>Last 1 Hour</option>
+        <option value="6" {% if hours == 6 %}selected{% endif %}>Last 6 Hours</option>
+        <option value="24" {% if hours == 24 %}selected{% endif %}>Last 24 Hours</option>
+        <option value="168" {% if hours == 168 %}selected{% endif %}>Last 7 Days</option>
+      </select>
+    </div>
+
+    {% if selected_app_id %}
+      <a href="/manager/analytics" class="btn btn-outlined btn-sm">Reset Filter</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- Scoped Summary Cards -->
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1.25rem; margin-bottom:2rem;">
+  <div class="card" style="padding:1.25rem;">
+    <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.25rem;">Total Requests</div>
+    <div style="font-size:1.85rem; font-weight:700; color:var(--md-sys-color-primary);">{{ "{:,}".format(summary.total_requests) }}</div>
+  </div>
+
+  <div class="card" style="padding:1.25rem;">
+    <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.25rem;">Total Errors</div>
+    <div style="font-size:1.85rem; font-weight:700; color:{% if summary.total_errors > 0 %}var(--md-sys-color-error){% else %}var(--md-sys-color-on-surface){% endif %};">
+      {{ "{:,}".format(summary.total_errors) }}
+    </div>
+  </div>
+
+  <div class="card" style="padding:1.25rem;">
+    <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.25rem;">Error Rate</div>
+    <div style="font-size:1.85rem; font-weight:700;">{{ summary.error_rate }}%</div>
+  </div>
+
+  <div class="card" style="padding:1.25rem;">
+    <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.25rem;">Avg Response Latency</div>
+    <div style="font-size:1.85rem; font-weight:700;">{{ summary.avg_duration }} <span style="font-size:0.9rem; font-weight:normal; color:var(--md-sys-color-outline);">ms</span></div>
+  </div>
+</div>
+
+<!-- Per-Endpoint Metrics Table -->
+<div class="card" style="padding:0; overflow:hidden;">
+  <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low);">
+    <h3 style="margin:0; font-size:1.05rem;">Endpoint Activity Breakdown</h3>
+  </div>
+
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width:90px;">Method</th>
+          <th>Endpoint Route</th>
+          <th style="width:120px; text-align:center;">Hits</th>
+          <th style="width:120px; text-align:center;">Errors</th>
+          <th style="width:120px; text-align:center;">Error Rate</th>
+          <th style="width:140px; text-align:right;">Avg Latency</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if endpoint_metrics and endpoint_metrics|length > 0 %}
+          {% for ep in endpoint_metrics %}
+            <tr>
+              <td>
+                <span class="badge badge-primary">{{ ep.method }}</span>
+              </td>
+              <td>
+                <code>{{ ep.path_template }}</code>
+              </td>
+              <td style="text-align:center; font-weight:600;">
+                {{ "{:,}".format(ep.hits) }}
+              </td>
+              <td style="text-align:center; color:{% if ep.errors > 0 %}var(--md-sys-color-error){% else %}inherit{% endif %}; font-weight:600;">
+                {{ ep.errors }}
+              </td>
+              <td style="text-align:center;">
+                {{ ep.error_rate }}%
+              </td>
+              <td style="text-align:right; font-family:monospace;">
+                {{ ep.avg_latency_ms }} ms
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" style="text-align:center; padding:3rem 1rem; color:var(--md-sys-color-on-surface-variant);">
+              <div style="font-size:2rem; margin-bottom:0.5rem;">📈</div>
+              <div>No recorded requests for your accessible applications in this window.</div>
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

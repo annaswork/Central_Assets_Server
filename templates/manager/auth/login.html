@@ -1,0 +1,63 @@
+{% extends "manager/base.html" %}
+
+{% block title %}Manager Sign In — Asset Platform{% endblock %}
+
+{% block content %}
+<div style="min-height:80vh; display:flex; align-items:center; justify-content:center; padding:1.5rem 1rem;">
+  <div class="card" style="width:100%; max-width:420px; box-shadow:var(--md-sys-elevation-3);">
+    <div style="text-align:center; margin-bottom:1.5rem;">
+      <div style="font-size:2.5rem; margin-bottom:0.25rem;">⚡</div>
+      <h1 style="font-size:1.6rem; margin-bottom:0.25rem;">Manager Sign In</h1>
+      <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem;">
+        Sign into your tenant workspace
+      </p>
+    </div>
+
+    {% if error %}
+      <div class="alert alert-error" style="margin-bottom:1.25rem;">
+        <span>⚠️</span>
+        <span>{{ error }}</span>
+      </div>
+    {% endif %}
+
+    <form method="POST" action="/manager/login">
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="username">Username</label>
+        <input
+          type="text"
+          id="username"
+          name="username"
+          class="input"
+          value="{{ username or '' }}"
+          required
+          autofocus
+          autocomplete="username"
+        >
+      </div>
+
+      <div class="form-group" style="margin-bottom:1.5rem;">
+        <label class="form-label" for="password">Password</label>
+        <input
+          type="password"
+          id="password"
+          name="password"
+          class="input"
+          required
+          autocomplete="current-password"
+        >
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width:100%; padding:0.75rem; font-size:1rem;">
+        Sign In
+      </button>
+
+      <div style="margin-top:1.5rem; padding-top:1rem; border-top:1px solid var(--md-sys-color-outline-variant); text-align:center; font-size:0.9rem;">
+        Need an account?
+        <a href="/manager/register" style="color:var(--md-sys-color-primary); font-weight:600; text-decoration:none; margin-left:0.25rem;">
+          Register as Manager
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

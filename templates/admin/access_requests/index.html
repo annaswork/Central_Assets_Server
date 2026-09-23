@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Access Request Queue — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
+  <div>
+    <h1 style="margin:0;">App Instance Access Requests</h1>
+    <p style="color:var(--md-sys-color-on-surface-variant); margin:0.25rem 0 0 0;">
+      Incoming requests from Managers to access existing application instances.
+    </p>
+  </div>
+</div>
+
+<!-- Status Filter Tabs -->
+<div style="display:flex; gap:0.5rem; margin-bottom:1.5rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.75rem;">
+  <a href="/admin/access-requests?status=pending" class="btn {% if current_status == 'pending' %}btn-primary{% else %}btn-outlined{% endif %} btn-sm">
+    Pending Requests
+  </a>
+  <a href="/admin/access-requests?status=approved" class="btn {% if current_status == 'approved' %}btn-primary{% else %}btn-outlined{% endif %} btn-sm">
+    Approved
+  </a>
+  <a href="/admin/access-requests?status=denied" class="btn {% if current_status == 'denied' %}btn-primary{% else %}btn-outlined{% endif %} btn-sm">
+    Denied
+  </a>
+  <a href="/admin/access-requests?status=all" class="btn {% if current_status == 'all' %}btn-primary{% else %}btn-outlined{% endif %} btn-sm">
+    All Requests
+  </a>
+</div>
+
+<!-- Access Requests Table -->
+<div class="card" style="padding:0; overflow:hidden;">
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Requesting Manager</th>
+          <th>Requested App Instance</th>
+          <th>Status</th>
+          <th style="width:160px;">Requested Date</th>
+          <th style="width:180px; text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if requests and requests|length > 0 %}
+          {% for r in requests %}
+            <tr>
+              <td>
+                <div style="font-weight:600; font-size:0.95rem;">{{ r.manager_username }}</div>
+                <div style="font-size:0.8rem; color:var(--md-sys-color-outline);">
+                  {{ r.manager_email or '' }} • ID: <code>{{ r.requesting_manager_id }}</code>
+                </div>
+              </td>
+              <td>
+                <div style="font-weight:600;">📱 {{ r.app_instance_name }}</div>
+                <div style="font-size:0.8rem; color:var(--md-sys-color-outline);">
+                  Package: <code>{{ r.app_package_name or '—' }}</code>
+                </div>
+              </td>
+              <td>
+                {% if r.status == 'pending' %}
+                  <span class="badge badge-warning">Pending Review</span>
+                {% elif r.status == 'approved' %}
+                  <span class="badge badge-success">Approved & Granted</span>
+                {% elif r.status == 'denied' %}
+                  <span class="badge badge-error">Denied</span>
+                {% endif %}
+              </td>
+              <td style="color:var(--md-sys-color-on-surface-variant); font-size:0.85rem;">
+                {{ r.created_at|format_datetime }}
+              </td>
+              <td style="text-align:right;">
+                {% if r.status == 'pending' %}
+                  <div style="display:inline-flex; gap:0.35rem;">
+                    <!-- Approve -->
+                    <form method="POST" action="/admin/access-requests/{{ r.id }}/approve" style="display:inline; margin:0;">
+                      <button type="submit" class="btn btn-primary btn-sm">Approve</button>
+                    </form>
+
+                    <!-- Deny -->
+                    <form method="POST" action="/admin/access-requests/{{ r.id }}/deny" style="display:inline; margin:0;" onsubmit="return confirm('Deny this access request?');">
+                      <button type="submit" class="btn btn-outlined btn-sm" style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);">Deny</button>
+                    </form>
+                  </div>
+                {% else %}
+                  <span style="font-size:0.85rem; color:var(--md-sys-color-outline);">
+                    {{ r.status|capitalize }}
+                  </span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="5" style="text-align:center; padding:3.5rem 1rem; color:var(--md-sys-color-on-surface-variant);">
+              <div style="font-size:2rem; margin-bottom:0.5rem;">📥</div>
+              <div style="font-weight:600;">No {{ current_status }} requests</div>
+              <div style="font-size:0.85rem; margin-top:0.25rem;">Incoming requests from managers will appear here.</div>
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,127 @@
+{% extends "manager/base.html" %}
+
+{% block title %}My App Instances — Manager Portal{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
+  <div>
+    <h1 style="margin:0;">App Instances</h1>
+    <p style="color:var(--md-sys-color-on-surface-variant); margin:0.25rem 0 0 0;">
+      Applications accessible to your manager account, and available platform apps you can request access to.
+    </p>
+  </div>
+</div>
+
+<!-- Accessible Instances Table -->
+<div class="card" style="padding:0; overflow:hidden; margin-bottom:2.5rem;">
+  <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low);">
+    <h3 style="margin:0; font-size:1.05rem;">My Active & Accessible Apps</h3>
+  </div>
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Application Name</th>
+          <th>Package Name</th>
+          <th style="width:120px; text-align:center;">Status</th>
+          <th style="width:160px;">Assigned</th>
+          <th style="width:150px; text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if instances and instances|length > 0 %}
+          {% for inst in instances %}
+            <tr>
+              <td>
+                <div style="display:flex; align-items:center; gap:0.75rem;">
+                  <div style="width:38px; height:38px; border-radius:8px; background:var(--md-sys-color-primary-container); color:var(--md-sys-color-on-primary-container); display:flex; align-items:center; justify-content:center; font-size:1.25rem;">
+                    📱
+                  </div>
+                  <div>
+                    <div style="font-weight:600; font-size:0.95rem;">{{ inst.name }}</div>
+                    <div style="font-size:0.8rem; color:var(--md-sys-color-outline);">ID: {{ inst.id }}</div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <code>{{ inst.package_name or 'Not configured' }}</code>
+              </td>
+              <td style="text-align:center;">
+                <span class="badge badge-primary">Active</span>
+              </td>
+              <td style="color:var(--md-sys-color-on-surface-variant); font-size:0.85rem;">
+                {{ inst.created_at|format_datetime }}
+              </td>
+              <td style="text-align:right;">
+                <a href="/manager/instances/{{ inst.id }}/content" class="btn btn-outlined btn-sm" style="display:inline-flex; align-items:center; gap:0.35rem;">
+                  <span>⚙️</span>
+                  <span>Manage Content</span>
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="5" style="text-align:center; padding:3rem 1rem; color:var(--md-sys-color-on-surface-variant);">
+              <div style="font-size:2rem; margin-bottom:0.5rem;">📱</div>
+              <div style="font-weight:600;">You don't have access to any apps yet</div>
+              <div style="font-size:0.9rem; margin-top:0.25rem;">Browse the available platform applications below and click <strong>Request Access</strong> to ask an Administrator for access.</div>
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Other App Instances (Request Access Queue Source) -->
+{% if other_instances and other_instances|length > 0 %}
+<div class="card" style="padding:0; overflow:hidden;">
+  <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <h3 style="margin:0; font-size:1.05rem;">Available Platform Applications</h3>
+      <p style="margin:0.25rem 0 0 0; font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">
+        Applications configured by administrators. Request access to manage creative asset working sets for these apps.
+      </p>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Application Name</th>
+          <th>Package Name</th>
+          <th style="width:160px; text-align:right;">Request Access</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for o in other_instances %}
+          <tr>
+            <td>
+              <div style="font-weight:600;">{{ o.name }}</div>
+            </td>
+            <td>
+              <code>{{ o.package_name or '—' }}</code>
+            </td>
+            <td style="text-align:right;">
+              {% if o.is_pending_request %}
+                <span class="badge badge-warning" style="font-size:0.8rem; padding:0.35rem 0.65rem;">⏳ Request Pending</span>
+              {% else %}
+                <form method="POST" action="/manager/instances/request-access" style="display:inline-block; margin:0;">
+                  <input type="hidden" name="app_instance_id" value="{{ o.id }}">
+                  <button type="submit" class="btn btn-outlined btn-sm" style="display:inline-flex; align-items:center; gap:0.25rem;">
+                    <span>📩</span>
+                    <span>Request Access</span>
+                  </button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

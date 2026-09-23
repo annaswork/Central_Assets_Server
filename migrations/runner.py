@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 MIGRATIONS = [
     ("0001_initial_indexes", "migrations.0001_initial_indexes"),
     ("0002_seed_allowed_paths", "migrations.0002_seed_allowed_paths"),
+    ("0003_manager_schema_indexes", "migrations.0003_manager_schema_indexes"),
 ]
 
 
