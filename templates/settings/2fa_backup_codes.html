@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Emergency Backup Codes — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="min-height:75vh; display:flex; align-items:center; justify-content:center; padding:1rem;">
+  <div class="card" style="width:100%; max-width:540px; box-shadow:var(--md-sys-elevation-3);">
+    <div style="text-align:center; margin-bottom:1.5rem;">
+      <div style="width:56px; height:56px; margin:0 auto 0.75rem; border-radius:50%; background:var(--md-sys-color-primary-container); color:var(--md-sys-color-on-primary-container); display:flex; align-items:center; justify-content:center; font-size:1.75rem;">
+        🛡️
+      </div>
+      <h1 style="font-size:1.5rem; margin-bottom:0.25rem;">2FA Activated Successfully!</h1>
+      <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem;">
+        Save your emergency backup recovery codes in a safe place.
+      </p>
+    </div>
+
+    <div class="alert alert-warning" style="margin-bottom:1.25rem;">
+      <span>⚠️</span>
+      <span style="font-size:0.85rem;">
+        Each backup code can be used <strong>only once</strong> to log in if you lose access to your authenticator device. These will not be shown again.
+      </span>
+    </div>
+
+    <div style="background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--radius-md); padding:1.25rem; margin-bottom:1.5rem;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; font-family:monospace; font-weight:700; font-size:1.1rem; text-align:center;">
+        {% for code in backup_codes %}
+          <div style="padding:0.4rem; background:var(--md-sys-color-surface); border-radius:var(--radius-sm); border:1px solid var(--md-sys-color-outline-variant);">
+            {{ code }}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:0.75rem;">
+      <div style="display:flex; gap:0.75rem;">
+        <button type="button" class="btn btn-secondary" onclick="copyBackupCodes()" id="copyCodesBtn" style="flex:1;">
+          📋 Copy Codes
+        </button>
+        <button type="button" class="btn btn-secondary" onclick="downloadBackupCodes()" style="flex:1;">
+          💾 Download .txt
+        </button>
+      </div>
+      <a href="/admin/settings" class="btn btn-primary" style="text-align:center; padding:0.75rem;">
+        I Have Saved My Codes → Back to Settings
+      </a>
+    </div>
+  </div>
+</div>
+
+<script>
+  const codes = {{ backup_codes | tojson }};
+
+  function copyBackupCodes() {
+    const text = "Creative Asset Platform 2FA Emergency Backup Codes:\n" + codes.join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.getElementById('copyCodesBtn');
+      if (btn) {
+        btn.textContent = '✓ Copied!';
+        setTimeout(() => { btn.textContent = '📋 Copy Codes'; }, 2000);
+      }
+    });
+  }
+
+  function downloadBackupCodes() {
+    const text = "Creative Asset Platform 2FA Emergency Backup Codes\nGenerated: " + new Date().toISOString() + "\n\n" + codes.join("\n") + "\n\nNote: Each code can be used only once.";
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "2fa_backup_codes_asset_platform.txt";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+</script>
+{% endblock %}

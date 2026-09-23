@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Two-Factor Verification — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="min-height:80vh; display:flex; align-items:center; justify-content:center; padding:1rem;">
+  <div class="card" style="width:100%; max-width:440px; box-shadow:var(--md-sys-elevation-3);">
+    <div style="text-align:center; margin-bottom:1.5rem;">
+      <div style="width:56px; height:56px; margin:0 auto 0.75rem; border-radius:50%; background:var(--md-sys-color-primary-container); color:var(--md-sys-color-on-primary-container); display:flex; align-items:center; justify-content:center; font-size:1.75rem;">
+        🔐
+      </div>
+      <h1 style="font-size:1.5rem; margin-bottom:0.25rem;">Two-Factor Verification</h1>
+      <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem;">
+        Signing in as <strong>{{ username }}</strong>
+      </p>
+    </div>
+
+    {% if error %}
+      <div class="alert alert-error" style="margin-bottom:1.25rem;">
+        <span>⚠️</span>
+        <span>{{ error }}</span>
+      </div>
+    {% endif %}
+
+    <form method="POST" action="/admin/login/2fa" id="twoFaForm">
+      <div class="form-group" style="margin-bottom:1.25rem;">
+        <label class="form-label" for="code" style="text-align:center; display:block; margin-bottom:0.5rem; font-weight:600;">
+          Enter 6-Digit Authenticator Code
+        </label>
+        <input
+          type="text"
+          id="code"
+          name="code"
+          class="input"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          placeholder="000000"
+          maxlength="10"
+          required
+          autofocus
+          style="text-align:center; font-size:1.5rem; letter-spacing:0.25em; font-family:monospace; padding:0.75rem; font-weight:700;"
+        >
+        <div style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant); text-align:center; margin-top:0.5rem;">
+          Open Google Authenticator on your mobile device to view your current verification code.
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width:100%; padding:0.75rem; font-size:1rem;">
+        Verify & Sign In
+      </button>
+
+      <div style="margin-top:1.25rem; padding-top:1rem; border-top:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center; font-size:0.85rem;">
+        <a href="/admin/login" style="color:var(--md-sys-color-on-surface-variant); text-decoration:none;">
+          ← Back to Login
+        </a>
+        <span style="color:var(--md-sys-color-outline);">•</span>
+        <button type="button" onclick="toggleBackupCodeHelp()" style="background:none; border:none; color:var(--md-sys-color-primary); cursor:pointer; font-size:0.85rem; padding:0;">
+          Lost device? Use backup code
+        </button>
+      </div>
+
+      <div id="backupCodeHelp" style="display:none; margin-top:1rem; padding:0.75rem; border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container-low); font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">
+        💡 You can enter one of your 8-character emergency backup codes (e.g. <code>A1B2-C3D4</code>) directly into the verification box above.
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function toggleBackupCodeHelp() {
+    const el = document.getElementById('backupCodeHelp');
+    if (el) {
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+      const input = document.getElementById('code');
+      if (input) {
+        input.placeholder = "A1B2-C3D4";
+        input.focus();
+      }
+    }
+  }
+
+  // Auto submit when 6 digits are typed
+  document.getElementById('code')?.addEventListener('input', function(e) {
+    const val = e.target.value.replace(/\D/g, '');
+    if (val.length === 6 && e.target.value.length === 6) {
+      document.getElementById('twoFaForm').submit();
+    }
+  });
+</script>
+{% endblock %}

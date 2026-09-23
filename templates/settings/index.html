@@ -10,7 +10,70 @@
   </p>
 </div>
 
+{% if error %}
+  <div class="alert alert-error" style="margin-bottom:1.5rem; max-width:1000px;">
+    <span>⚠️</span>
+    <span>{{ error }}</span>
+  </div>
+{% endif %}
+
+{% if success %}
+  <div class="alert alert-success" style="margin-bottom:1.5rem; max-width:1000px;">
+    <span>✓</span>
+    <span>{{ success }}</span>
+  </div>
+{% endif %}
+
 <div class="grid grid-2" style="max-width:1000px; gap:1.5rem;">
+  <!-- Two-Factor Authentication Security Card -->
+  <div class="card" style="grid-column: 1 / -1; border-left: 4px solid {% if user and user.is_2fa_enabled %}var(--md-sys-color-primary){% else %}var(--md-sys-color-outline){% endif %};">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem;">
+      <div>
+        <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.35rem;">
+          <span style="font-size:1.35rem;">🔐</span>
+          <h3 style="margin:0;">Two-Factor Authentication (Google Authenticator)</h3>
+          {% if user and user.is_2fa_enabled %}
+            <span class="badge badge-success" style="font-size:0.75rem;">Active & Protected</span>
+          {% else %}
+            <span class="badge badge-warning" style="font-size:0.75rem;">Disabled</span>
+          {% endif %}
+        </div>
+        <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem; margin:0; max-width:620px;">
+          Require a 6-digit TOTP code from Google Authenticator, 1Password, or Authy whenever signing into your admin account.
+        </p>
+      </div>
+
+      <div>
+        {% if user and user.is_2fa_enabled %}
+          <button type="button" class="btn btn-secondary" onclick="toggleDisable2FaModal()" style="border-color:var(--md-sys-color-error); color:var(--md-sys-color-error);">
+            Disable 2FA
+          </button>
+        {% else %}
+          <a href="/admin/settings/2fa/setup" class="btn btn-primary">
+            🛡️ Enable Google Authenticator
+          </a>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if user and user.is_2fa_enabled %}
+      <div id="disable2FaModal" style="display:none; margin-top:1.25rem; padding-top:1.25rem; border-top:1px solid var(--md-sys-color-outline-variant);">
+        <form method="POST" action="/admin/settings/2fa/disable" style="display:flex; gap:0.75rem; align-items:flex-end; max-width:480px;">
+          <div class="form-group" style="flex:1; margin-bottom:0;">
+            <label class="form-label" for="disable_password" style="font-size:0.85rem;">Confirm Password to Disable 2FA</label>
+            <input type="password" id="disable_password" name="password" class="input" placeholder="Your admin password" required />
+          </div>
+          <button type="submit" class="btn btn-primary" style="background:var(--md-sys-color-error); border-color:var(--md-sys-color-error);">
+            Confirm Disable
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="toggleDisable2FaModal()">
+            Cancel
+          </button>
+        </form>
+      </div>
+    {% endif %}
+  </div>
+
   <!-- Runtime Info -->
   <div class="card">
     <h3 style="margin-bottom:1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.5rem;">
@@ -93,4 +156,16 @@
     </div>
   </div>
 </div>
+
+<script>
+  function toggleDisable2FaModal() {
+    const el = document.getElementById('disable2FaModal');
+    if (el) {
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+      if (el.style.display === 'block') {
+        document.getElementById('disable_password')?.focus();
+      }
+    }
+  }
+</script>
 {% endblock %}

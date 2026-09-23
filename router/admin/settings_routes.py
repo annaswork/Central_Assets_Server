@@ -130,13 +130,122 @@ async def admin_update_key_rate_limit(
 
 
 @router.get("/settings")
-async def admin_settings_page(request: Request) -> Response:
+async def admin_settings_page(
+    request: Request,
+    error: str | None = None,
+    success: str | None = None,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
     session = get_current_admin_session(request)
     if not session:
         return RedirectResponse(url="/admin/login", status_code=303)
 
+    from controller.authorization_controller import get_admin_user_by_id
+
+    user = await get_admin_user_by_id(db, session["user_id"])
     return templates.TemplateResponse(
         request=request,
         name="settings/index.html",
-        context={"session": session, "settings": settings, "active_tab": "settings"},
+        context={
+            "session": session,
+            "settings": settings,
+            "user": user,
+            "error": error,
+            "success": success,
+            "active_tab": "settings",
+        },
     )
+
+
+@router.get("/settings/2fa/setup")
+async def admin_2fa_setup_page(
+    request: Request, db: AsyncIOMotorDatabase = Depends(get_db)
+) -> Response:
+    session = get_current_admin_session(request)
+    if not session:
+        return RedirectResponse(url="/admin/login", status_code=303)
+
+    from controller.authorization_controller import initiate_2fa_setup
+
+    setup_data = await initiate_2fa_setup(db, user_id=session["user_id"])
+    return templates.TemplateResponse(
+        request=request,
+        name="settings/2fa_setup.html",
+        context={
+            "session": session,
+            "secret": setup_data["secret"],
+            "qr_code_url": setup_data["qr_code_url"],
+            "error": None,
+            "active_tab": "settings",
+        },
+    )
+
+
+@router.post("/settings/2fa/confirm")
+async def admin_2fa_confirm(
+    request: Request,
+    code: str = Form(...),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    session = get_current_admin_session(request)
+    if not session:
+        return RedirectResponse(url="/admin/login", status_code=303)
+
+    from controller.authorization_controller import confirm_and_enable_2fa, get_admin_user_by_id
+    from utils.errors import ValidationError
+
+    try:
+        backup_codes = await confirm_and_enable_2fa(
+            db, user_id=session["user_id"], code=code
+        )
+        return templates.TemplateResponse(
+            request=request,
+            name="settings/2fa_backup_codes.html",
+            context={
+                "session": session,
+                "backup_codes": backup_codes,
+                "active_tab": "settings",
+            },
+        )
+    except ValidationError as err:
+        from authorization.totp import generate_provisioning_uri, generate_qr_code_base64
+
+        user = await get_admin_user_by_id(db, session["user_id"])
+        temp_secret = user.get("totp_temp_secret", "")
+        uri = generate_provisioning_uri(user["username"], temp_secret)
+        qr_url = generate_qr_code_base64(uri)
+
+        return templates.TemplateResponse(
+            request=request,
+            name="settings/2fa_setup.html",
+            context={
+                "session": session,
+                "secret": temp_secret,
+                "qr_code_url": qr_url,
+                "error": err.message,
+                "active_tab": "settings",
+            },
+            status_code=400,
+        )
+
+
+@router.post("/settings/2fa/disable")
+async def admin_2fa_disable(
+    request: Request,
+    password: str = Form(...),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    session = get_current_admin_session(request)
+    if not session:
+        return RedirectResponse(url="/admin/login", status_code=303)
+
+    from controller.authorization_controller import disable_2fa
+    from utils.errors import UnauthorizedError
+
+    try:
+        await disable_2fa(db, user_id=session["user_id"], password=password)
+        return RedirectResponse(url="/admin/settings?success=2FA+has+been+disabled", status_code=303)
+    except UnauthorizedError as err:
+        return RedirectResponse(
+            url=f"/admin/settings?error={err.message}", status_code=303
+        )
