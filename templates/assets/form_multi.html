@@ -1,0 +1,3211 @@
+{% extends "base.html" %}
+
+{% block title %}{% if asset %}Edit {{ asset.name }}{% else %}New Asset{% endif %} — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+  <a href="/admin/assets"
+    style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
+    ← Back to Assets
+  </a>
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+    <div>
+      <h1>{% if asset %}Edit Asset: {{ asset.name }}{% else %}New Multi-File Asset{% endif %}</h1>
+      <p style="color:var(--md-sys-color-on-surface-variant);">
+        Author centrally shippable creative assets with typed polymorphic payload blocks.
+      </p>
+    </div>
+    {% if asset and ((asset.moreFields and asset.moreFields.frames) or (asset.more_fields and asset.more_fields.frames))
+    %}
+    <a href="/admin/assets/{{ asset.id }}/frames" class="btn btn-outlined"
+      style="color:var(--app-premium); border-color:var(--app-premium);">
+      Launch Interactive Frame Editor 🖼️
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+{% if error %}
+<div class="card"
+  style="margin-bottom:1.5rem; background:var(--md-sys-color-error-container); color:var(--md-sys-color-on-error-container); border-color:var(--md-sys-color-error); padding:1rem; font-weight:500;">
+  ⚠️ {{ error }}
+</div>
+{% endif %}
+
+<form method="POST" action="/admin/assets/save" id="assetForm" class="asset-edit-grid"
+  style="display:grid; grid-template-columns:minmax(340px, 440px) 1fr; gap:1.5rem; align-items:start;">
+  {% if asset and asset.id %}
+  <input type="hidden" name="id" value="{{ asset.id }}">
+  {% endif %}
+  <input type="hidden" name="more_fields_json" id="moreFieldsJsonInput" value="">
+
+  <!-- ===== LEFT COLUMN: Core Details ===== -->
+  <div class="asset-edit-col-left">
+    <h3 style="margin-bottom:1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.5rem;">
+      Core Metadata
+    </h3>
+
+    <div class="form-group">
+      <label class="label" for="assetName">Asset Name <span
+          style="font-size:0.8rem; font-weight:normal; color:var(--md-sys-color-on-surface-variant);">(leave blank to
+          pick name of first uploaded file)</span></label>
+      <input type="text" id="assetName" name="name" class="input" value="{{ asset.name if asset else '' }}"
+        placeholder="e.g. Neon Horizon Background" autocomplete="off" oninput="onAssetNameInput()">
+      <div id="assetNameStatus"
+        style="margin-top:0.35rem; font-size:0.85rem; min-height:1.25rem; display:flex; align-items:center; gap:0.35rem; transition:all 0.2s ease;">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="label" for="assetDescription">Description</label>
+      <textarea id="assetDescription" name="description" class="textarea" rows="2"
+        placeholder="Optional editorial note or usage description...">{{ asset.description if asset else '' }}</textarea>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="form-group">
+        <label class="label" for="categorySelect">Category *</label>
+        <select id="categorySelect" name="category_id" class="select" required
+          onchange="currentSubId=''; onCategoryChanged(this.value, '')">
+          <option value="">-- Select Category --</option>
+          {% for cat in categories %}
+          <option value="{{ cat.id }}" {% if (asset and (asset.categoryId==cat.id or asset.category_id==cat.id)) or (not
+            asset and selected_cat==cat.id) %}selected{% endif %}>{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="label" for="subCategorySelect">Subcategory *</label>
+        <select id="subCategorySelect" name="sub_category_id" class="select" required {% if not asset and not
+          selected_cat %}disabled{% endif %}>
+          {% if not asset and not selected_cat %}
+          <option value="">-- Select Category First --</option>
+          {% else %}
+          <option value="">-- Select Subcategory --</option>
+          {% for sub in subcategories %}
+          <option value="{{ sub.id }}" {% if (asset and (asset.subCategoryId==sub.id or asset.sub_category_id==sub.id))
+            or (not asset and selected_sub==sub.id) %}selected{% endif %}>{{ sub.name }}</option>
+          {% endfor %}
+          {% endif %}
+        </select>
+      </div>
+    </div>
+
+    <!-- Thumbnail Upload -->
+    <div style="margin-top:0.5rem;">
+      <div
+        style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.75rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.5rem;">
+        <h3 style="margin:0; font-size:0.95rem;">Asset Thumbnail</h3>
+        <span style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">Optional preview</span>
+      </div>
+
+      <div style="margin-bottom:0.75rem;">
+        <label class="form-label" style="font-size:0.8rem; font-weight:600; margin-bottom:0.4rem; display:block;">Thumbnail Source Mode</label>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:0.4rem;">
+          <label style="display:flex; align-items:center; gap:0.35rem; padding:0.4rem 0.55rem; border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer;">
+            <input type="radio" name="multi_thumb_mode" value="custom" checked onchange="updateMultiThumbMode('custom')">
+            <span style="font-size:0.78rem; font-weight:500;">Custom Upload</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:0.35rem; padding:0.4rem 0.55rem; border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer;">
+            <input type="radio" name="multi_thumb_mode" value="auto_create" onchange="updateMultiThumbMode('auto_create')">
+            <span style="font-size:0.78rem; font-weight:500;">Create from Block</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:0.35rem; padding:0.4rem 0.55rem; border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer;">
+            <input type="radio" name="multi_thumb_mode" value="original" onchange="updateMultiThumbMode('original')">
+            <span style="font-size:0.78rem; font-weight:500;">Use Original Image</span>
+          </label>
+        </div>
+      </div>
+
+      {% set current_thumb = (asset.thumbnailUrl or asset.thumbnail_url) if asset else '' %}
+      <div style="display:flex; gap:1rem; align-items:flex-start; flex-wrap:wrap;">
+        <!-- Live Preview Container -->
+        <div
+          style="width:120px; height:120px; border-radius:var(--radius-md); border:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container); display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; flex-shrink:0;">
+          <img id="thumbPreviewImg" src="{{ current_thumb }}" alt="Thumbnail preview"
+            style="width:100%; height:100%; object-fit:cover; display:{% if current_thumb %}block{% else %}none{% endif %};">
+          <span id="thumbPlaceholder"
+            style="font-size:2rem; display:{% if current_thumb %}none{% else %}block{% endif %};">🖼️</span>
+          <button type="button" id="thumbClearBtn" onclick="clearThumbnail()"
+            style="position:absolute; top:4px; right:4px; background:rgba(0,0,0,0.6); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:11px; cursor:pointer; display:{% if current_thumb %}flex{% else %}none{% endif %}; align-items:center; justify-content:center;"
+            title="Remove thumbnail">✕</button>
+          <button type="button" id="thumbCropBtn" onclick="cropCurrentThumbnail()"
+            style="position:absolute; bottom:4px; right:4px; background:rgba(15,23,42,0.85); color:#38bdf8; border:1px solid rgba(255,255,255,0.2); border-radius:4px; padding:2px 6px; font-size:11px; cursor:pointer; display:{% if current_thumb %}flex{% else %}none{% endif %}; align-items:center; gap:2px;"
+            title="Crop thumbnail">✂️</button>
+        </div>
+
+        <!-- Drag & Drop Zone -->
+        <div id="thumbDropzoneWrap" style="flex:1; min-width:200px; display:flex; flex-direction:column; gap:0.65rem;">
+          <div class="dropzone" id="thumbDropzone" ondragover="handleThumbDragOver(event)"
+            ondragleave="handleThumbDragLeave(event)" ondrop="handleThumbDrop(event)"
+            onclick="document.getElementById('thumbFileInput').click()" style="padding:0.75rem;">
+            <div class="dropzone-icon" style="font-size:1.5rem;">📸</div>
+            <div class="dropzone-text" style="font-size:0.8rem;">Drop thumbnail here, or <span>browse</span></div>
+            <div class="dropzone-hint" style="font-size:0.7rem;">PNG, JPG, WEBP, GIF, SVG</div>
+            <input type="file" id="thumbFileInput" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+              style="display:none;" onchange="uploadThumbnail(this.files[0])">
+          </div>
+
+          <div id="thumbUploadBar" class="morefields-uploading-bar" style="display:none;">
+            <span style="font-size:0.85rem;">⏳</span>
+            <span id="thumbUploadStatusText">Uploading thumbnail...</span>
+          </div>
+
+          <input type="hidden" id="thumbnailUrlInput" name="thumbnail_url" value="{{ current_thumb }}">
+        </div>
+      </div>
+    </div>
+
+    <!-- References Info (If editing) -->
+    {% if references is defined and references %}
+    <div
+      style="margin-top:1.25rem; padding:0.85rem; background:var(--md-sys-color-surface-container); border-radius:var(--radius-sm); border:1px solid var(--md-sys-color-outline-variant);">
+      <h4 style="margin-bottom:0.5rem; font-size:0.85rem;">Referencing Instances ({{ references|length }})</h4>
+      <div style="display:flex; flex-wrap:wrap; gap:0.4rem;">
+        {% for ref in references %}
+        <span class="badge badge-primary" style="font-size:0.7rem;">{{ ref.appInstanceId }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ===== RIGHT COLUMN: Payload Blocks ===== -->
+  <div class="asset-edit-col-right">
+    <div
+      style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.5rem; flex-wrap:wrap; gap:0.5rem;">
+      <h3 style="margin:0;">Payload Blocks (moreFields)</h3>
+      <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+        <select id="newBlockTypeSelect" class="select"
+          style="min-height:34px; padding:0.2rem 0.5rem; max-width:160px; font-size:0.82rem;">
+          <option value="image">Image Block</option>
+          <option value="audio">Audio Block</option>
+          <option value="video">Video Block</option>
+          <option value="string_list">String List Block</option>
+          <option value="frames">Frames Block</option>
+          <option value="json">Custom JSON</option>
+        </select>
+        <button type="button" class="btn btn-outlined"
+          style="min-height:34px; padding:0.2rem 0.7rem; font-size:0.82rem;" onclick="addPayloadBlock()">
+          + Add Block
+        </button>
+      </div>
+    </div>
+
+    <div id="payloadBlocksContainer" style="display:flex; flex-direction:column; gap:1.25rem;">
+      <!-- Dynamic payload cards injected via JS -->
+    </div>
+  </div>
+
+  <!-- ===== FULL-WIDTH: Submit Buttons ===== -->
+  <div class="asset-edit-full-width"
+    style="display:flex; justify-content:flex-end; gap:0.75rem; border-top:1px solid var(--md-sys-color-outline-variant); padding-top:1.25rem;">
+    <a href="/admin/assets" class="btn btn-outlined">Cancel</a>
+    <button type="submit" class="btn btn-primary" id="saveAssetSubmitBtn">
+      {% if asset %}Save Asset Changes{% else %}Create Asset{% endif %}
+    </button>
+  </div>
+</form>
+
+<style>
+  /* ===== Two-Column Asset Edit Layout ===== */
+  #assetForm.asset-edit-grid {
+    display: grid !important;
+    grid-template-columns: minmax(340px, 440px) 1fr !important;
+    gap: 1.5rem !important;
+    align-items: start !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .asset-edit-col-left,
+  .asset-edit-col-right {
+    background: var(--md-sys-color-surface-container-low);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    box-sizing: border-box;
+  }
+
+  .asset-edit-col-left {
+    position: sticky;
+    top: 1rem;
+    z-index: 10;
+  }
+
+  .asset-edit-col-right {
+    min-height: 400px;
+    min-width: 0;
+  }
+
+  .asset-edit-full-width {
+    grid-column: 1 / -1 !important;
+  }
+
+  @media (max-width: 840px) {
+    #assetForm.asset-edit-grid {
+      grid-template-columns: 1fr !important;
+    }
+
+    .asset-edit-col-left {
+      position: static !important;
+    }
+  }
+
+  /* ===== Collapsible Payload Blocks ===== */
+  .morefields-card {
+    transition: all 0.2s ease;
+    overflow: hidden;
+  }
+
+  .morefields-card-header {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s ease;
+  }
+
+  .morefields-card-header:hover {
+    background: var(--md-sys-color-surface-container-highest, rgba(0, 0, 0, 0.03));
+  }
+
+  .morefields-collapse-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: 1px solid var(--md-sys-color-outline-variant, #ccc);
+    background: var(--md-sys-color-surface, #fff);
+    color: var(--md-sys-color-on-surface, #333);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: transform 0.2s ease, background-color 0.15s ease;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+
+  .morefields-collapse-toggle:hover {
+    background: var(--md-sys-color-surface-container-highest, #e0e0e0);
+  }
+
+  .morefields-card.collapsed .morefields-card-body {
+    display: none !important;
+  }
+
+  .morefields-card:not(.collapsed) .morefields-card-body {
+    display: block !important;
+  }
+
+  .morefields-card.collapsed {
+    padding-bottom: 0.75rem;
+  }
+
+  .morefields-card.collapsed .morefields-card-header {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  /* Inline JSON Editor Modal Styles (Aligned with color_palette.md tokens) */
+  .json-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(11, 15, 25, 0.78);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .json-modal-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .json-modal-container {
+    background: var(--md-sys-color-surface);
+    border-radius: var(--radius-md, 12px);
+    width: 90vw;
+    max-width: 820px;
+    height: 560px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: var(--md-sys-elevation-3);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    transform: scale(0.96) translateY(8px);
+    transition: transform 0.22s cubic-bezier(0.34, 1.3, 0.64, 1);
+  }
+
+  .json-modal-overlay.active .json-modal-container {
+    transform: scale(1) translateY(0);
+  }
+
+  .json-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 18px;
+    background: var(--md-sys-color-surface-container-high);
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+    min-height: 48px;
+    box-sizing: border-box;
+    color: var(--md-sys-color-on-surface);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  .json-modal-header.unsaved {
+    background: var(--md-sys-color-primary) !important;
+    color: var(--md-sys-color-on-primary) !important;
+    border-bottom-color: transparent;
+  }
+
+  .json-modal-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--md-sys-color-on-surface);
+    user-select: none;
+  }
+
+  .json-modal-unsaved-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--md-sys-color-on-primary);
+  }
+
+  .json-modal-divider {
+    display: inline-block;
+    width: 1px;
+    height: 18px;
+    background: currentColor;
+    opacity: 0.35;
+    margin: 0 2px;
+  }
+
+  .json-modal-btn-save {
+    background: #FFFFFF !important;
+    color: #0F172A !important;
+    border: none;
+    border-radius: 9999px;
+    font-weight: 600;
+    font-size: 0.82rem;
+    padding: 5px 20px;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: all 0.15s ease;
+    line-height: 1.2;
+  }
+
+  .json-modal-btn-save:hover {
+    background: #F8FAFC !important;
+    transform: translateY(-0.5px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
+  }
+
+  .json-modal-btn-save.disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .json-modal-btn-discard {
+    background: transparent;
+    color: var(--md-sys-color-on-primary);
+    border: none;
+    font-weight: 500;
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.15s ease;
+  }
+
+  .json-modal-btn-discard:hover {
+    background: rgba(0, 0, 0, 0.12);
+  }
+
+  .json-modal-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--md-sys-color-on-surface-variant);
+    font-size: 1.2rem;
+    cursor: pointer;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    line-height: 1;
+  }
+
+  .json-modal-close-btn:hover {
+    color: var(--md-sys-color-on-surface);
+    background: var(--md-sys-color-surface-container-highest);
+  }
+
+  .json-modal-header.unsaved .json-modal-close-btn {
+    color: var(--md-sys-color-on-primary);
+  }
+
+  .json-modal-header.unsaved .json-modal-close-btn:hover {
+    background: rgba(0, 0, 0, 0.12);
+  }
+
+  .json-modal-banner {
+    margin: 12px 16px 8px 16px;
+    padding: 8px 14px;
+    border-radius: var(--radius-sm, 8px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.84rem;
+    font-weight: 500;
+    min-height: 36px;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
+  }
+
+  .json-modal-banner.valid {
+    background: var(--app-success-bg);
+    border: 1px solid var(--app-success);
+    color: var(--app-success);
+  }
+
+  .json-modal-banner.invalid {
+    background: var(--app-premium-container);
+    border: 1px solid var(--app-premium);
+    color: var(--app-premium);
+  }
+
+  .json-modal-banner-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .json-modal-banner-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: bold;
+    flex-shrink: 0;
+  }
+
+  .json-modal-banner.valid .json-modal-banner-icon {
+    background: var(--app-success);
+    color: var(--app-success-bg);
+  }
+
+  .json-modal-banner.invalid .json-modal-banner-icon {
+    background: var(--app-premium);
+    color: var(--app-premium-container);
+  }
+
+  .json-modal-banner-format-btn {
+    background: transparent;
+    border: none;
+    color: var(--app-success);
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 3px 10px;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+
+  .json-modal-banner-format-btn:hover {
+    background: rgba(74, 222, 128, 0.15);
+    text-decoration: underline;
+  }
+
+  .json-modal-body {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    position: relative;
+    background: var(--md-sys-color-surface-container-lowest);
+    margin: 4px 16px 16px 16px;
+    border-radius: var(--radius-sm, 8px);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    overflow: hidden;
+  }
+
+  .json-modal-gutter {
+    width: 54px;
+    min-width: 54px;
+    background: var(--md-sys-color-surface-container);
+    border-right: 1px solid var(--md-sys-color-outline-variant);
+    padding: 12px 0;
+    user-select: none;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 13px;
+    line-height: 22px;
+    color: var(--md-sys-color-on-surface-variant);
+    text-align: right;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+
+  .json-modal-gutter-line {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 10px;
+    height: 22px;
+    position: relative;
+    gap: 5px;
+    box-sizing: border-box;
+  }
+
+  .json-modal-gutter-line.active-line {
+    color: var(--md-sys-color-primary);
+    font-weight: 600;
+  }
+
+  .json-modal-gutter-fold {
+    font-size: 9px;
+    color: var(--md-sys-color-outline);
+    line-height: 1;
+    display: inline-block;
+    transform: translateY(-1px);
+  }
+
+  .json-modal-gutter-error {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--md-sys-color-error);
+    box-shadow: 0 0 6px var(--md-sys-color-error);
+    margin-right: 2px;
+  }
+
+  .json-modal-editor-area {
+    flex: 1;
+    position: relative;
+    display: flex;
+    min-width: 0;
+    background: var(--md-sys-color-surface-container-lowest);
+  }
+
+  .json-modal-textarea {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    color: var(--md-sys-color-on-surface);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 13px;
+    line-height: 22px;
+    padding: 12px 14px;
+    white-space: pre;
+    overflow: auto;
+    tab-size: 2;
+    -moz-tab-size: 2;
+    box-sizing: border-box;
+    caret-color: var(--md-sys-color-primary);
+  }
+
+  .json-modal-textarea::selection {
+    background: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
+  }
+
+  .json-modal-active-line-indicator {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 22px;
+    background: rgba(96, 165, 250, 0.07);
+    pointer-events: none;
+    transition: top 0.05s ease;
+  }
+</style>
+
+<!-- Expandable JSON Editor Popup Modal (Matching Screenshots) -->
+<div id="jsonEditorModal" class="json-modal-overlay" style="display:none;"
+  onclick="handleJsonModalBackdropClick(event)">
+  <div class="json-modal-container" id="jsonModalContainer" onclick="event.stopPropagation()">
+    <!-- Top Header Bar -->
+    <div id="jsonModalHeader" class="json-modal-header">
+      <!-- Default / Clean State (Screenshot 2) -->
+      <div id="jsonModalHeaderClean"
+        style="display:flex; align-items:center; width:100%; justify-content:space-between;">
+        <span class="json-modal-title">JSON Editor</span>
+        <button type="button" class="json-modal-close-btn" onclick="closeJsonEditorModal()"
+          title="Close editor">✕</button>
+      </div>
+
+      <!-- Unsaved Changes State (Screenshot 1) -->
+      <div id="jsonModalHeaderUnsaved"
+        style="display:none; align-items:center; width:100%; justify-content:space-between;">
+        <div class="json-modal-unsaved-group">
+          <span>Unsaved changes</span>
+          <span class="json-modal-divider"></span>
+          <button type="button" id="jsonModalSaveBtn" class="json-modal-btn-save"
+            onclick="saveModalJson()">Save</button>
+          <button type="button" class="json-modal-btn-discard" onclick="discardModalJson()">Discard</button>
+        </div>
+        <button type="button" class="json-modal-close-btn" onclick="closeJsonEditorModal()"
+          title="Close editor">✕</button>
+      </div>
+    </div>
+
+    <!-- Validation Status Banner -->
+    <div id="jsonModalValidationBanner" class="json-modal-banner valid">
+      <div class="json-modal-banner-left">
+        <span class="json-modal-banner-icon" id="jsonModalBannerIcon">✓</span>
+        <span id="jsonModalBannerText">Valid JSON</span>
+      </div>
+      <button type="button" id="jsonModalFormatBtn" class="json-modal-banner-format-btn"
+        onclick="formatModalJson()">Format</button>
+    </div>
+
+    <!-- Editor Body with Line Numbers Gutter -->
+    <div class="json-modal-body">
+      <div id="jsonModalGutter" class="json-modal-gutter">
+        <div class="json-modal-gutter-line">
+          <span class="json-modal-gutter-fold">▾</span>
+          <span>1</span>
+        </div>
+      </div>
+      <div class="json-modal-editor-area">
+        <div id="jsonModalActiveLineHighlight" class="json-modal-active-line-indicator" style="top:12px;"></div>
+        <textarea id="jsonModalTextarea" class="json-modal-textarea" spellcheck="false" autocomplete="off"
+          autocorrect="off" autocapitalize="off"></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let existingMoreFields = {{ ((asset.moreFields or asset.more_fields) if (asset and(asset.moreFields or asset.more_fields)) else { }) | tojson }};
+  let currentSubId = "{{ (asset.subCategoryId or asset.sub_category_id) if asset else (selected_sub or '') }}";
+  let nameCheckTimeout = null;
+  let isNameAvailable = true;
+  const currentAssetId = "{{ asset.id if asset else '' }}";
+  const currentAssetFolder = "{{ asset.folder_name if asset and asset.folder_name else '' }}";
+  let stagedThumbnailFile = null;
+  let isSubmitting = false;
+
+  async function checkAssetNameAvailability() {
+    const nameInput = document.getElementById('assetName');
+    const statusEl = document.getElementById('assetNameStatus');
+    const submitBtn = document.getElementById('saveAssetSubmitBtn');
+    const catSelect = document.getElementById('categorySelect');
+    const subSelect = document.getElementById('subCategorySelect');
+
+    if (!nameInput || !statusEl) return;
+
+    const nameVal = nameInput.value.trim();
+    if (!nameVal) {
+      statusEl.innerHTML = '<span style="color:var(--md-sys-color-on-surface-variant); font-size:0.8rem;">(Will automatically pick the name of the first uploaded file)</span>';
+      nameInput.style.borderColor = '';
+      isNameAvailable = true;
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.title = '';
+      }
+      return;
+    }
+
+    statusEl.innerHTML = '<span style="color:var(--md-sys-color-on-surface-variant); font-size:0.8rem;">⏳ Checking availability...</span>';
+
+    const catId = catSelect ? catSelect.value : '';
+    const subId = subSelect ? subSelect.value : '';
+
+    try {
+      let url = `/admin/assets/check-name?name=${encodeURIComponent(nameVal)}`;
+      if (subId) url += `&subCategoryId=${encodeURIComponent(subId)}`;
+      if (catId) url += `&categoryId=${encodeURIComponent(catId)}`;
+      if (currentAssetId) url += `&assetId=${encodeURIComponent(currentAssetId)}`;
+
+      const res = await fetch(url);
+      const data = await res.json().catch(() => ({}));
+
+      if (data.available) {
+        statusEl.innerHTML = '<span style="color:var(--md-sys-color-primary, #00875a); font-weight:600; display:inline-flex; align-items:center; gap:0.25rem;">✓ Available</span>';
+        nameInput.style.borderColor = 'var(--md-sys-color-primary, #00875a)';
+        isNameAvailable = true;
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.title = '';
+        }
+      } else {
+        const msg = data.message || `Asset name "${nameVal}" is already used in database. Please rename.`;
+        statusEl.innerHTML = `<span style="color:var(--md-sys-color-error, #de350b); font-weight:600; display:inline-flex; align-items:center; gap:0.25rem;">✗ ${escapeHtml(msg)}</span>`;
+        nameInput.style.borderColor = 'var(--md-sys-color-error, #de350b)';
+        isNameAvailable = false;
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.title = 'Please rename the asset before saving.';
+        }
+      }
+    } catch (err) {
+      statusEl.innerHTML = '';
+      nameInput.style.borderColor = '';
+      isNameAvailable = true;
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.title = '';
+      }
+    }
+  }
+
+  function onAssetNameInput() {
+    clearTimeout(nameCheckTimeout);
+    nameCheckTimeout = setTimeout(checkAssetNameAvailability, 250);
+  }
+
+  // Format helper functions
+  function formatBytes(bytes) {
+    if (!bytes || isNaN(bytes)) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function handleThumbDragOver(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const dz = document.getElementById('thumbDropzone');
+    if (dz) dz.classList.add('dragover');
+  }
+
+  function handleThumbDragLeave(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const dz = document.getElementById('thumbDropzone');
+    if (dz) dz.classList.remove('dragover');
+  }
+
+  function handleThumbDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const dz = document.getElementById('thumbDropzone');
+    if (dz) dz.classList.remove('dragover');
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      uploadThumbnail(e.dataTransfer.files[0]);
+    }
+  }
+
+  function updateMultiThumbMode(mode) {
+    const wrap = document.getElementById('thumbDropzoneWrap');
+    if (wrap) {
+      wrap.style.display = (mode === 'custom') ? 'flex' : 'none';
+    }
+    if (mode === 'auto_create' || mode === 'original') {
+      let candidateUrl = '';
+      let candidateFile = null;
+      if (typeof existingMoreFields === 'object') {
+        for (const key of Object.keys(existingMoreFields)) {
+          const blk = existingMoreFields[key];
+          if (blk && blk.items && blk.items.length > 0) {
+            for (const item of blk.items) {
+              if (item.thumbnail_url && !/\.(mp4|webm|mov|avi|mkv)(\?.*)?$/i.test(item.thumbnail_url)) {
+                candidateUrl = item.thumbnail_url;
+                break;
+              } else if (item.url && (mode === 'original' || !/\.(mp4|webm|mov|avi|mkv)(\?.*)?$/i.test(item.url))) {
+                candidateUrl = item.url;
+                if (item._file) candidateFile = item._file;
+                break;
+              }
+            }
+          } else if (blk && (blk.type === 'frames' || blk.type === 'frame' || key.toLowerCase().includes('frame'))) {
+            if (blk._file) {
+              candidateFile = blk._file;
+              candidateUrl = blk.imageUrl || blk.image_url || '';
+              break;
+            } else if (blk.image_url || blk.imageUrl) {
+              candidateUrl = blk.image_url || blk.imageUrl;
+              break;
+            }
+          }
+          if (candidateUrl || candidateFile) break;
+        }
+      }
+      if (candidateFile) {
+        stageThumbnail(candidateFile);
+      } else if (candidateUrl) {
+        document.getElementById('thumbnailUrlInput').value = candidateUrl;
+        updateThumbPreview(candidateUrl);
+      }
+    }
+  }
+
+  function updateThumbPreview(url) {
+    const img = document.getElementById('thumbPreviewImg');
+    const placeholder = document.getElementById('thumbPlaceholder');
+    const clearBtn = document.getElementById('thumbClearBtn');
+    if (url && url.trim()) {
+      img.src = url.trim();
+      img.style.display = 'block';
+      if (placeholder) placeholder.style.display = 'none';
+      if (clearBtn) clearBtn.style.display = 'flex';
+      const cropBtn = document.getElementById('thumbCropBtn');
+      if (cropBtn) cropBtn.style.display = 'flex';
+    } else {
+      img.style.display = 'none';
+      if (placeholder) placeholder.style.display = 'block';
+      if (clearBtn) clearBtn.style.display = 'none';
+      const cropBtn = document.getElementById('thumbCropBtn');
+      if (cropBtn) cropBtn.style.display = 'none';
+    }
+  }
+
+  async function cropCurrentThumbnail() {
+    let file = stagedThumbnailFile;
+    if (!file) {
+      const curUrl = document.getElementById('thumbnailUrlInput')?.value;
+      if (curUrl && window.MediaCropper) {
+        try {
+          const res = await fetch(curUrl);
+          const blob = await res.blob();
+          file = new File([blob], 'thumbnail.png', { type: blob.type });
+        } catch (e) {
+          alert('Could not load current thumbnail for cropping.');
+          return;
+        }
+      }
+    }
+    if (!file) {
+      document.getElementById('thumbFileInput')?.click();
+      return;
+    }
+    if (window.MediaCropper) {
+      window.MediaCropper.crop(file, {
+        title: 'Crop Asset Thumbnail',
+        onCrop: (cropped) => {
+          if (cropped) stageThumbnail(cropped);
+          else stageThumbnail(file);
+        },
+        onCancel: () => {
+          stageThumbnail(file);
+        }
+      });
+    }
+  }
+
+  function clearThumbnail() {
+    stagedThumbnailFile = null;
+    const textInput = document.getElementById('thumbnailUrlInput');
+    if (textInput) textInput.value = '';
+    const fileInput = document.getElementById('thumbFileInput');
+    if (fileInput) fileInput.value = '';
+    const bar = document.getElementById('thumbUploadBar');
+    if (bar) bar.style.display = 'none';
+    updateThumbPreview('');
+  }
+
+  function stageThumbnail(file) {
+    if (!file) return;
+
+    // Ensure thumbnail name is prefixed with "thumb_" so it doesn't clash with original filename
+    let thumbName = file.name;
+    if (!thumbName.startsWith('thumb_')) {
+      thumbName = 'thumb_' + thumbName;
+    }
+    if (file.name !== thumbName) {
+      file = new File([file], thumbName, { type: file.type, lastModified: file.lastModified || Date.now() });
+    }
+    stagedThumbnailFile = file;
+
+    // Auto-fill asset name if blank (stripping thumb_ prefix)
+    const nameInput = document.getElementById('assetName');
+    if (nameInput && !nameInput.value.trim()) {
+      const raw = file.name.replace(/^thumb_/, "").replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ").trim();
+      nameInput.value = raw.charAt(0).toUpperCase() + raw.slice(1);
+      checkAssetNameAvailability();
+    }
+
+    const localUrl = URL.createObjectURL(file);
+    updateThumbPreview(localUrl);
+
+    const bar = document.getElementById('thumbUploadBar');
+    const txt = document.getElementById('thumbUploadStatusText');
+    if (bar) bar.style.display = 'flex';
+    if (txt) txt.textContent = `Selected: ${file.name} (staged, uploads on Save)`;
+    setTimeout(() => {
+      if (bar) bar.style.display = 'none';
+    }, 2500);
+  }
+
+  const uploadThumbnail = stageThumbnail;
+
+  async function onCategoryChanged(categoryId, targetSubId) {
+    const subSelect = document.getElementById('subCategorySelect');
+    const desiredSub = targetSubId !== undefined ? targetSubId : currentSubId;
+    if (!categoryId) {
+      subSelect.innerHTML = '<option value="">-- Select Category First --</option>';
+      subSelect.disabled = true;
+      return;
+    }
+
+    subSelect.disabled = false;
+    subSelect.innerHTML = '<option value="">Loading subcategories...</option>';
+
+    try {
+      let items = [];
+      const res = await fetch(`/admin/subcategories/api/list?categoryId=${encodeURIComponent(categoryId)}`, {
+        credentials: 'same-origin'
+      });
+      if (res.ok) {
+        const json = await res.json();
+        items = json.items || [];
+      } else {
+        const v1Res = await fetch(`/api/v1/subcategories?categoryId=${categoryId}&pageSize=100`);
+        const v1Json = await v1Res.json();
+        items = v1Json.data?.items || [];
+      }
+
+      if (items.length === 0) {
+        subSelect.innerHTML = '<option value="">-- No Subcategories In Category --</option>';
+        return;
+      }
+
+      subSelect.innerHTML = '<option value="">-- Select Subcategory --</option>';
+      items.forEach(sub => {
+        const opt = document.createElement('option');
+        opt.value = sub.id;
+        opt.textContent = sub.name;
+        if (desiredSub && sub.id === desiredSub) {
+          opt.selected = true;
+        }
+        subSelect.appendChild(opt);
+      });
+      if (desiredSub) {
+        subSelect.value = desiredSub;
+      }
+    } catch (err) {
+      console.error('Failed to load subcategories', err);
+      subSelect.innerHTML = '<option value="">Failed to load subcategories</option>';
+    }
+  }
+
+  // Media probing: extracts duration, filesize, and dimensions in the browser
+  function probeMediaMetadata(file) {
+    return new Promise((resolve) => {
+      const base = { filesize: file.size, size_bytes: file.size };
+      if (file.type.startsWith('audio/')) {
+        const audio = document.createElement('audio');
+        audio.preload = 'metadata';
+        const objUrl = URL.createObjectURL(file);
+        audio.src = objUrl;
+        audio.onloadedmetadata = () => {
+          URL.revokeObjectURL(objUrl);
+          const dur = Number(audio.duration.toFixed(3));
+          const ms = Math.round(audio.duration * 1000);
+          resolve({ ...base, duration_ms: ms, duration: dur });
+        };
+        audio.onerror = () => {
+          URL.revokeObjectURL(objUrl);
+          resolve(base);
+        };
+      } else if (file.type.startsWith('video/')) {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        const objUrl = URL.createObjectURL(file);
+        video.src = objUrl;
+        video.onloadedmetadata = () => {
+          URL.revokeObjectURL(objUrl);
+          const dur = Number(video.duration.toFixed(3));
+          const ms = Math.round(video.duration * 1000);
+          resolve({
+            ...base,
+            duration_ms: ms,
+            duration: dur,
+            width: video.videoWidth,
+            height: video.videoHeight,
+            dimensions: `${video.videoWidth}x${video.videoHeight}`
+          });
+        };
+        video.onerror = () => {
+          URL.revokeObjectURL(objUrl);
+          resolve(base);
+        };
+      } else if (file.type.startsWith('image/')) {
+        const img = new Image();
+        const objUrl = URL.createObjectURL(file);
+        img.src = objUrl;
+        img.onload = () => {
+          URL.revokeObjectURL(objUrl);
+          resolve({
+            ...base,
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            dimensions: `${img.naturalWidth}x${img.naturalHeight}`
+          });
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objUrl);
+          resolve(base);
+        };
+      } else {
+        resolve(base);
+      }
+    });
+  }
+
+  // Normalize media and string list block structure
+  function normalizeBlock(key) {
+    let block = existingMoreFields[key];
+    if (!block) return;
+
+    if (Array.isArray(block)) {
+      const isTagOrStringKey = /tag|keyword|label|string|badge|bubble/i.test(key);
+      const areNonFileStrings = block.length > 0 && block.every(it => typeof it === 'string' && !it.includes('/') && !/\.(png|jpg|jpeg|webp|gif|svg|mp3|mp4|wav|ogg|mov|webm)$/i.test(it));
+      if (isTagOrStringKey || areNonFileStrings) {
+        existingMoreFields[key] = {
+          type: 'string_list',
+          items: block.map(it => String(it).trim()).filter(Boolean)
+        };
+        return;
+      }
+
+      const isAudio = key.toLowerCase().includes('audio') || block.some(it => it && ((it.mime && it.mime.startsWith('audio/')) || (it.url && /\.(mp3|wav|ogg|aac|m4a)$/i.test(it.url))));
+      const isVideo = key.toLowerCase().includes('video') || block.some(it => it && ((it.mime && it.mime.startsWith('video/')) || (it.url && /\.(mp4|webm|mov)$/i.test(it.url))));
+      let inferredType = 'image';
+      if (isAudio) inferredType = 'audio';
+      else if (isVideo) inferredType = 'video';
+
+      existingMoreFields[key] = {
+        type: inferredType,
+        items: block.map(it => {
+          if (typeof it === 'string') {
+            return {
+              url: it,
+              filename: it.split('/').pop() || 'file',
+              mime: null,
+              size_bytes: null,
+              width: null,
+              height: null,
+              duration_ms: null
+            };
+          }
+          return {
+            url: it.url || '',
+            filename: it.filename || (it.url ? it.url.split('/').pop() : 'file'),
+            mime: it.mime || null,
+            size_bytes: it.size_bytes ?? it.filesize ?? null,
+            filesize: it.filesize ?? it.size_bytes ?? null,
+            width: it.width ?? null,
+            height: it.height ?? null,
+            dimensions: it.dimensions ?? null,
+            duration: it.duration ?? null,
+            duration_ms: it.duration_ms ?? null
+          };
+        }),
+        _isDirectArray: true
+      };
+      block = existingMoreFields[key];
+      block.urls = block.items.map(it => it.url).filter(Boolean);
+      block.url = block.items.length > 0 ? block.items[0].url : '';
+      return;
+    }
+
+    if (typeof block !== 'object') return;
+    const t = block.type || '';
+
+    // Detect frames block: plain object with 'coordinates' or 'placeholders' array and no 'type' or type='frames'
+    if ((t === 'frames' || t === '' || key.toLowerCase().includes('frame')) && (block.coordinates || block.placeholders)) {
+      block.type = 'frames';
+      if (!block.coordinates && block.placeholders) block.coordinates = block.placeholders;
+      // Normalize image_url / imageUrl
+      if (!block.image_url && block.imageUrl) block.image_url = block.imageUrl;
+      if (!block.imageUrl && block.image_url) block.imageUrl = block.image_url;
+      delete block.placeholders;
+      return;
+    }
+
+    // Detect JSON block: plain dict without a recognized block type
+    if (t === '' && typeof block === 'object' && !Array.isArray(block) && !block.items && !block.url && !block.urls && !block.placeholders && !block.coordinates) {
+      existingMoreFields[key] = {
+        type: 'json',
+        data: block
+      };
+      return;
+    }
+
+    if (t === 'string_list' || t === 'strings') {
+      block.type = 'string_list';
+      if (!Array.isArray(block.items)) {
+        if (Array.isArray(block.values)) {
+          block.items = block.values;
+        } else if (Array.isArray(block.strings)) {
+          block.items = block.strings;
+        } else {
+          block.items = [];
+        }
+      }
+      block.items = block.items.map(it => String(it).trim()).filter(Boolean);
+      return;
+    }
+    if (['image', 'image_list', 'audio', 'audio_list', 'video', 'video_list'].includes(t)) {
+      block._isDirectArray = true;
+      if (!Array.isArray(block.items)) {
+        block.items = [];
+        if (Array.isArray(block.urls) && block.urls.length > 0) {
+          block.items = block.urls.map(u => ({
+            url: u,
+            filename: typeof u === 'string' ? u.split('/').pop() : 'file',
+            mime: null,
+            size_bytes: null,
+            width: null,
+            height: null,
+            duration_ms: null
+          }));
+        } else if (block.url && typeof block.url === 'string') {
+          block.items = [{
+            url: block.url,
+            filename: block.url.split('/').pop(),
+            mime: block.mime || null,
+            width: block.width || null,
+            height: block.height || null,
+            duration_ms: block.duration_ms || null,
+            size_bytes: block.size_bytes || null
+          }];
+        }
+      }
+      block.urls = block.items.map(it => it.url).filter(Boolean);
+      block.url = block.items.length > 0 ? block.items[0].url : '';
+    }
+  }
+
+  // Render dynamic moreFields payload cards
+  function renderPayloadBlocks() {
+    const container = document.getElementById('payloadBlocksContainer');
+    container.innerHTML = '';
+
+    const keys = Object.keys(existingMoreFields);
+    if (keys.length === 0) {
+      container.innerHTML = '<div style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem; padding:1.5rem; border:1px dashed var(--md-sys-color-outline-variant); border-radius:var(--radius-md); text-align:center;">No payload blocks added yet. Select a type and click "+ Add Block" above.</div>';
+      return;
+    }
+
+    keys.forEach(key => {
+      normalizeBlock(key);
+      const block = existingMoreFields[key] || {};
+      const bType = block.type || 'json';
+      const safeKey = escapeHtml(key);
+      const safeId = 'blk_' + Math.abs(hashCode(key));
+
+      // Check if this block should be expanded (newly added or user toggled)
+      const isExpanded = window._expandedBlocks && window._expandedBlocks.has(key);
+
+      const card = document.createElement('div');
+      card.className = isExpanded ? 'morefields-card' : 'morefields-card collapsed';
+      card.id = `card_${safeId}`;
+      card.setAttribute('data-block-key', key);
+
+      // Block type details
+      let typeBadgeLabel = 'JSON';
+      let typeIcon = '⚙️';
+      let isMediaBlock = false;
+      let acceptTypes = '*/*';
+      let acceptHint = '';
+      let itemCountHint = '';
+
+      if (bType === 'image' || bType === 'image_list') {
+        isMediaBlock = true;
+        typeBadgeLabel = 'Image';
+        typeIcon = '🖼️';
+        acceptTypes = 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml';
+        acceptHint = 'PNG, JPG, WEBP, GIF, SVG';
+      } else if (bType === 'audio' || bType === 'audio_list') {
+        isMediaBlock = true;
+        typeBadgeLabel = 'Audio';
+        typeIcon = '🎵';
+        acceptTypes = 'audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/aac,audio/m4a';
+        acceptHint = 'MP3, WAV, OGG, AAC, M4A';
+      } else if (bType === 'video' || bType === 'video_list') {
+        isMediaBlock = true;
+        typeBadgeLabel = 'Video';
+        typeIcon = '🎬';
+        acceptTypes = 'video/mp4,video/webm,video/quicktime';
+        acceptHint = 'MP4, WEBM, MOV';
+      } else if (bType === 'string_list') {
+        typeBadgeLabel = 'String List';
+        typeIcon = '🏷️';
+      } else if (bType === 'frames') {
+        typeBadgeLabel = 'Frames';
+        typeIcon = '🖼️';
+      }
+
+      // Item count summary for collapsed view
+      if (isMediaBlock && Array.isArray(block.items)) {
+        itemCountHint = `<span style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); margin-left:0.25rem;">${block.items.length} file${block.items.length !== 1 ? 's' : ''}</span>`;
+      } else if (bType === 'string_list' && Array.isArray(block.items)) {
+        itemCountHint = `<span style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); margin-left:0.25rem;">${block.items.length} item${block.items.length !== 1 ? 's' : ''}</span>`;
+      }
+
+      // Card Header HTML — with collapse toggle
+      let headerHtml = `
+      <div class="morefields-card-header" onclick="toggleBlockCollapse('${safeId}')">
+        <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+          <button type="button" class="morefields-collapse-toggle${isExpanded ? ' expanded' : ''}" id="toggle_${safeId}" onclick="event.stopPropagation(); toggleBlockCollapse('${safeId}');" title="${isExpanded ? 'Collapse' : 'Expand'}">${isExpanded ? '▼' : '▶'}</button>
+          <span class="badge badge-primary">${typeIcon} ${typeBadgeLabel}</span>
+          <label style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant); margin:0;">Key:</label>
+          <input type="text" class="morefields-key-input" value="${safeKey}" title="Object property name in moreFields" onchange="renamePayloadBlock('${safeKey}', this.value)" onclick="event.stopPropagation()">
+          ${itemCountHint}
+        </div>
+        <button type="button" class="btn btn-destructive" style="min-height:28px; padding:0.15rem 0.6rem; font-size:0.75rem;" onclick="event.stopPropagation(); removePayloadBlock('${safeKey}');">
+          Remove Block
+        </button>
+      </div>
+    `;
+
+      // Card Body HTML
+      let bodyHtml = '';
+
+      if (isMediaBlock) {
+        const items = Array.isArray(block.items) ? block.items : [];
+        let itemsListHtml = '';
+        if (items.length > 0) {
+          itemsListHtml = items.map((item, idx) => {
+            const itemUrl = escapeHtml(item.url || '');
+            const itemName = escapeHtml(item.filename || (item.url ? item.url.split('/').pop() : ('File ' + (idx + 1))));
+            const metaParts = [];
+            if (item._isUploading) {
+              metaParts.push(`<span class="badge" id="uploadItemStatus_${safeId}_${idx}" style="background:rgba(103, 80, 164, 0.25); color:#d0bcff; font-size:0.7rem; font-weight:600; padding:1px 6px;">Uploading in background (${item._uploadProgress || 0}%)...</span>`);
+            } else if (item._uploadError) {
+              metaParts.push(`<span class="badge badge-error" style="font-size:0.7rem; font-weight:600; padding:1px 6px;">Upload Failed</span>`);
+            } else if (item._isStaged) {
+              metaParts.push('<span class="badge" style="background:var(--md-sys-color-secondary-container, #e8def8); color:var(--md-sys-color-on-secondary-container, #1d192b); font-size:0.7rem; font-weight:600; padding:1px 6px;">Staged (Uploads on Save)</span>');
+            }
+            if (item.size_bytes) metaParts.push(formatBytes(item.size_bytes));
+            if (item.width && item.height) metaParts.push(`${item.width}×${item.height}`);
+            if (item.duration_ms) metaParts.push(`${(item.duration_ms / 1000).toFixed(1)}s`);
+
+            let previewHtml = '';
+            if (bType === 'image' || bType === 'image_list') {
+              previewHtml = `<div class="morefields-item-preview"><img src="${itemUrl}" alt="${itemName}"></div>`;
+            } else if (bType === 'audio' || bType === 'audio_list') {
+              previewHtml = `
+              <div style="display:flex; align-items:center; gap:0.5rem;">
+                <audio controls class="audio-player-compact" src="${itemUrl}"></audio>
+              </div>
+            `;
+            } else if (bType === 'video' || bType === 'video_list') {
+              previewHtml = `
+              <div class="morefields-item-preview" style="width:80px; height:52px; min-width:80px;">
+                <video src="${itemUrl}" controls style="width:100%; height:100%; object-fit:cover;"></video>
+              </div>
+            `;
+            }
+
+            return `
+            <div class="morefields-item" style="display:flex; gap:0.75rem; align-items:center; padding:0.6rem; border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--radius-sm); background:var(--md-sys-color-surface);">
+              ${previewHtml}
+              <div class="morefields-item-info" style="flex:1; min-width:0; display:flex; flex-direction:column; gap:0.35rem;">
+                <div style="display:flex; gap:0.5rem; align-items:center;">
+                  <span style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); min-width:55px;">Name:</span>
+                  <input type="text" class="input" style="min-height:26px; padding:0.15rem 0.4rem; font-size:0.8rem; font-weight:600; flex:1;" value="${itemName}" placeholder="Filename" title="Filename" onchange="updateMediaItemField('${safeKey}', ${idx}, 'filename', this.value)">
+                </div>
+                <div style="display:flex; gap:0.5rem; align-items:center;">
+                  <span style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); min-width:55px;">URL:</span>
+                  <input type="text" class="input" style="min-height:26px; padding:0.15rem 0.4rem; font-size:0.75rem; font-family:monospace; flex:1;" value="${itemUrl}" placeholder="Static path or URL" title="Item URL" onchange="updateMediaItemField('${safeKey}', ${idx}, 'url', this.value)">
+                </div>
+                ${metaParts.length > 0 ? `<div class="morefields-item-meta" style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">${metaParts.join(' • ')}</div>` : ''}
+              </div>
+              <div style="display:flex; flex-direction:column; gap:0.25rem; flex-shrink:0;">
+                <button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.75rem;" onclick="cropMediaBlockItem('${safeKey}', ${idx})" title="${bType.startsWith('audio') ? 'Crop Audio' : 'Crop Media'}">
+                  ✂️ Crop
+                </button>
+                <button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.75rem; color:var(--md-sys-color-error); border-color:var(--md-sys-color-outline-variant);" onclick="removeMediaItem('${safeKey}', ${idx})" title="Remove this file">
+                  ✕
+                </button>
+              </div>
+            </div>
+          `;
+          }).join('');
+        } else {
+          itemsListHtml = `<div style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant); padding:0.5rem 0.25rem;">No files uploaded yet. Drag and drop file(s) or add by URL below.</div>`;
+        }
+
+        bodyHtml = `
+        <div class="dropzone" id="dropzone_${safeId}"
+             ondragover="handleBlockDragOver(event, '${safeId}')"
+             ondragleave="handleBlockDragLeave(event, '${safeId}')"
+             ondrop="handleBlockDrop(event, '${safeKey}', '${safeId}')"
+             onclick="document.getElementById('fileInput_${safeId}').click()">
+          <div class="dropzone-icon">${typeIcon}</div>
+          <div class="dropzone-text">Drag & drop ${typeBadgeLabel.toLowerCase()} file(s) here, or <span>browse</span></div>
+          <div class="dropzone-hint">Supports single or multiple files (${acceptHint})</div>
+          <div style="display:flex; justify-content:center; align-items:center; gap:0.75rem; margin-top:0.5rem;" onclick="event.stopPropagation()">
+            <label class="crop-data-option-label" title="Automatically open the cropping popup when adding files to this block">
+              <input type="checkbox" id="cropOption_${safeId}" ${window._cropOptions && window._cropOptions[key] ? 'checked' : ''} onchange="toggleBlockCropOption('${safeKey}', this.checked)">
+              ✂️ Crop data on add
+            </label>
+          </div>
+          <input type="file" id="fileInput_${safeId}" multiple accept="${acceptTypes}" style="display:none;" onchange="handleBlockFilesSelected(this.files, '${safeKey}', '${safeId}', false)">
+          <input type="file" id="fileCropInput_${safeId}" multiple accept="${acceptTypes}" style="display:none;" onchange="handleBlockFilesSelected(this.files, '${safeKey}', '${safeId}', true)">
+        </div>
+
+        <div id="uploadBar_${safeId}" class="morefields-uploading-bar" style="display:none;">
+          <span style="font-size:0.85rem;">⏳</span>
+          <span id="uploadText_${safeId}">Uploading files to central storage...</span>
+        </div>
+
+        <div style="margin-top:0.75rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
+            <span style="font-size:0.8rem; font-weight:600; color:var(--md-sys-color-on-surface-variant);">
+              Media Items (${items.length})
+            </span>
+            <span style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">
+              All changes saved to database on save
+            </span>
+          </div>
+          <div class="morefields-items-container" style="display:flex; flex-direction:column; gap:0.5rem;">
+            ${itemsListHtml}
+          </div>
+          <div style="display:flex; gap:0.5rem; margin-top:0.65rem; align-items:center;">
+            <input type="text" id="addUrlInput_${safeId}" class="input" style="min-height:30px; font-size:0.8rem; flex:1;" placeholder="Or paste ${typeBadgeLabel.toLowerCase()} URL to add...">
+            <button type="button" class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.65rem; font-size:0.8rem; white-space:nowrap;" onclick="addMediaItemByUrl('${safeKey}', '${safeId}')">
+              + Add URL
+            </button>
+          </div>
+        </div>
+      `;
+      } else if (bType === 'frames') {
+        const frameImg = block.imageUrl || block.image_url || '';
+        const coords = Array.isArray(block.coordinates) ? block.coordinates : (Array.isArray(block.placeholders) ? block.placeholders : []);
+        const coordsCount = coords.length;
+        
+        let photoSection = '';
+        if (frameImg) {
+          photoSection = `
+          <div style="display:flex; align-items:center; gap:1rem; padding:0.75rem; background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--radius-sm);">
+            <div style="width:72px; height:72px; flex-shrink:0; border-radius:var(--radius-xs); overflow:hidden; border:1px solid var(--md-sys-color-outline-variant); background:repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%) 50% / 12px 12px; display:flex; align-items:center; justify-content:center;">
+              <img src="${escapeHtml(frameImg)}" alt="Frame Photo" style="max-width:100%; max-height:100%; object-fit:contain;">
+            </div>
+            <div style="flex:1; min-width:0;">
+              <div style="font-weight:600; font-size:0.85rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--md-sys-color-on-surface);">
+                ${escapeHtml(frameImg.split('/').pop().split('?')[0])}
+              </div>
+              <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); margin-top:2px;">
+                ${block.width && block.height ? `${block.width} × ${block.height} px • ` : ''}
+                <span style="font-weight:600; color:var(--md-sys-color-primary);">🖼️ ${coordsCount} Placeholder ${coordsCount === 1 ? 'Slot' : 'Slots'} Detected</span>
+              </div>
+            </div>
+            <div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;">
+              <button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.55rem; font-size:0.75rem;" onclick="document.getElementById('frameFileInput_${safeId}').click()">
+                Change Photo
+              </button>
+              <button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.55rem; font-size:0.75rem;" onclick="reanalyzeFramePlaceholders('${safeKey}', '${safeId}')" title="Re-detect transparent placeholders">
+                🤖 Re-detect
+              </button>
+              {% if asset and asset.id %}
+                <a href="/admin/assets/{{ asset.id }}/frames" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.55rem; font-size:0.75rem;">
+                  Interactive Editor 🖼️
+                </a>
+              {% endif %}
+              <button type="button" class="btn btn-destructive" style="min-height:28px; padding:0.15rem 0.45rem; font-size:0.75rem;" onclick="removeFramePhoto('${safeKey}')" title="Remove Photo">
+                ✕
+              </button>
+            </div>
+          </div>
+          `;
+        } else {
+          photoSection = `
+          <div class="frame-upload-dropzone" onclick="document.getElementById('frameFileInput_${safeId}').click()" ondragover="event.preventDefault(); this.style.borderColor='var(--md-sys-color-primary)';" ondragleave="this.style.borderColor='var(--md-sys-color-outline-variant)';" ondrop="event.preventDefault(); this.style.borderColor='var(--md-sys-color-outline-variant)'; if(event.dataTransfer.files[0]) handleFramePhotoUpload('${safeKey}', '${safeId}', event.dataTransfer.files[0]);" style="border: 2px dashed var(--md-sys-color-outline-variant); border-radius: var(--radius-sm); padding: 1.25rem 1rem; text-align: center; cursor: pointer; background: var(--md-sys-color-surface-container-low); transition: all 0.2s ease;">
+            <div style="font-size: 1.6rem; margin-bottom: 0.25rem;">🖼️</div>
+            <div style="font-weight: 600; font-size: 0.88rem; color: var(--md-sys-color-on-surface);">Upload Frame Photo</div>
+            <div style="font-size: 0.78rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.2rem;">
+              Click to select or drag & drop frame image (PNG / WebP with transparent cutouts)
+            </div>
+            <button type="button" class="btn btn-primary" style="margin-top: 0.6rem; min-height: 28px; padding: 0.2rem 0.85rem; font-size: 0.8rem;" onclick="event.stopPropagation(); document.getElementById('frameFileInput_${safeId}').click();">
+              Select Photo
+            </button>
+          </div>
+          `;
+        }
+
+        bodyHtml = `
+        <div style="display:flex; flex-direction:column; gap:0.6rem;">
+          <input type="file" id="frameFileInput_${safeId}" accept="image/*" style="display:none;" onchange="handleFramePhotoUpload('${safeKey}', '${safeId}', this.files[0])">
+          ${photoSection}
+          <div id="frameUploadBar_${safeId}" class="morefields-uploading-bar" style="display:none; align-items:center; gap:0.5rem; padding:0.4rem 0.6rem; background:rgba(103, 80, 164, 0.1); border-radius:var(--radius-xs);">
+            <span id="frameUploadText_${safeId}" style="font-size:0.78rem; font-weight:500;">Uploading photo & detecting placeholders...</span>
+          </div>
+        </div>
+      `;
+      } else if (bType === 'string_list') {
+        const items = Array.isArray(block.items) ? block.items : [];
+        let bubblesHtml = '';
+        if (items.length > 0) {
+          bubblesHtml = items.map((it, idx) => {
+            const safeText = escapeHtml(String(it));
+            return `
+            <span class="string-bubble" data-index="${idx}">
+              <span class="string-bubble-text" title="${safeText}">${safeText}</span>
+              <button type="button" class="string-bubble-remove" onclick="removeStringListItem('${safeKey}', ${idx})" title="Remove ${safeText}" aria-label="Remove ${safeText}">
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </span>
+          `;
+          }).join('');
+        } else {
+          bubblesHtml = '<span class="string-bubbles-empty">No items added yet. Type an item below and press Enter to add.</span>';
+        }
+
+        bodyHtml = `
+        <div class="string-bubbles-wrapper">
+          <div class="string-bubbles-meta">
+            <span><strong>String Items (${items.length})</strong> — each item appears as a removable bubble</span>
+            ${items.length > 0 ? `<button type="button" class="btn btn-outlined" style="min-height:24px; padding:0.1rem 0.5rem; font-size:0.75rem; color:var(--md-sys-color-error); border-color:var(--md-sys-color-outline-variant);" onclick="clearStringList('${safeKey}')">Clear All</button>` : ''}
+          </div>
+
+          <div class="string-bubbles-box" id="bubblesBox_${safeId}">
+            ${bubblesHtml}
+          </div>
+
+          <div class="string-bubbles-input-row">
+            <input type="text"
+                   id="addStringInput_${safeId}"
+                   class="input string-bubbles-input"
+                   placeholder="Type an item and press Enter (or comma) to add..."
+                   autocomplete="off"
+                   onkeydown="handleStringListKeyDown(event, '${safeKey}', this)"
+                   onpaste="handleStringListPaste(event, '${safeKey}', this)">
+            <button type="button"
+                    class="btn btn-outlined"
+                    style="min-height:32px; padding:0.2rem 0.85rem; font-size:0.82rem; white-space:nowrap;"
+                    onclick="addStringListItemFromInput('${safeKey}', 'addStringInput_${safeId}')">
+              + Add Item
+            </button>
+          </div>
+          <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); margin-top:-0.15rem;">
+            Tip: Press <kbd style="padding:1px 4px; border:1px solid var(--md-sys-color-outline-variant); border-radius:3px; font-size:0.7rem;">Enter</kbd> or <kbd style="padding:1px 4px; border:1px solid var(--md-sys-color-outline-variant); border-radius:3px; font-size:0.7rem;">,</kbd> to add bubbles, or paste a comma-separated list.
+          </div>
+        </div>
+      `;
+      } else {
+        // JSON input ONLY when JSON option is selected
+        let jsonStr = '';
+        try {
+          jsonStr = JSON.stringify(block.data !== undefined ? block.data : block, null, 2);
+        } catch (e) {
+          jsonStr = '{}';
+        }
+
+        bodyHtml = `
+        <div class="form-group" style="margin-bottom:0;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
+            <label class="label" style="font-size:0.8rem; margin-bottom:0;">JSON Configuration</label>
+            <div style="display:flex; gap:0.4rem; align-items:center;">
+              <button type="button" class="btn btn-outlined" style="min-height:24px; padding:0.1rem 0.5rem; font-size:0.75rem;" onclick="formatBlockJson('${safeKey}', '${safeId}')">
+                Prettify JSON
+              </button>
+              <button type="button" class="btn btn-outlined" style="min-height:24px; padding:0.1rem 0.6rem; font-size:0.75rem; background:var(--md-sys-color-surface-container); border-color:var(--md-sys-color-primary); color:var(--md-sys-color-primary); font-weight:600;" onclick="openJsonEditorModal('${safeKey}', '${safeId}')" title="Expand JSON editor in popup screen">
+                ⛶ Expand Editor
+              </button>
+            </div>
+          </div>
+          <div style="position:relative;">
+            <textarea id="jsonArea_${safeId}" class="textarea" rows="5" style="font-family:monospace; font-size:0.85rem; padding-right:75px;" oninput="updateBlockJson('${safeKey}', this.value, '${safeId}')" ondblclick="openJsonEditorModal('${safeKey}', '${safeId}')" title="Double-click to expand in popup">${escapeHtml(jsonStr)}</textarea>
+            <button type="button" onclick="openJsonEditorModal('${safeKey}', '${safeId}')" title="Expand in popup screen" style="position:absolute; right:8px; bottom:12px; background:rgba(30,30,30,0.75); color:#fff; border:1px solid rgba(255,255,255,0.25); border-radius:4px; padding:2px 7px; font-size:0.72rem; cursor:pointer; display:flex; align-items:center; gap:3px;">
+              ⛶ Expand
+            </button>
+          </div>
+          <div id="jsonStatus_${safeId}" style="font-size:0.75rem; margin-top:0.25rem; color:var(--md-sys-color-on-surface-variant);">Valid JSON</div>
+        </div>
+      `;
+      }
+
+      card.innerHTML = headerHtml + `<div class="morefields-card-body${isExpanded ? ' expanded' : ''}" id="body_${safeId}" style="display:${isExpanded ? 'block' : 'none'};">${bodyHtml}</div>`;
+      container.appendChild(card);
+    });
+  }
+
+  function hashCode(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) - hash + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return hash;
+  }
+
+  // Drag and drop visual state handlers
+  function handleBlockDragOver(e, safeId) {
+    e.preventDefault();
+    e.stopPropagation();
+    const dz = document.getElementById(`dropzone_${safeId}`);
+    if (dz) dz.classList.add('dragover');
+  }
+
+  function handleBlockDragLeave(e, safeId) {
+    e.preventDefault();
+    e.stopPropagation();
+    const dz = document.getElementById(`dropzone_${safeId}`);
+    if (dz) dz.classList.remove('dragover');
+  }
+
+  function handleBlockDrop(e, key, safeId) {
+    e.preventDefault();
+    e.stopPropagation();
+    const dz = document.getElementById(`dropzone_${safeId}`);
+    if (dz) dz.classList.remove('dragover');
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleBlockFilesSelected(e.dataTransfer.files, key, safeId, false);
+    }
+  }
+
+  async function handleBlockFilesSelected(files, key, safeId, forceCrop = false) {
+    if (!files || files.length === 0) return;
+    let shouldCrop = forceCrop || (window._cropOptions && window._cropOptions[key]);
+    let fileList = Array.from(files);
+
+    if (shouldCrop && window.MediaCropper) {
+      const processed = [];
+      for (let i = 0; i < fileList.length; i++) {
+        if (!shouldCrop) {
+          processed.push(fileList[i]);
+          continue;
+        }
+        try {
+          const cropped = await window.MediaCropper.open(fileList[i], {
+            queueIndex: i,
+            queueTotal: fileList.length
+          });
+          if (cropped) {
+            processed.push(cropped);
+            if (cropped.skipRemainingCrops) {
+              shouldCrop = false;
+            }
+          } else {
+            processed.push(fileList[i]);
+          }
+        } catch (e) {
+          console.log('Cropping skipped:', e);
+          processed.push(fileList[i]);
+        }
+      }
+      fileList = processed;
+    }
+
+    uploadFilesToBlock(fileList, key, safeId);
+
+    // Clear inputs so re-selecting same file triggers onchange
+    const normalInput = document.getElementById(`fileInput_${safeId}`);
+    if (normalInput) normalInput.value = '';
+    const cropInput = document.getElementById(`fileCropInput_${safeId}`);
+    if (cropInput) cropInput.value = '';
+  }
+
+  function toggleBlockCropOption(key, isChecked) {
+    if (!window._cropOptions) window._cropOptions = {};
+    window._cropOptions[key] = isChecked;
+  }
+
+  function openBlockCropFilePicker(key, safeId) {
+    const cropInput = document.getElementById(`fileCropInput_${safeId}`);
+    if (cropInput) cropInput.click();
+    else {
+      const normalInput = document.getElementById(`fileInput_${safeId}`);
+      if (normalInput) normalInput.click();
+    }
+  }
+
+  async function cropMediaBlockItem(key, idx) {
+    normalizeBlock(key);
+    const block = existingMoreFields[key];
+    if (!block || !block.items || !block.items[idx] || !window.MediaCropper) return;
+    const item = block.items[idx];
+
+    let sourceFile = item._file;
+    if (!sourceFile && item.url) {
+      try {
+        const res = await fetch(item.url);
+        const blob = await res.blob();
+        sourceFile = new File([blob], item.filename || 'media_asset', { type: item.mime || blob.type });
+      } catch (e) {
+        alert('Could not load asset file for cropping: ' + (e.message || 'Unknown error'));
+        return;
+      }
+    }
+
+    if (!sourceFile) {
+      alert('No media file available to crop.');
+      return;
+    }
+
+    try {
+      const cropped = await window.MediaCropper.open(sourceFile);
+      if (cropped && !cropped.cropCancelled && cropped !== sourceFile) {
+        item._file = cropped;
+        item._isStaged = true;
+        item.filename = cropped.name;
+        item.url = URL.createObjectURL(cropped);
+        item.size_bytes = cropped.size;
+        item.filesize = cropped.size;
+
+        const probeMeta = await probeMediaMetadata(cropped);
+        if (probeMeta.width) item.width = probeMeta.width;
+        if (probeMeta.height) item.height = probeMeta.height;
+        if (probeMeta.dimensions) item.dimensions = probeMeta.dimensions;
+        if (probeMeta.duration) item.duration = probeMeta.duration;
+        if (probeMeta.duration_ms) item.duration_ms = probeMeta.duration_ms;
+
+        block.urls = block.items.map(it => it.url);
+        block.url = block.items[0].url;
+        renderPayloadBlocks();
+      }
+    } catch (e) {
+      console.log('Crop cancelled:', e);
+    }
+  }
+
+  // Upload single file to central media endpoint with conflict detection
+  async function uploadFileToServer(file, folder, catId, subId, assetName, clientHints) {
+    if (catId && subId && typeof showRenameModal === 'function') {
+      try {
+        let chkUrl = `/api/v1/media/check-similarity?filename=${encodeURIComponent(file.name)}&categoryId=${encodeURIComponent(catId)}&subCategoryId=${encodeURIComponent(subId)}`;
+        if (assetName) chkUrl += `&assetName=${encodeURIComponent(assetName)}`;
+        if (typeof currentAssetId !== 'undefined' && currentAssetId) chkUrl += `&assetId=${encodeURIComponent(currentAssetId)}`;
+        if (typeof currentAssetFolder !== 'undefined' && currentAssetFolder) chkUrl += `&assetFolder=${encodeURIComponent(currentAssetFolder)}`;
+
+        const chkRes = await fetch(chkUrl);
+        if (chkRes.ok) {
+          const chkData = await chkRes.json();
+          const m = (chkData.matches && chkData.matches[0]) ? chkData.matches[0] : null;
+          if (m && m.has_conflict) {
+            const renamed = await showRenameModal({
+              filename: file.name,
+              existingMatch: m.matched_name,
+              conflictType: m.conflict_type,
+              suggestedFilename: m.suggested_filename,
+              title: 'Rename File — Filename Conflict Detected'
+            });
+            if (renamed && renamed !== file.name) {
+              file = new File([file], renamed, { type: file.type, lastModified: file.lastModified || Date.now() });
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Similarity check error:', e);
+      }
+    }
+
+    if (window.BackgroundUploader) {
+      try {
+        const result = await window.BackgroundUploader.upload(file, {
+          folder: folder,
+          categoryId: catId,
+          subCategoryId: subId,
+          assetName: assetName,
+          assetFolder: (typeof currentAssetFolder !== 'undefined') ? currentAssetFolder : '',
+          assetId: (typeof currentAssetId !== 'undefined') ? currentAssetId : '',
+          clientHints: clientHints
+        });
+        return result;
+      } catch (err) {
+        const errMsg = err.message || 'Upload failed';
+        if ((errMsg.includes('clash') || errMsg.includes('already exists') || errMsg.includes('rename') || errMsg.includes('409')) && typeof showRenameModal === 'function') {
+          const renamed = await showRenameModal({
+            filename: file.name,
+            existingMatch: file.name,
+            conflictType: 'exact',
+            title: 'Filename Collision — Rename File'
+          });
+          if (renamed && renamed !== file.name) {
+            const renamedFile = new File([file], renamed, { type: file.type, lastModified: file.lastModified || Date.now() });
+            return uploadFileToServer(renamedFile, folder, catId, subId, assetName, clientHints);
+          }
+        }
+        throw err;
+      }
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('folder', folder);
+    if (catId) formData.append('categoryId', catId);
+    if (subId) formData.append('subCategoryId', subId);
+    if (assetName) formData.append('assetName', assetName);
+    if (typeof currentAssetFolder !== 'undefined' && currentAssetFolder) formData.append('assetFolder', currentAssetFolder);
+    if (typeof currentAssetId !== 'undefined' && currentAssetId) formData.append('assetId', currentAssetId);
+    if (clientHints) {
+      if (clientHints.duration_ms) formData.append('duration_ms', clientHints.duration_ms);
+      if (clientHints.duration) formData.append('duration', clientHints.duration);
+      if (clientHints.width) formData.append('width', clientHints.width);
+      if (clientHints.height) formData.append('height', clientHints.height);
+      if (clientHints.filesize) formData.append('filesize', clientHints.filesize);
+      else if (file.size) formData.append('filesize', file.size);
+    } else if (file.size) {
+      formData.append('filesize', file.size);
+    }
+
+    const res = await fetch('/api/v1/media/upload', {
+      method: 'POST',
+      body: formData
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const errMsg = json.error?.message || json.message || 'Upload failed';
+      if ((res.status === 409 || errMsg.includes('clash') || errMsg.includes('already exists') || errMsg.includes('rename')) && typeof showRenameModal === 'function') {
+        const renamed = await showRenameModal({
+          filename: file.name,
+          existingMatch: file.name,
+          conflictType: 'exact',
+          title: 'Filename Collision — Rename File'
+        });
+        if (renamed && renamed !== file.name) {
+          const renamedFile = new File([file], renamed, { type: file.type, lastModified: file.lastModified || Date.now() });
+          return uploadFileToServer(renamedFile, folder, catId, subId, assetName, clientHints);
+        }
+      }
+      throw new Error(errMsg);
+    }
+
+    return {
+      url: json.data?.url || json.url || '',
+      filename: json.data?.filename || file.name,
+      mime: json.data?.mime || file.type,
+      size_bytes: json.data?.size_bytes || file.size,
+      width: json.data?.width || null,
+      height: json.data?.height || null,
+      duration_ms: json.data?.duration_ms || null
+    };
+  }
+
+  async function extractVideoFirstFrame(file) {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      const url = URL.createObjectURL(file);
+      video.src = url;
+      video.onloadeddata = () => {
+        video.currentTime = 0;
+      };
+      video.onseeked = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth || 480;
+          canvas.height = video.videoHeight || 480;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob((blob) => {
+            URL.revokeObjectURL(url);
+            if (blob) {
+              const thumbName = `thumb_${file.name.replace(/\.[^/.]+$/, "")}.webp`;
+              const thumbFile = new File([blob], thumbName, { type: 'image/webp' });
+              resolve(thumbFile);
+            } else {
+              resolve(null);
+            }
+          }, 'image/webp', 0.9);
+        } catch (e) {
+          URL.revokeObjectURL(url);
+          resolve(null);
+        }
+      };
+      video.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      };
+    });
+  }
+
+  // Stage dropped or selected files in memory; files are only uploaded to central storage when Save is clicked
+  async function stageFilesToBlock(fileList, key, safeId) {
+    normalizeBlock(key);
+    const block = existingMoreFields[key];
+    if (!block) return;
+
+    const total = fileList.length;
+    for (let i = 0; i < total; i++) {
+      const file = fileList[i];
+
+      // Auto-set asset name if blank before saving so folder is created using its name
+      const nameInput = document.getElementById('assetName');
+      if (nameInput && !nameInput.value.trim()) {
+        const raw = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ").trim();
+        nameInput.value = raw.charAt(0).toUpperCase() + raw.slice(1);
+        checkAssetNameAvailability();
+      }
+
+      // Extract client metadata (duration / dimensions / filesize)
+      const probeMeta = await probeMediaMetadata(file);
+      const localUrl = URL.createObjectURL(file);
+
+      const newItem = {
+        _isStaged: true,
+        _file: file,
+        url: localUrl,
+        filename: file.name,
+        mime: file.type || '',
+        filesize: file.size || probeMeta.filesize || null,
+        size_bytes: file.size || probeMeta.size_bytes || null,
+        width: probeMeta.width || null,
+        height: probeMeta.height || null,
+        dimensions: probeMeta.dimensions || null,
+        duration: probeMeta.duration || null,
+        duration_ms: probeMeta.duration_ms || null
+      };
+
+      block.items.push(newItem);
+      block.urls = block.items.map(it => it.url);
+      block.url = block.items[0].url;
+      if (newItem.width) block.width = newItem.width;
+      if (newItem.height) block.height = newItem.height;
+      if (newItem.dimensions) block.dimensions = newItem.dimensions;
+      if (newItem.duration) block.duration = newItem.duration;
+      if (newItem.duration_ms) block.duration_ms = newItem.duration_ms;
+      if (newItem.filesize) block.filesize = newItem.filesize;
+      if (newItem.size_bytes) block.size_bytes = newItem.size_bytes;
+      if (newItem.mime) block.mime = newItem.mime;
+      const threshold = (typeof window.LARGE_FILE_THRESHOLD_BYTES !== 'undefined') ? window.LARGE_FILE_THRESHOLD_BYTES : 2 * 1024 * 1024;
+      const isLarge = file.size >= threshold;
+
+      if (isLarge && window.BackgroundUploader) {
+        newItem._isUploading = true;
+        newItem._uploadProgress = 0;
+
+        const catSelect = document.getElementById('categorySelect');
+        const subSelect = document.getElementById('subCategorySelect');
+        const catId = catSelect ? catSelect.value : '';
+        const subId = subSelect ? subSelect.value : '';
+
+        window.BackgroundUploader.upload(file, {
+          folder: 'more_fields',
+          categoryId: catId,
+          subCategoryId: subId,
+          assetName: nameInput ? nameInput.value.trim() : '',
+          assetFolder: (typeof currentAssetFolder !== 'undefined') ? currentAssetFolder : '',
+          assetId: (typeof currentAssetId !== 'undefined') ? currentAssetId : '',
+          clientHints: newItem,
+          onProgress: (p) => {
+            newItem._uploadProgress = p.percent;
+            const statusBadge = document.getElementById(`uploadItemStatus_${safeId}_${block.items.indexOf(newItem)}`);
+            if (statusBadge) {
+              statusBadge.textContent = `Uploading in background (${p.percent}%)...`;
+            }
+          },
+          onSuccess: (result) => {
+            newItem._isUploading = false;
+            newItem._isStaged = false;
+            delete newItem._file;
+            newItem.url = result.url;
+            newItem.filename = result.filename || file.name;
+            newItem.mime = result.mime || newItem.mime;
+            newItem.size_bytes = result.size_bytes || result.filesize || newItem.size_bytes;
+            newItem.filesize = result.filesize || result.size_bytes || newItem.filesize;
+            if (result.width) newItem.width = result.width;
+            if (result.height) newItem.height = result.height;
+            if (result.dimensions) newItem.dimensions = result.dimensions;
+            if (result.duration) newItem.duration = result.duration;
+            if (result.duration_ms) newItem.duration_ms = result.duration_ms;
+
+            if (result.thumbnail_url && !/\.(mp4|webm|mov|avi|mkv)(\?.*)?$/i.test(result.thumbnail_url)) {
+              newItem.thumbnail_url = result.thumbnail_url;
+              const thumbInput = document.getElementById('thumbnailUrlInput');
+              const curThumb = thumbInput ? thumbInput.value.trim() : '';
+              const isVideoThumb = /\.(mp4|webm|mov|avi|mkv)(\?.*)?$/i.test(curThumb);
+              const thumbModeRadio = document.querySelector('input[name="multi_thumb_mode"]:checked');
+              const thumbMode = thumbModeRadio ? thumbModeRadio.value : 'custom';
+              if (!curThumb || isVideoThumb || thumbMode === 'auto_create') {
+                if (thumbInput) thumbInput.value = result.thumbnail_url;
+                updateThumbPreview(result.thumbnail_url);
+              }
+            }
+
+            block.urls = block.items.map(it => it.url).filter(Boolean);
+            block.url = block.urls.length > 0 ? block.urls[0] : '';
+            renderPayloadBlocks();
+          },
+          onError: (err) => {
+            newItem._isUploading = false;
+            newItem._uploadError = err.message;
+            renderPayloadBlocks();
+          }
+        }).catch(() => { });
+      }
+
+      // Also auto-stage asset thumbnail if image/video and thumbnail is currently blank or pointing to mp4
+      const thumbInput = document.getElementById('thumbnailUrlInput');
+      const thumbImg = document.getElementById('thumbPreviewImg');
+      const curThumbVal = thumbInput ? thumbInput.value.trim() : '';
+      const isVideoThumbVal = /\.(mp4|webm|mov|avi|mkv)(\?.*)?$/i.test(curThumbVal);
+      const isThumbEmpty = (!curThumbVal || isVideoThumbVal) && (!thumbImg || thumbImg.style.display === 'none') && !stagedThumbnailFile;
+      
+      if (isThumbEmpty) {
+        if (file.type.startsWith('image/') || block.type === 'image') {
+          stageThumbnail(file);
+        } else if (file.type.startsWith('video/') || block.type === 'video' || /\.(mp4|webm|mov|avi|mkv)$/i.test(file.name)) {
+          extractVideoFirstFrame(file).then(thumbFile => {
+            if (thumbFile) stageThumbnail(thumbFile);
+          });
+        } else if (file.type.startsWith('audio/') || block.type === 'audio' || block.type === 'audios' || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(file.name)) {
+          const defaultAudioThumb = '/static/thumbnail_default.png';
+          if (thumbInput) thumbInput.value = defaultAudioThumb;
+          updateThumbPreview(defaultAudioThumb);
+        }
+      }
+    }
+
+    renderPayloadBlocks();
+  }
+
+  const uploadFilesToBlock = stageFilesToBlock;
+
+  // Helper to count available data items across moreFields to prevent deleting the last item
+  function countAvailableMoreFieldsData(excludeKey, excludeIndex, excludeEntireKey) {
+    let count = 0;
+    for (const key of Object.keys(existingMoreFields)) {
+      if (excludeEntireKey && key === excludeKey) {
+        continue;
+      }
+      const block = existingMoreFields[key];
+      if (!block) continue;
+
+      const bType = block.type || '';
+      if (bType === 'string_list' || bType === 'strings') {
+        const items = Array.isArray(block.items) ? block.items : [];
+        let c = items.length;
+        if (key === excludeKey && excludeIndex !== undefined && excludeIndex !== null) {
+          c = Math.max(0, c - 1);
+        }
+        count += c;
+      } else if (['image', 'image_list', 'audio', 'audio_list', 'video', 'video_list'].includes(bType) || Array.isArray(block.items)) {
+        const items = Array.isArray(block.items) ? block.items : [];
+        let c = items.length;
+        if (key === excludeKey && excludeIndex !== undefined && excludeIndex !== null) {
+          c = Math.max(0, c - 1);
+        }
+        count += c;
+      } else if (bType === 'frames') {
+        const hasImg = Boolean(block.imageUrl || block.image_url);
+        const phCount = Array.isArray(block.placeholders) ? block.placeholders.length : 0;
+        if (hasImg || phCount > 0) {
+          count += Math.max(1, phCount);
+        }
+      } else if (bType === 'json') {
+        const safeId = 'blk_' + Math.abs(hashCode(key));
+        const jsonArea = document.getElementById(`jsonArea_${safeId}`);
+        let hasData = false;
+        if (jsonArea) {
+          const val = jsonArea.value.trim();
+          if (val && val !== '{}' && val !== '[]') hasData = true;
+        } else if (block.data !== undefined && block.data !== null) {
+          if (typeof block.data === 'object') {
+            hasData = Object.keys(block.data).length > 0;
+          } else {
+            hasData = Boolean(block.data);
+          }
+        }
+        if (hasData) count += 1;
+      } else {
+        if (block.url || (Array.isArray(block.urls) && block.urls.length > 0)) {
+          count += (Array.isArray(block.urls) && block.urls.length > 0) ? block.urls.length : 1;
+        } else if (typeof block === 'object' && Object.keys(block).length > 0) {
+          count += 1;
+        }
+      }
+    }
+    return count;
+  }
+
+  function syncThumbnailAfterMediaRemoval(removedItem) {
+    if (!removedItem) return;
+    const thumbInput = document.getElementById('thumbnailUrlInput');
+    if (!thumbInput || !thumbInput.value) return;
+
+    const currentThumbVal = thumbInput.value.trim();
+    const removedUrl = removedItem.url ? String(removedItem.url).trim() : '';
+    const removedFilename = removedItem.filename || (removedUrl ? removedUrl.split('/').pop().split('?')[0] : '');
+
+    const isMatch = (removedUrl && currentThumbVal === removedUrl) ||
+      (removedFilename && currentThumbVal.endsWith('/' + removedFilename));
+
+    if (isMatch) {
+      // Look for first available alternative image across all payload blocks
+      let fallbackImgUrl = '';
+      for (const bKey of Object.keys(existingMoreFields)) {
+        const b = existingMoreFields[bKey];
+        if (!b) continue;
+        const bType = b.type || '';
+        const isImg = bType === 'image' || bType === 'image_list' || bKey.toLowerCase().includes('image');
+        if (Array.isArray(b.items)) {
+          const found = b.items.find(it => {
+            if (!it || !it.url) return false;
+            if (it.url.startsWith('blob:')) return false;
+            return isImg || (it.mime && String(it.mime).startsWith('image/'));
+          });
+          if (found && found.url) {
+            fallbackImgUrl = found.url;
+            break;
+          }
+        } else if (b.url && !b.url.startsWith('blob:') && isImg) {
+          fallbackImgUrl = b.url;
+          break;
+        }
+      }
+
+      if (fallbackImgUrl) {
+        thumbInput.value = fallbackImgUrl;
+        updateThumbPreview(fallbackImgUrl);
+      } else {
+        clearThumbnail();
+      }
+    }
+  }
+
+  function removeMediaItem(key, idx) {
+    normalizeBlock(key);
+    const block = existingMoreFields[key];
+    if (!block || !Array.isArray(block.items)) return;
+
+    const currentTotal = countAvailableMoreFieldsData();
+    const remainingTotal = countAvailableMoreFieldsData(key, idx, false);
+    if (currentTotal > 0 && remainingTotal === 0) {
+      alert("Cannot delete this item: An asset must contain at least one item in more fields. If you wish to delete this asset completely, please delete it from the Assets list.");
+      return;
+    }
+
+    const removedItem = block.items[idx];
+    block.items.splice(idx, 1);
+    block.urls = block.items.map(it => it.url).filter(Boolean);
+    block.url = block.urls.length > 0 ? block.urls[0] : '';
+
+    syncThumbnailAfterMediaRemoval(removedItem);
+    renderPayloadBlocks();
+  }
+
+  function updateMediaItemField(key, idx, field, val) {
+    normalizeBlock(key);
+    const block = existingMoreFields[key];
+    if (!block || !Array.isArray(block.items) || !block.items[idx]) return;
+    let cleanVal = (val !== null && val !== undefined) ? String(val).trim() : '';
+    if (['width', 'height', 'duration_ms', 'size_bytes'].includes(field)) {
+      cleanVal = val ? parseInt(val, 10) : null;
+    }
+    block.items[idx][field] = cleanVal;
+    if (field === 'url') {
+      if (cleanVal && !cleanVal.startsWith('blob:')) {
+        block.items[idx]._isStaged = false;
+        delete block.items[idx]._file;
+      }
+      block.urls = block.items.map(it => it.url).filter(Boolean);
+      block.url = block.urls.length > 0 ? block.urls[0] : '';
+    }
+  }
+
+  function addMediaItemByUrl(key, safeId) {
+    const block = existingMoreFields[key];
+    if (!block) return;
+    normalizeBlock(key);
+    const input = document.getElementById(`addUrlInput_${safeId}`);
+    if (!input || !input.value.trim()) return;
+    const url = input.value.trim();
+    const filename = url.split('/').pop() || 'file';
+    block.items.push({
+      url: url,
+      filename: filename,
+      mime: null,
+      width: null,
+      height: null,
+      duration_ms: null,
+      size_bytes: null
+    });
+    block.urls = block.items.map(it => it.url).filter(Boolean);
+    block.url = block.urls.length > 0 ? block.urls[0] : '';
+    input.value = '';
+    renderPayloadBlocks();
+  }
+
+  function addPayloadBlock() {
+    const type = document.getElementById('newBlockTypeSelect').value;
+    let defaultPrefix = type;
+    if (type === 'image') defaultPrefix = 'images';
+    else if (type === 'string_list') defaultPrefix = 'tags';
+
+    let keyName = defaultPrefix;
+    let counter = 1;
+    while (existingMoreFields[keyName]) {
+      keyName = `${defaultPrefix}_${counter++}`;
+    }
+
+    let initialData = {};
+    if (type === 'image') {
+      initialData = { type: 'image', url: '', urls: [], items: [], _isDirectArray: true };
+    } else if (type === 'audio') {
+      initialData = { type: 'audio', url: '', urls: [], items: [], _isDirectArray: true };
+    } else if (type === 'video') {
+      initialData = { type: 'video', url: '', urls: [], items: [], _isDirectArray: true };
+    } else if (type === 'string_list') {
+      initialData = { type: 'string_list', items: [] };
+    } else if (type === 'frames') {
+      initialData = { type: 'frames', imageUrl: '', image_url: '', width: 1080, height: 1080, coordinates: [] };
+    } else {
+      // Custom JSON
+      initialData = { type: 'json', data: {} };
+    }
+
+    // Prepend the new block at the top by rebuilding the object
+    const reordered = {};
+    reordered[keyName] = initialData;
+    for (const k of Object.keys(existingMoreFields)) {
+      reordered[k] = existingMoreFields[k];
+    }
+    existingMoreFields = reordered;
+
+    // Auto-expand the newly added block
+    if (!window._expandedBlocks) window._expandedBlocks = new Set();
+    window._expandedBlocks.add(keyName);
+
+    renderPayloadBlocks();
+
+    // If string_list was added, auto-focus its input
+    if (type === 'string_list') {
+      const safeId = 'blk_' + Math.abs(hashCode(keyName));
+      setTimeout(() => {
+        const inp = document.getElementById(`addStringInput_${safeId}`);
+        if (inp) inp.focus();
+      }, 50);
+    }
+
+    // Scroll to the new block
+    const newSafeId = 'blk_' + Math.abs(hashCode(keyName));
+    setTimeout(() => {
+      const newCard = document.getElementById(`card_${newSafeId}`);
+      if (newCard) newCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }
+
+  function toggleBlockCollapse(safeId) {
+    const card = document.getElementById(`card_${safeId}`);
+    if (!card) return;
+    const key = card.getAttribute('data-block-key') || '';
+    const body = document.getElementById(`body_${safeId}`);
+    const toggle = document.getElementById(`toggle_${safeId}`);
+
+    if (!window._expandedBlocks) window._expandedBlocks = new Set();
+
+    const isCollapsed = card.classList.contains('collapsed');
+    if (isCollapsed) {
+      // Expand
+      card.classList.remove('collapsed');
+      if (body) {
+        body.classList.add('expanded');
+        body.style.display = 'block';
+      }
+      if (toggle) {
+        toggle.classList.add('expanded');
+        toggle.textContent = '▼';
+        toggle.title = 'Collapse';
+      }
+      if (key) window._expandedBlocks.add(key);
+    } else {
+      // Collapse
+      card.classList.add('collapsed');
+      if (body) {
+        body.classList.remove('expanded');
+        body.style.display = 'none';
+      }
+      if (toggle) {
+        toggle.classList.remove('expanded');
+        toggle.textContent = '▶';
+        toggle.title = 'Expand';
+      }
+      if (key) window._expandedBlocks.delete(key);
+    }
+  }
+
+  // String List Block Interactive Handlers
+  function addStringListItemFromInput(key, inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const raw = input.value;
+    if (!raw || !raw.trim()) return;
+    addStringListItems(key, raw);
+    input.value = '';
+    input.focus();
+  }
+
+  function addStringListItems(key, rawText) {
+    const block = existingMoreFields[key];
+    if (!block) return;
+    if (!Array.isArray(block.items)) block.items = [];
+
+    // Split by commas or newlines if any
+    const parts = rawText.split(/[,\n\r]+/).map(s => s.trim()).filter(Boolean);
+    for (const part of parts) {
+      if (part) {
+        block.items.push(part);
+      }
+    }
+    renderPayloadBlocks();
+  }
+
+  function removeStringListItem(key, idx) {
+    const block = existingMoreFields[key];
+    if (!block || !Array.isArray(block.items)) return;
+
+    const currentTotal = countAvailableMoreFieldsData();
+    const remainingTotal = countAvailableMoreFieldsData(key, idx, false);
+    if (currentTotal > 0 && remainingTotal === 0) {
+      alert("Cannot delete this item: An asset must contain at least one item in more fields. If you wish to delete this asset completely, please delete it from the Assets list.");
+      return;
+    }
+
+    block.items.splice(idx, 1);
+    renderPayloadBlocks();
+  }
+
+  function clearStringList(key) {
+    const block = existingMoreFields[key];
+    if (!block || !Array.isArray(block.items)) return;
+    if (block.items.length === 0) return;
+
+    const currentTotal = countAvailableMoreFieldsData();
+    const remainingTotal = countAvailableMoreFieldsData(key, null, true);
+    if (currentTotal > 0 && remainingTotal === 0) {
+      alert("Cannot clear this block: An asset must contain at least one item in more fields. If you wish to delete this asset completely, please delete it from the Assets list.");
+      return;
+    }
+
+    if (confirm(`Remove all ${block.items.length} item(s) from "${key}"?`)) {
+      block.items = [];
+      renderPayloadBlocks();
+    }
+  }
+
+  function handleStringListKeyDown(event, key, inputElem) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const val = inputElem.value.trim();
+      if (val) {
+        addStringListItems(key, val);
+        inputElem.value = '';
+      }
+    } else if (event.key === ',') {
+      event.preventDefault();
+      const val = inputElem.value.trim();
+      if (val) {
+        addStringListItems(key, val);
+        inputElem.value = '';
+      }
+    }
+  }
+
+  function handleStringListPaste(event, key, inputElem) {
+    const paste = (event.clipboardData || window.clipboardData).getData('text');
+    if (paste && (paste.includes(',') || paste.includes('\n'))) {
+      event.preventDefault();
+      addStringListItems(key, paste);
+      inputElem.value = '';
+    }
+  }
+
+  function removePayloadBlock(key) {
+    const currentTotal = countAvailableMoreFieldsData();
+    const remainingTotal = countAvailableMoreFieldsData(key, null, true);
+    if (currentTotal > 0 && remainingTotal === 0) {
+      alert("Cannot delete this block: An asset must contain at least one item in more fields. If you wish to delete this asset completely, please delete it from the Assets list.");
+      return;
+    }
+
+    const removedBlock = existingMoreFields[key];
+    delete existingMoreFields[key];
+
+    if (removedBlock) {
+      if (Array.isArray(removedBlock.items)) {
+        for (const it of removedBlock.items) {
+          syncThumbnailAfterMediaRemoval(it);
+        }
+      } else if (removedBlock.url) {
+        syncThumbnailAfterMediaRemoval({ url: removedBlock.url });
+      }
+    }
+
+    renderPayloadBlocks();
+  }
+
+  function renamePayloadBlock(oldKey, newKey) {
+    const clean = newKey.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+    if (!clean) {
+      alert('Block key cannot be empty');
+      renderPayloadBlocks();
+      return;
+    }
+    if (clean === oldKey) return;
+    if (existingMoreFields[clean]) {
+      alert(`A block named "${clean}" already exists.`);
+      renderPayloadBlocks();
+      return;
+    }
+
+    existingMoreFields[clean] = existingMoreFields[oldKey];
+    delete existingMoreFields[oldKey];
+    renderPayloadBlocks();
+  }
+
+  function updateFramesField(key, field, val) {
+    if (existingMoreFields[key]) {
+      existingMoreFields[key][field] = val;
+      if (field === 'imageUrl') existingMoreFields[key]['image_url'] = val;
+      if (field === 'image_url') existingMoreFields[key]['imageUrl'] = val;
+    }
+  }
+
+  async function handleFramePhotoUpload(key, safeId, file) {
+    if (!file) return;
+    const block = existingMoreFields[key];
+    if (!block) return;
+
+    const bar = document.getElementById(`frameUploadBar_${safeId}`);
+    const txt = document.getElementById(`frameUploadText_${safeId}`);
+    if (bar) bar.style.display = 'flex';
+    if (txt) txt.textContent = `Processing frame photo ${file.name}...`;
+
+    try {
+      const nameInput = document.getElementById('assetName');
+      const assetName = nameInput ? nameInput.value.trim() : '';
+
+      // Auto-populate asset name if empty
+      if (nameInput && !assetName) {
+        const raw = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ").trim();
+        nameInput.value = raw.charAt(0).toUpperCase() + raw.slice(1);
+        if (typeof checkAssetNameAvailability === 'function') checkAssetNameAvailability();
+      }
+
+      // Stage locally without saving to disk yet (will save when user clicks Save)
+      block._isStaged = true;
+      block._file = file;
+      block.filename = file.name;
+      const localUrl = URL.createObjectURL(file);
+      block.imageUrl = localUrl;
+      block.image_url = localUrl;
+
+      // Extract client-side dimensions as fallback
+      const img = new Image();
+      img.onload = () => {
+        if (!block.width) block.width = img.naturalWidth;
+        if (!block.height) block.height = img.naturalHeight;
+      };
+      img.src = localUrl;
+
+      // Auto-create/stage thumbnail if:
+      // - "Create from Block" is selected (thumbMode === 'auto_create')
+      // - or "Use Original Image" is selected (thumbMode === 'original')
+      // - or thumbnail is currently empty (e.g. first file added to asset)
+      const thumbModeRadio = document.querySelector('input[name="multi_thumb_mode"]:checked');
+      const thumbMode = thumbModeRadio ? thumbModeRadio.value : 'custom';
+      const thumbInput = document.getElementById('thumbnailUrlInput');
+      const thumbImg = document.getElementById('thumbPreviewImg');
+      const curThumbVal = thumbInput ? thumbInput.value.trim() : '';
+      const isVideoThumbVal = /\.(mp4|webm|mov|avi|mkv)(\?.*)?$/i.test(curThumbVal);
+      const isThumbEmpty = (!curThumbVal || isVideoThumbVal) && (!thumbImg || thumbImg.style.display === 'none') && !stagedThumbnailFile;
+
+      if (thumbMode === 'auto_create' || thumbMode === 'original' || isThumbEmpty) {
+        stageThumbnail(file);
+      }
+
+      if (txt) txt.textContent = `Analyzing transparent placeholders with OpenCV...`;
+
+      // In-memory placeholder detection via POST FormData (no file written to disk)
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const detectRes = await fetch('/api/v1/media/detect-frames', {
+          method: 'POST',
+          body: formData
+        });
+        if (detectRes.ok) {
+          const detectData = await detectRes.json();
+          const coords = detectData.coordinates || detectData.placeholders || [];
+          block.coordinates = coords;
+          delete block.placeholders;
+          if (detectData.width) block.width = Math.round(detectData.width);
+          if (detectData.height) block.height = Math.round(detectData.height);
+        } else {
+          console.warn('Frame detection response not OK:', detectRes.status);
+        }
+      } catch (e) {
+        console.warn('Auto frame detection warning:', e);
+      }
+
+      if (bar) bar.style.display = 'none';
+      renderPayloadBlocks();
+    } catch (err) {
+      if (bar) bar.style.display = 'none';
+      alert('Failed to process frame photo: ' + (err.message || err));
+    }
+  }
+
+  async function reanalyzeFramePlaceholders(key, safeId) {
+    const block = existingMoreFields[key];
+    if (!block) return;
+    const photoUrl = block.image_url || block.imageUrl;
+    if (!photoUrl && !block._file) {
+      alert('No frame photo uploaded. Please upload a photo first.');
+      return;
+    }
+
+    const bar = document.getElementById(`frameUploadBar_${safeId}`);
+    const txt = document.getElementById(`frameUploadText_${safeId}`);
+    if (bar) bar.style.display = 'flex';
+    if (txt) txt.textContent = 'Analyzing transparent placeholders with OpenCV...';
+
+    try {
+      let detectRes;
+      if (block._file) {
+        const formData = new FormData();
+        formData.append('file', block._file);
+        detectRes = await fetch('/api/v1/media/detect-frames', {
+          method: 'POST',
+          body: formData
+        });
+      } else {
+        detectRes = await fetch(`/api/v1/media/detect-frames?imageUrl=${encodeURIComponent(photoUrl)}`);
+      }
+
+      if (detectRes.ok) {
+        const detectData = await detectRes.json();
+        const coords = detectData.coordinates || detectData.placeholders || [];
+        block.coordinates = coords;
+        delete block.placeholders;
+        if (detectData.width) block.width = Math.round(detectData.width);
+        if (detectData.height) block.height = Math.round(detectData.height);
+        alert(`Successfully detected ${coords.length} frame placeholder slot(s)!`);
+      } else {
+        const errJson = await detectRes.json().catch(() => ({}));
+        throw new Error(errJson.message || 'Detection failed');
+      }
+    } catch (err) {
+      alert('Detection failed: ' + err.message);
+    } finally {
+      if (bar) bar.style.display = 'none';
+      renderPayloadBlocks();
+    }
+  }
+
+  function removeFramePhoto(key) {
+    if (existingMoreFields[key]) {
+      existingMoreFields[key].imageUrl = '';
+      existingMoreFields[key].image_url = '';
+      existingMoreFields[key].coordinates = [];
+      delete existingMoreFields[key].placeholders;
+      delete existingMoreFields[key]._file;
+      existingMoreFields[key]._isStaged = false;
+      renderPayloadBlocks();
+    }
+  }
+
+  function updateBlockJson(key, textValue, safeId) {
+    const status = document.getElementById(`jsonStatus_${safeId}`);
+    try {
+      const parsed = JSON.parse(textValue);
+      if (existingMoreFields[key]) {
+        existingMoreFields[key] = {
+          type: 'json',
+          data: (typeof parsed === 'object' && parsed !== null && parsed.data !== undefined && parsed.type === undefined) ? parsed.data : parsed
+        };
+      }
+      if (status) {
+        status.textContent = '✓ Valid JSON';
+        status.style.color = 'var(--app-green, #27ae60)';
+      }
+    } catch (err) {
+      if (status) {
+        status.textContent = '✕ Invalid JSON: ' + err.message;
+        status.style.color = 'var(--md-sys-color-error)';
+      }
+    }
+  }
+
+  function formatBlockJson(key, safeId) {
+    const area = document.getElementById(`jsonArea_${safeId}`);
+    if (!area) return;
+    try {
+      const parsed = JSON.parse(area.value);
+      area.value = JSON.stringify(parsed, null, 2);
+      updateBlockJson(key, area.value, safeId);
+    } catch (err) {
+      alert('Cannot format invalid JSON: ' + err.message);
+    }
+  }
+
+  // JSON Editor Modal State and Controllers
+  let activeJsonModalKey = null;
+  let activeJsonModalSafeId = null;
+  let initialJsonModalContent = '';
+  let isJsonModalDirty = false;
+  let isJsonModalValid = true;
+
+  function openJsonEditorModal(key, safeId) {
+    activeJsonModalKey = key;
+    activeJsonModalSafeId = safeId;
+    const area = document.getElementById(`jsonArea_${safeId}`);
+    let raw = '';
+    if (area) {
+      raw = area.value;
+    } else {
+      const block = existingMoreFields[key];
+      raw = JSON.stringify((block && block.data !== undefined) ? block.data : (block || {}), null, 2);
+    }
+
+    initialJsonModalContent = raw;
+    isJsonModalDirty = false;
+
+    const modal = document.getElementById('jsonEditorModal');
+    const textarea = document.getElementById('jsonModalTextarea');
+    textarea.value = raw;
+
+    validateAndRenderModal(false);
+
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => {
+      modal.classList.add('active');
+    });
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(0, 0);
+      updateActiveLineHighlight();
+    }, 50);
+  }
+
+  function handleJsonModalBackdropClick(e) {
+    if (e.target.id === 'jsonEditorModal') {
+      closeJsonEditorModal();
+    }
+  }
+
+  function closeJsonEditorModal(force = false) {
+    const textarea = document.getElementById('jsonModalTextarea');
+    if (!force && textarea && textarea.value !== initialJsonModalContent) {
+      if (!confirm('You have unsaved changes in the JSON editor. Discard them?')) {
+        return;
+      }
+    }
+    const modal = document.getElementById('jsonEditorModal');
+    if (modal) {
+      modal.classList.remove('active');
+      setTimeout(() => {
+        modal.style.display = 'none';
+      }, 200);
+    }
+    activeJsonModalKey = null;
+    activeJsonModalSafeId = null;
+  }
+
+  function setJsonModalHeaderState(isDirty) {
+    if (typeof isDirty === 'boolean') {
+      isJsonModalDirty = isDirty;
+    }
+    const header = document.getElementById('jsonModalHeader');
+    const cleanBar = document.getElementById('jsonModalHeaderClean');
+    const unsavedBar = document.getElementById('jsonModalHeaderUnsaved');
+    const saveBtn = document.getElementById('jsonModalSaveBtn');
+
+    // 'Save' and 'Discard' buttons appear whenever JSON is valid, and hide when JSON is invalid
+    const shouldShowUnsaved = Boolean(isJsonModalValid);
+
+    if (shouldShowUnsaved) {
+      header.classList.add('unsaved');
+      cleanBar.style.display = 'none';
+      unsavedBar.style.display = 'flex';
+    } else {
+      header.classList.remove('unsaved');
+      cleanBar.style.display = 'flex';
+      unsavedBar.style.display = 'none';
+    }
+
+    if (saveBtn) {
+      if (!isJsonModalValid) {
+        saveBtn.classList.add('disabled');
+        saveBtn.style.opacity = '0.45';
+        saveBtn.style.cursor = 'not-allowed';
+      } else {
+        saveBtn.classList.remove('disabled');
+        saveBtn.style.opacity = '1';
+        saveBtn.style.cursor = 'pointer';
+      }
+    }
+  }
+
+  function validateAndRenderModal(markDirtyIfChanged = true) {
+    const textarea = document.getElementById('jsonModalTextarea');
+    if (!textarea) return;
+    const text = textarea.value;
+    const lines = text.split('\n');
+    const totalLines = Math.max(1, lines.length);
+
+    const banner = document.getElementById('jsonModalValidationBanner');
+    const icon = document.getElementById('jsonModalBannerIcon');
+    const textEl = document.getElementById('jsonModalBannerText');
+    const formatBtn = document.getElementById('jsonModalFormatBtn');
+    const saveBtn = document.getElementById('jsonModalSaveBtn');
+
+    let errorLine = null;
+    let errorMsg = '';
+
+    try {
+      JSON.parse(text);
+      isJsonModalValid = true;
+    } catch (err) {
+      isJsonModalValid = false;
+      errorMsg = err.message || 'Invalid JSON syntax';
+
+      const lineMatch = errorMsg.match(/line\s+(\d+)/i);
+      if (lineMatch) {
+        errorLine = parseInt(lineMatch[1], 10);
+      } else {
+        const posMatch = errorMsg.match(/position\s+(\d+)/i);
+        if (posMatch) {
+          const pos = parseInt(posMatch[1], 10);
+          errorLine = text.slice(0, pos).split('\n').length;
+        } else {
+          errorLine = 1;
+        }
+      }
+      if (errorLine > totalLines) errorLine = totalLines;
+    }
+
+    if (markDirtyIfChanged) {
+      isJsonModalDirty = (text !== initialJsonModalContent);
+    }
+
+    setJsonModalHeaderState();
+
+    if (isJsonModalValid) {
+      banner.className = 'json-modal-banner valid';
+      icon.textContent = '✓';
+      textEl.textContent = 'Valid JSON';
+      formatBtn.style.display = 'inline-block';
+    } else {
+      banner.className = 'json-modal-banner invalid';
+      icon.textContent = '!';
+      textEl.textContent = 'Invalid JSON';
+      formatBtn.style.display = 'none';
+    }
+
+    if (saveBtn) {
+      if (!isJsonModalValid) {
+        saveBtn.classList.add('disabled');
+        saveBtn.style.opacity = '0.45';
+        saveBtn.style.cursor = 'not-allowed';
+      } else {
+        saveBtn.classList.remove('disabled');
+        saveBtn.style.opacity = '1';
+        saveBtn.style.cursor = 'pointer';
+      }
+    }
+
+    renderModalGutter(totalLines, errorLine, lines);
+    updateActiveLineHighlight();
+  }
+
+  function renderModalGutter(totalLines, errorLine, lines) {
+    const gutter = document.getElementById('jsonModalGutter');
+    if (!gutter) return;
+    let html = '';
+    for (let i = 1; i <= totalLines; i++) {
+      const isErr = (errorLine === i);
+      const lineText = lines[i - 1] ? lines[i - 1].trim() : '';
+      const canFold = (i === 1 && (lineText.startsWith('{') || lineText.startsWith('[')));
+
+      let foldHtml = '';
+      if (isErr) {
+        foldHtml = '<span class="json-modal-gutter-error" title="Syntax error on this line"></span>';
+      } else if (canFold) {
+        foldHtml = '<span class="json-modal-gutter-fold">▾</span>';
+      }
+
+      html += `<div class="json-modal-gutter-line" data-line="${i}">${foldHtml}<span>${i}</span></div>`;
+    }
+    gutter.innerHTML = html;
+  }
+
+  function updateActiveLineHighlight() {
+    const textarea = document.getElementById('jsonModalTextarea');
+    const highlight = document.getElementById('jsonModalActiveLineHighlight');
+    if (!textarea || !highlight) return;
+    const pos = textarea.selectionStart || 0;
+    const lineNum = textarea.value.substr(0, pos).split('\n').length;
+    const topPos = 12 + (lineNum - 1) * 22 - textarea.scrollTop;
+    highlight.style.top = `${topPos}px`;
+  }
+
+  function formatModalJson() {
+    const textarea = document.getElementById('jsonModalTextarea');
+    if (!textarea) return;
+    try {
+      const parsed = JSON.parse(textarea.value);
+      textarea.value = JSON.stringify(parsed, null, 2);
+      validateAndRenderModal(true);
+    } catch (e) {
+      alert('Cannot format invalid JSON: ' + e.message);
+    }
+  }
+
+  function saveModalJson() {
+    const textarea = document.getElementById('jsonModalTextarea');
+    if (!textarea) return;
+    try {
+      const parsed = JSON.parse(textarea.value);
+      const targetArea = document.getElementById(`jsonArea_${activeJsonModalSafeId}`);
+      if (targetArea) {
+        targetArea.value = textarea.value;
+        updateBlockJson(activeJsonModalKey, textarea.value, activeJsonModalSafeId);
+      }
+      closeJsonEditorModal(true);
+    } catch (err) {
+      validateAndRenderModal(true);
+      alert('Cannot save: The JSON format is invalid. Please resolve syntax errors before saving.');
+    }
+  }
+
+  function discardModalJson() {
+    const textarea = document.getElementById('jsonModalTextarea');
+    if (textarea) {
+      textarea.value = initialJsonModalContent;
+    }
+    closeJsonEditorModal(true);
+  }
+
+  function initJsonModalListeners() {
+    const textarea = document.getElementById('jsonModalTextarea');
+    const gutter = document.getElementById('jsonModalGutter');
+    if (textarea && gutter) {
+      textarea.addEventListener('scroll', () => {
+        gutter.scrollTop = textarea.scrollTop;
+        updateActiveLineHighlight();
+      });
+
+      textarea.addEventListener('input', () => {
+        validateAndRenderModal(true);
+      });
+
+      textarea.addEventListener('click', updateActiveLineHighlight);
+      textarea.addEventListener('keyup', updateActiveLineHighlight);
+
+      textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          const start = textarea.selectionStart;
+          const end = textarea.selectionEnd;
+          textarea.value = textarea.value.substring(0, start) + '  ' + textarea.value.substring(end);
+          textarea.selectionStart = textarea.selectionEnd = start + 2;
+          validateAndRenderModal(true);
+        } else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+          e.preventDefault();
+          saveModalJson();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          closeJsonEditorModal();
+        }
+      });
+    }
+  }
+
+  // Form submit hook: uploads staged files on Save, compiles all blocks into JSON input, and guards duplicate asset name and empty items
+  document.getElementById('assetForm').addEventListener('submit', async function (e) {
+    if (isSubmitting) return;
+    e.preventDefault();
+
+    const form = document.getElementById('assetForm');
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+
+    if (!isNameAvailable) {
+      alert('The chosen asset name is already used in the database. Please rename the asset before saving.');
+      const nameInput = document.getElementById('assetName');
+      if (nameInput) {
+        nameInput.focus();
+        nameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
+
+    // Guard: asset must contain at least one payload item in moreFields
+    const totalAvailable = countAvailableMoreFieldsData();
+    if (totalAvailable === 0) {
+      alert('Cannot save asset: An asset must contain at least one payload item in more fields.');
+      return;
+    }
+
+    // If background uploads are currently running, wait for them to finish before committing save
+    if (window.BackgroundUploader && window.BackgroundUploader.hasActiveUploads()) {
+      const submitBtn = document.getElementById('saveAssetSubmitBtn');
+      const originalBtnText = submitBtn ? submitBtn.textContent : 'Save Asset';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Waiting for background uploads to finish...';
+      }
+      try {
+        await window.BackgroundUploader.waitForAll();
+      } catch (e) {
+        console.warn('Wait for background uploads error:', e);
+      }
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalBtnText;
+      }
+    }
+
+    // Collect staged items that need uploading
+    const stagedBlockItems = [];
+    for (const key of Object.keys(existingMoreFields)) {
+      normalizeBlock(key);
+      const blk = existingMoreFields[key];
+      if (blk && Array.isArray(blk.items)) {
+        for (const it of blk.items) {
+          if (it._isStaged && it._file && !it._isUploading) {
+            stagedBlockItems.push({ blockKey: key, item: it, file: it._file });
+          }
+        }
+      }
+    }
+
+    // Collect staged frames blocks that need uploading
+    const stagedFrameBlocks = [];
+    for (const key of Object.keys(existingMoreFields)) {
+      const blk = existingMoreFields[key];
+      if (blk && (blk.type === 'frames' || blk.type === 'frame' || key.toLowerCase().includes('frame'))) {
+        if (blk._isStaged && blk._file) {
+          stagedFrameBlocks.push({ blockKey: key, block: blk, file: blk._file });
+        }
+      }
+    }
+
+    const totalToUpload = (stagedThumbnailFile ? 1 : 0) + stagedBlockItems.length + stagedFrameBlocks.length;
+    const submitBtn = document.getElementById('saveAssetSubmitBtn');
+    const originalBtnText = submitBtn ? submitBtn.textContent : 'Save Asset';
+
+    if (totalToUpload > 0) {
+      if (submitBtn) submitBtn.disabled = true;
+
+      const catSelect = document.getElementById('categorySelect');
+      const subSelect = document.getElementById('subCategorySelect');
+      const catId = catSelect ? catSelect.value : '';
+      const subId = subSelect ? subSelect.value : '';
+      const nameInput = document.getElementById('assetName');
+      const assetName = nameInput ? nameInput.value.trim() : '';
+
+      let uploadStep = 1;
+
+      // 1. Upload staged thumbnail if any
+      if (stagedThumbnailFile) {
+        if (submitBtn) submitBtn.textContent = `Uploading 1 of ${totalToUpload} (Thumbnail)...`;
+        const thumbBar = document.getElementById('thumbUploadBar');
+        const thumbTxt = document.getElementById('thumbUploadStatusText');
+        if (thumbBar) thumbBar.style.display = 'flex';
+        if (thumbTxt) thumbTxt.textContent = `Uploading ${stagedThumbnailFile.name}...`;
+
+        try {
+          const thumbResult = await uploadFileToServer(stagedThumbnailFile, 'thumbnails', catId, subId, assetName);
+          const thumbInput = document.getElementById('thumbnailUrlInput');
+          if (thumbInput) thumbInput.value = thumbResult.url;
+          updateThumbPreview(thumbResult.url);
+          stagedThumbnailFile = null;
+          if (thumbBar) thumbBar.style.display = 'none';
+          uploadStep++;
+        } catch (err) {
+          if (thumbBar) thumbBar.style.display = 'none';
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
+          }
+          alert(`Thumbnail upload failed: ${err.message}`);
+          return;
+        }
+      }
+
+      // 2. Upload staged media block items
+      for (const entry of stagedBlockItems) {
+        const { blockKey, item, file } = entry;
+        if (submitBtn) submitBtn.textContent = `Uploading ${uploadStep} of ${totalToUpload}: ${file.name}...`;
+        const safeId = 'blk_' + Math.abs(hashCode(blockKey));
+        const bar = document.getElementById(`uploadBar_${safeId}`);
+        const txt = document.getElementById(`uploadText_${safeId}`);
+        if (bar) bar.style.display = 'flex';
+        if (txt) txt.textContent = `Uploading ${file.name}...`;
+
+        let fileToUpload = file;
+        if (item.filename && item.filename !== file.name) {
+          fileToUpload = new File([file], item.filename, { type: file.type, lastModified: file.lastModified || Date.now() });
+        }
+
+        try {
+          const result = await uploadFileToServer(fileToUpload, 'more_fields', catId, subId, assetName, item);
+          item.url = result.url;
+          item.filename = result.filename || fileToUpload.name;
+          item.mime = result.mime || item.mime;
+          item.size_bytes = result.size_bytes || result.filesize || item.size_bytes || fileToUpload.size;
+          item.filesize = result.filesize || result.size_bytes || item.filesize || fileToUpload.size;
+          if (result.width) item.width = result.width;
+          if (result.height) item.height = result.height;
+          if (result.dimensions) item.dimensions = result.dimensions;
+          else if (item.width && item.height && !String(item.mime || '').startsWith('audio/')) {
+            item.dimensions = `${item.width}x${item.height}`;
+          }
+          if (result.duration) item.duration = result.duration;
+          if (result.duration_ms) item.duration_ms = result.duration_ms;
+          if (String(item.mime || '').startsWith('audio/') || blockKey.toLowerCase().includes('audio')) {
+            delete item.width;
+            delete item.height;
+            delete item.dimensions;
+          }
+          item._isStaged = false;
+          delete item._file;
+
+          const blk = existingMoreFields[blockKey];
+          if (blk) {
+            blk.urls = blk.items.map(it => it.url).filter(Boolean);
+            blk.url = blk.urls.length > 0 ? blk.urls[0] : '';
+            if (item.width) blk.width = item.width;
+            if (item.height) blk.height = item.height;
+            if (item.dimensions) blk.dimensions = item.dimensions;
+            if (item.duration) blk.duration = item.duration;
+            if (item.duration_ms) blk.duration_ms = item.duration_ms;
+            if (item.filesize) blk.filesize = item.filesize;
+            if (item.size_bytes) blk.size_bytes = item.size_bytes;
+            if (item.mime) blk.mime = item.mime;
+            if (String(item.mime || '').startsWith('audio/') || blockKey.toLowerCase().includes('audio')) {
+              delete blk.width;
+              delete blk.height;
+              delete blk.dimensions;
+            }
+          }
+          uploadStep++;
+          if (bar) bar.style.display = 'none';
+        } catch (err) {
+          if (bar) bar.style.display = 'none';
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
+          }
+          alert(`Upload failed for "${fileToUpload.name}": ${err.message}`);
+          return;
+        }
+      }
+
+      // 3. Upload staged frame blocks
+      for (const entry of stagedFrameBlocks) {
+        const { blockKey, block, file } = entry;
+        if (submitBtn) submitBtn.textContent = `Uploading ${uploadStep} of ${totalToUpload}: ${file.name}...`;
+        const safeId = 'blk_' + Math.abs(hashCode(blockKey));
+        const bar = document.getElementById(`frameUploadBar_${safeId}`);
+        const txt = document.getElementById(`frameUploadText_${safeId}`);
+        if (bar) bar.style.display = 'flex';
+        if (txt) txt.textContent = `Uploading ${file.name}...`;
+
+        let fileToUpload = file;
+        if (block.filename && block.filename !== file.name) {
+          fileToUpload = new File([file], block.filename, { type: file.type, lastModified: file.lastModified || Date.now() });
+        }
+
+        try {
+          const result = await uploadFileToServer(fileToUpload, 'more_fields', catId, subId, assetName, block);
+          block.imageUrl = result.url;
+          block.image_url = result.url;
+          if (result.width) block.width = Math.round(result.width);
+          if (result.height) block.height = Math.round(result.height);
+          block._isStaged = false;
+          delete block._file;
+          uploadStep++;
+          if (bar) bar.style.display = 'none';
+        } catch (err) {
+          if (bar) bar.style.display = 'none';
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
+          }
+          alert(`Upload failed for frame photo "${fileToUpload.name}": ${err.message}`);
+          return;
+        }
+      }
+    }
+
+    if (submitBtn) submitBtn.textContent = 'Saving asset...';
+
+    // Ensure all media blocks have synced url and urls fields, and sync JSON textareas
+    const finalPayload = {};
+    for (const key of Object.keys(existingMoreFields)) {
+      normalizeBlock(key);
+      const safeId = 'blk_' + Math.abs(hashCode(key));
+      const jsonArea = document.getElementById(`jsonArea_${safeId}`);
+      if (jsonArea) {
+        try {
+          const parsed = JSON.parse(jsonArea.value);
+          finalPayload[key] = {
+            type: 'json',
+            data: (typeof parsed === 'object' && parsed !== null && parsed.data !== undefined && parsed.type === undefined) ? parsed.data : parsed
+          };
+          continue;
+        } catch (err) {
+          alert(`Block "${key}" has invalid JSON: ${err.message}`);
+          jsonArea.focus();
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
+          }
+          return;
+        }
+      }
+
+      const block = existingMoreFields[key];
+      if (!block || typeof block !== 'object') {
+        finalPayload[key] = block;
+        continue;
+      }
+
+      // === STANDARDIZED OUTPUT: String blocks → direct plain string arrays ===
+      if (block.type === 'string_list' || block.type === 'strings') {
+        finalPayload[key] = Array.isArray(block.items) ? block.items.map(s => String(s).trim()).filter(Boolean) : [];
+        continue;
+      }
+
+      // === STANDARDIZED OUTPUT: Frames blocks → clean object {image_url, coordinates} ===
+      if (block.type === 'frames' || key.toLowerCase().includes('frame') || Array.isArray(block.coordinates)) {
+        const rawCoords = Array.isArray(block.coordinates) ? block.coordinates : (Array.isArray(block.placeholders) ? block.placeholders : []);
+        const cleanCoords = rawCoords.map((c, idx) => {
+          let rot = parseFloat(c.rotation || 0) || 0;
+          let w = parseFloat(c.width || 0) || 0;
+          let h = parseFloat(c.height || 0) || 0;
+          while (rot > 45) { rot -= 90; const t = w; w = h; h = t; }
+          while (rot < -45) { rot += 90; const t = w; w = h; h = t; }
+          rot = Math.max(-45, Math.min(45, Math.round(rot * 100) / 100));
+          return {
+            x: Math.round(parseFloat(c.x || 0)),
+            y: Math.round(parseFloat(c.y || 0)),
+            height: Math.round(h),
+            width: Math.round(w),
+            rotation: rot,
+            elevation: c.elevation !== undefined ? parseInt(c.elevation, 10) : idx
+          };
+        });
+        finalPayload[key] = {
+          image_url: block.image_url || block.imageUrl || '',
+          coordinates: cleanCoords
+        };
+        continue;
+      }
+
+      // === STANDARDIZED OUTPUT: All media blocks → direct arrays of objects ===
+      const isMediaType = ['image', 'image_list', 'audio', 'audio_list', 'video', 'video_list'].includes(block.type);
+      if (isMediaType && Array.isArray(block.items)) {
+        finalPayload[key] = block.items.map(it => {
+          const itemObj = {
+            url: it.url || '',
+            filename: it.filename || (it.url ? it.url.split('/').pop() : 'file')
+          };
+          const isAudioItem = String(it.mime || '').startsWith('audio/') || key.toLowerCase().includes('audio');
+          if (!isAudioItem) {
+            if (it.width !== undefined && it.width !== null) itemObj.width = it.width;
+            if (it.height !== undefined && it.height !== null) itemObj.height = it.height;
+            if (it.dimensions) itemObj.dimensions = it.dimensions;
+            else if (itemObj.width && itemObj.height) itemObj.dimensions = `${itemObj.width}x${itemObj.height}`;
+          }
+          if (it.mime !== undefined && it.mime !== null) itemObj.mime = it.mime;
+          const sz = it.filesize !== undefined && it.filesize !== null ? it.filesize : it.size_bytes;
+          if (sz !== undefined && sz !== null) {
+            itemObj.filesize = sz;
+            itemObj.size_bytes = sz;
+          }
+          if (it.duration !== undefined && it.duration !== null) itemObj.duration = it.duration;
+          if (it.duration_ms !== undefined && it.duration_ms !== null) itemObj.duration_ms = it.duration_ms;
+          else if (itemObj.duration !== undefined && itemObj.duration !== null) itemObj.duration_ms = Math.round(itemObj.duration * 1000);
+          return itemObj;
+        });
+        continue;
+      }
+
+      // === STANDARDIZED OUTPUT: JSON blocks → direct parsed JSON data ===
+      if (block.type === 'json' || block.type === 'json_data') {
+        finalPayload[key] = (block.data !== undefined && block.data !== null) ? block.data : {};
+        continue;
+      }
+
+      // Fallback: pass through as-is
+      finalPayload[key] = block;
+    }
+
+    // If thumbnail is empty or pointing to an audio file, and the asset contains audio, default to /static/thumbnail_default.png
+    const thumbInputEl = document.getElementById('thumbnailUrlInput');
+    const curThumbVal = thumbInputEl ? thumbInputEl.value.trim() : '';
+    const isAudioThumb = /\.(mp3|wav|ogg|m4a|aac|flac)(\?.*)?$/i.test(curThumbVal);
+    if (!curThumbVal || isAudioThumb) {
+      const hasAudio = Object.keys(existingMoreFields).some(k => {
+        const b = existingMoreFields[k];
+        if (k.toLowerCase().includes('audio') || (b && b.type && b.type.toLowerCase().includes('audio'))) return true;
+        if (b && Array.isArray(b.items)) {
+          return b.items.some(it => String(it.mime || '').startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(it.filename || it.url || ''));
+        }
+        return false;
+      });
+      if (hasAudio && thumbInputEl) {
+        thumbInputEl.value = '/static/thumbnail_default.png';
+      }
+    }
+
+    document.getElementById('moreFieldsJsonInput').value = JSON.stringify(finalPayload);
+    isSubmitting = true;
+    form.submit();
+  });
+
+  // Initial boot
+  const catVal = document.getElementById('categorySelect').value;
+  const subSelect = document.getElementById('subCategorySelect');
+  if (currentSubId && subSelect) {
+    subSelect.value = currentSubId;
+  }
+  if (catVal && subSelect && subSelect.options.length <= 1) {
+    onCategoryChanged(catVal, currentSubId);
+  }
+  if (subSelect) {
+    subSelect.addEventListener('change', () => {
+      const nameInput = document.getElementById('assetName');
+      if (nameInput && nameInput.value.trim()) {
+        checkAssetNameAvailability();
+      }
+    });
+  }
+  renderPayloadBlocks();
+  checkAssetNameAvailability();
+  initJsonModalListeners();
+</script>
+{% endblock %}

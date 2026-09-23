@@ -1,0 +1,1087 @@
+{% extends "base.html" %}
+
+{% block title %}Bulk Single-File Add — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+  <a href="/admin/assets" style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
+    ← Back to Assets
+  </a>
+  <h1>Bulk Single-File Asset Intake</h1>
+  <p style="color:var(--md-sys-color-on-surface-variant);">
+    Drop multiple media files to automatically create individual standalone assets.
+  </p>
+</div>
+
+<div class="card" style="margin-bottom:1.5rem;">
+  <div class="grid grid-2" style="margin-bottom:1.5rem;">
+    <div class="form-group">
+      <label class="label">Target Category *</label>
+      <select id="bulkCategory" class="select" required onchange="preselectedSubId=''; loadSubcategories(this.value, '')">
+        <option value="">-- Select Category --</option>
+        {% for cat in categories %}
+          <option value="{{ cat.id }}" {% if selected_cat == cat.id %}selected{% endif %}>{{ cat.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="label">Target Subcategory *</label>
+      <select id="bulkSubcategory" class="select" required {% if not selected_cat %}disabled{% endif %} onchange="checkStagedConflicts()">
+        {% if not selected_cat %}
+          <option value="">-- Select Category First --</option>
+        {% else %}
+          <option value="">-- Select Subcategory --</option>
+          {% for sub in subcategories %}
+            <option value="{{ sub.id }}" data-category-id="{{ sub.category_id }}" {% if selected_sub == sub.id %}selected{% endif %}>{{ sub.name }}</option>
+          {% endfor %}
+        {% endif %}
+      </select>
+    </div>
+  </div>
+
+  <!-- Data Types Selection Section -->
+  <div style="margin-bottom:1.25rem;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem; flex-wrap:wrap; gap:0.5rem;">
+      <label class="form-label" style="font-weight:600; margin:0; display:flex; align-items:center; gap:0.4rem;">
+        Data Types to Ingest
+        <span style="font-size:0.75rem; font-weight:normal; color:var(--md-sys-color-on-surface-variant);">(select which kind of data is being added)</span>
+      </label>
+      <div style="display:flex; gap:0.5rem; align-items:center;">
+        <button type="button" class="btn btn-text" style="font-size:0.75rem; padding:0.15rem 0.4rem; cursor:pointer;" onclick="selectAllDataTypes(true)">Select All</button>
+        <span style="color:var(--md-sys-color-outline-variant);">|</span>
+        <button type="button" class="btn btn-text" style="font-size:0.75rem; padding:0.15rem 0.4rem; cursor:pointer;" onclick="selectAllDataTypes(false)">Clear All</button>
+      </div>
+    </div>
+    <div id="dataTypeCardsGroup" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(175px, 1fr)); gap:0.65rem;">
+      <!-- Image Checkbox -->
+      <label class="data-type-card" id="card_type_image" style="display:flex; align-items:center; gap:0.6rem; padding:0.65rem 0.85rem; border:1.5px solid var(--md-sys-color-primary); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer; transition:all 0.15s ease;">
+        <input type="checkbox" name="bulk_data_type" value="image" checked onchange="onDataTypeChange()" style="accent-color:var(--md-sys-color-primary); width:16px; height:16px;">
+        <div>
+          <div style="font-weight:600; font-size:0.85rem; display:flex; align-items:center; gap:0.3rem;">🖼️ Image</div>
+          <div style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant);">PNG, JPG, WEBP, SVG, GIF</div>
+        </div>
+      </label>
+
+      <!-- Videos Checkbox -->
+      <label class="data-type-card" id="card_type_videos" style="display:flex; align-items:center; gap:0.6rem; padding:0.65rem 0.85rem; border:1.5px solid var(--md-sys-color-primary); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer; transition:all 0.15s ease;">
+        <input type="checkbox" name="bulk_data_type" value="videos" checked onchange="onDataTypeChange()" style="accent-color:var(--md-sys-color-primary); width:16px; height:16px;">
+        <div>
+          <div style="font-weight:600; font-size:0.85rem; display:flex; align-items:center; gap:0.3rem;">🎬 Videos</div>
+          <div style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant);">MP4, WebM, MOV, AVI, MKV</div>
+        </div>
+      </label>
+
+      <!-- Audio Checkbox -->
+      <label class="data-type-card" id="card_type_audio" style="display:flex; align-items:center; gap:0.6rem; padding:0.65rem 0.85rem; border:1.5px solid var(--md-sys-color-primary); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer; transition:all 0.15s ease;">
+        <input type="checkbox" name="bulk_data_type" value="audio" checked onchange="onDataTypeChange()" style="accent-color:var(--md-sys-color-primary); width:16px; height:16px;">
+        <div>
+          <div style="font-weight:600; font-size:0.85rem; display:flex; align-items:center; gap:0.3rem;">🎵 Audio</div>
+          <div style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant);">MP3, WAV, OGG, M4A, AAC</div>
+        </div>
+      </label>
+
+      <!-- JSON Checkbox -->
+      <label class="data-type-card" id="card_type_json" style="display:flex; align-items:center; gap:0.6rem; padding:0.65rem 0.85rem; border:1.5px solid var(--md-sys-color-primary); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer; transition:all 0.15s ease;">
+        <input type="checkbox" name="bulk_data_type" value="json" checked onchange="onDataTypeChange()" style="accent-color:var(--md-sys-color-primary); width:16px; height:16px;">
+        <div>
+          <div style="font-weight:600; font-size:0.85rem; display:flex; align-items:center; gap:0.3rem;">📄 JSON</div>
+          <div style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant);">Custom Data (.json)</div>
+        </div>
+      </label>
+
+      <!-- Frames Checkbox -->
+      <label class="data-type-card" id="card_type_frames" style="display:flex; align-items:center; gap:0.6rem; padding:0.65rem 0.85rem; border:1.5px solid var(--md-sys-color-primary); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer; transition:all 0.15s ease;">
+        <input type="checkbox" name="bulk_data_type" value="frames" checked onchange="onDataTypeChange()" style="accent-color:var(--md-sys-color-primary); width:16px; height:16px;">
+        <div>
+          <div style="font-weight:600; font-size:0.85rem; display:flex; align-items:center; gap:0.3rem;">🖼️ Frames</div>
+          <div style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant);">Frame Overlays (.png, .webp, .json)</div>
+        </div>
+      </label>
+    </div>
+    <div id="noTypeWarning" style="display:none; margin-top:0.45rem; font-size:0.82rem; color:var(--md-sys-color-error); font-weight:500;">
+      ⚠️ Please select at least one data type above to enable file selection and ingestion.
+    </div>
+  </div>
+
+  <!-- Thumbnail Options Section -->
+  <div style="margin-bottom:1.25rem;">
+    <label class="form-label" style="font-weight:600; margin-bottom:0.5rem; display:block;">Thumbnail Source Options</label>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:0.75rem;">
+      <label style="display:flex; align-items:center; gap:0.6rem; padding:0.65rem 0.85rem; border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer;">
+        <input type="radio" name="asset_thumb_mode" value="custom" onchange="onAssetThumbModeChange('custom')">
+        <div>
+          <div style="font-weight:600; font-size:0.85rem;">Custom Thumbnails</div>
+          <div style="font-size:0.73rem; color:var(--md-sys-color-on-surface-variant);">Upload custom thumbnails (matching filenames)</div>
+        </div>
+      </label>
+
+      <label style="display:flex; align-items:center; gap:0.6rem; padding:0.65rem 0.85rem; border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer;">
+        <input type="radio" name="asset_thumb_mode" value="auto_create" checked onchange="onAssetThumbModeChange('auto_create')">
+        <div>
+          <div style="font-weight:600; font-size:0.85rem;">Create from Media</div>
+          <div style="font-size:0.73rem; color:var(--md-sys-color-on-surface-variant);">Frame 0 / 1/3rd scale (alpha-preserved)</div>
+        </div>
+      </label>
+
+      <label style="display:flex; align-items:center; gap:0.6rem; padding:0.65rem 0.85rem; border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer;">
+        <input type="radio" name="asset_thumb_mode" value="original" onchange="onAssetThumbModeChange('original')">
+        <div>
+          <div style="font-weight:600; font-size:0.85rem;">Use Original Image</div>
+          <div style="font-size:0.73rem; color:var(--md-sys-color-on-surface-variant);">Direct source image (or frame 0 for videos)</div>
+        </div>
+      </label>
+    </div>
+  </div>
+
+  <!-- Secondary Drag & Drop Zone for Custom Thumbnails -->
+  <div id="bulkThumbDropzoneContainer" style="display:none; margin-bottom:1.25rem;">
+    <div class="dropzone" id="bulkThumbDropzone" onclick="document.getElementById('bulkThumbFileInput').click()" style="border-style:dashed; border-color:var(--md-sys-color-primary); padding:1rem;">
+      <div style="font-size:2rem; margin-bottom:0.35rem;">📸</div>
+      <div style="font-size:0.95rem; font-weight:600; margin-bottom:0.2rem;">Drag & drop custom thumbnail image files here</div>
+      <div style="color:var(--md-sys-color-on-surface-variant); font-size:0.8rem;">Thumbnail filename should match asset filename (e.g. <code>my_asset.png</code> & <code>my_asset.jpg</code>)</div>
+      <input type="file" id="bulkThumbFileInput" multiple accept="image/*" style="display:none;" onchange="handleBulkThumbFilesSelect(this.files)">
+    </div>
+    <div id="matchedThumbStatus" style="margin-top:0.4rem; font-size:0.82rem; color:var(--app-success); font-weight:500;"></div>
+  </div>
+
+  <div class="dropzone" id="bulkDropzone" onclick="onBulkDropzoneClick(event)">
+    <div style="font-size:3rem; margin-bottom:0.75rem;">📁</div>
+    <div style="font-size:1.1rem; font-weight:600; margin-bottom:0.25rem;">Drag & drop creative files here</div>
+    <div id="bulkDropzoneHint" style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem;">or click to select PNG, JPG, WEBP, MP4, MP3, JSON...</div>
+    <input type="file" id="bulkFileInput" multiple style="display:none;" onchange="handleFileSelect(this.files, false)">
+    <input type="file" id="bulkCropFileInput" multiple style="display:none;" onchange="handleFileSelect(this.files, true)">
+    <div style="display:flex; justify-content:center; align-items:center; gap:0.75rem; margin-top:0.75rem;" onclick="event.stopPropagation()">
+      <label class="crop-data-option-label" title="Automatically open the crop/cut popup for files when dropped or selected">
+        <input type="checkbox" id="bulkCropDataToggle"> ✂️ Crop data before ingest
+      </label>
+    </div>
+  </div>
+</div>
+
+<!-- Staged Files Preview -->
+<div id="stagedSection" class="card" style="display:none; margin-bottom:1.5rem;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+    <h3>Staged Creative Items (<span id="stagedCount">0</span>)</h3>
+    <button type="button" class="btn btn-outlined" onclick="clearStaged()">Clear All</button>
+  </div>
+
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width:40px;">#</th>
+          <th>Generated Asset Name</th>
+          <th>File Name</th>
+          <th style="width:130px;">Data Type</th>
+          <th>File Size</th>
+          <th>Status</th>
+          <th style="width:100px; text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="stagedTableBody">
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-top:1.5rem; display:flex; justify-content:flex-end; gap:0.75rem;">
+    <button type="button" id="startUploadBtn" class="btn btn-primary" onclick="startBulkUpload()">
+      Upload & Ingest Assets
+    </button>
+  </div>
+</div>
+
+<script>
+let stagedFiles = [];
+let stagedCustomThumbs = new Map(); // stem.toLowerCase() -> File
+let preselectedSubId = "{{ selected_sub or '' }}";
+
+const DATA_TYPE_CONFIG = {
+  image: {
+    label: 'Image',
+    icon: '🖼️',
+    extensions: ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif', '.bmp', '.avif'],
+    mimes: ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/gif', 'image/bmp', 'image/avif']
+  },
+  videos: {
+    label: 'Videos',
+    icon: '🎬',
+    extensions: ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.3gp', '.ts', '.m4v'],
+    mimes: ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska']
+  },
+  audio: {
+    label: 'Audio',
+    icon: '🎵',
+    extensions: ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'],
+    mimes: ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/aac', 'audio/flac']
+  },
+  json: {
+    label: 'JSON',
+    icon: '📄',
+    extensions: ['.json'],
+    mimes: ['application/json', 'text/json']
+  },
+  frames: {
+    label: 'Frames',
+    icon: '🖼️',
+    extensions: ['.png', '.jpg', '.jpeg', '.webp', '.json'],
+    mimes: ['image/png', 'image/jpeg', 'image/webp', 'application/json']
+  }
+};
+
+function getSelectedDataTypes() {
+  return Array.from(document.querySelectorAll('input[name="bulk_data_type"]:checked')).map(cb => cb.value);
+}
+
+function selectAllDataTypes(enableAll) {
+  const checkboxes = document.querySelectorAll('input[name="bulk_data_type"]');
+  checkboxes.forEach(cb => { cb.checked = enableAll; });
+  onDataTypeChange();
+}
+
+function onDataTypeChange() {
+  const activeTypes = getSelectedDataTypes();
+  const warningEl = document.getElementById('noTypeWarning');
+  const dropzoneHint = document.getElementById('bulkDropzoneHint');
+  const bInput = document.getElementById('bulkFileInput');
+  const bcInput = document.getElementById('bulkCropFileInput');
+
+  document.querySelectorAll('input[name="bulk_data_type"]').forEach(cb => {
+    const card = document.getElementById(`card_type_${cb.value}`);
+    if (card) {
+      if (cb.checked) {
+        card.style.borderColor = 'var(--md-sys-color-primary)';
+        card.style.background = 'var(--md-sys-color-surface-container-high, var(--md-sys-color-surface-container))';
+      } else {
+        card.style.borderColor = 'var(--md-sys-color-outline-variant)';
+        card.style.background = 'var(--md-sys-color-surface-container)';
+      }
+    }
+  });
+
+  if (activeTypes.length === 0) {
+    if (warningEl) warningEl.style.display = 'block';
+    if (dropzoneHint) dropzoneHint.textContent = '⚠️ No data types selected. Check at least one above to enable ingest.';
+    if (bInput) bInput.accept = '';
+    if (bcInput) bcInput.accept = '';
+  } else {
+    if (warningEl) warningEl.style.display = 'none';
+    const allMimes = [];
+    const allExts = [];
+    activeTypes.forEach(t => {
+      const cfg = DATA_TYPE_CONFIG[t];
+      if (cfg) {
+        allMimes.push(...cfg.mimes);
+        allExts.push(...cfg.extensions);
+      }
+    });
+    const acceptStr = [...new Set([...allMimes, ...allExts])].join(',');
+    if (bInput) bInput.accept = acceptStr;
+    if (bcInput) bcInput.accept = acceptStr;
+    if (dropzoneHint) {
+      const labels = activeTypes.map(t => DATA_TYPE_CONFIG[t]?.label || t);
+      dropzoneHint.textContent = `Allowed types: ${labels.join(', ')} (${allExts.slice(0, 10).join(', ')}${allExts.length > 10 ? '...' : ''})`;
+    }
+  }
+}
+
+function onBulkDropzoneClick(event) {
+  const activeTypes = getSelectedDataTypes();
+  if (activeTypes.length === 0) {
+    alert('Please select at least one data type (Images, Videos, Audio, JSON, Frames) first.');
+    return;
+  }
+  const cropToggle = document.getElementById('bulkCropDataToggle');
+  if (cropToggle && cropToggle.checked) {
+    document.getElementById('bulkCropFileInput').click();
+  } else {
+    document.getElementById('bulkFileInput').click();
+  }
+}
+
+function classifyFile(file, activeTypes) {
+  const name = file.name.toLowerCase();
+  const ext = name.includes('.') ? '.' + name.split('.').pop() : '';
+  const mime = (file.type || '').toLowerCase();
+
+  const isAudio = DATA_TYPE_CONFIG.audio.extensions.includes(ext) || mime.startsWith('audio/');
+  const isVideo = DATA_TYPE_CONFIG.videos.extensions.includes(ext) || mime.startsWith('video/');
+  const isJson = ext === '.json' || mime === 'application/json';
+  const isImage = DATA_TYPE_CONFIG.image.extensions.includes(ext) || mime.startsWith('image/');
+
+  if (isAudio) {
+    return activeTypes.includes('audio') ? 'audio' : null;
+  }
+  if (isVideo) {
+    return activeTypes.includes('videos') ? 'video' : null;
+  }
+  if (isJson) {
+    if (activeTypes.includes('json') && activeTypes.includes('frames')) {
+      return (name.includes('frame') || name.includes('slot')) ? 'frames' : 'json';
+    }
+    if (activeTypes.includes('frames')) return 'frames';
+    if (activeTypes.includes('json')) return 'json';
+    return null;
+  }
+  if (isImage) {
+    if (activeTypes.includes('image') && activeTypes.includes('frames')) {
+      return name.includes('frame') ? 'frames' : 'image';
+    }
+    if (activeTypes.includes('frames')) return 'frames';
+    if (activeTypes.includes('image')) return 'image';
+    return null;
+  }
+  return null;
+}
+
+function onAssetThumbModeChange(mode) {
+  const container = document.getElementById('bulkThumbDropzoneContainer');
+  if (container) {
+    container.style.display = (mode === 'custom') ? 'block' : 'none';
+  }
+}
+
+function handleBulkThumbFilesSelect(files) {
+  if (!files || files.length === 0) return;
+  let count = 0;
+  for (let f of files) {
+    const stem = f.name.replace(/\.[^/.]+$/, "").toLowerCase();
+    stagedCustomThumbs.set(stem, f);
+    count++;
+  }
+  matchCustomThumbsWithStaged();
+  const statusEl = document.getElementById('matchedThumbStatus');
+  if (statusEl) {
+    statusEl.textContent = `✓ Staged ${count} custom thumbnail file(s). Auto-matched with creative assets by filename stem.`;
+  }
+}
+
+function matchCustomThumbsWithStaged() {
+  if (stagedFiles.length === 0 || stagedCustomThumbs.size === 0) return;
+  stagedFiles.forEach(it => {
+    const stem = it.file.name.replace(/\.[^/.]+$/, "").toLowerCase();
+    if (stagedCustomThumbs.has(stem)) {
+      it.customThumbFile = stagedCustomThumbs.get(stem);
+    }
+  });
+  renderStaged();
+}
+
+async function loadSubcategories(categoryId, targetSubId) {
+  const subSelect = document.getElementById('bulkSubcategory');
+  const desiredSub = targetSubId !== undefined ? targetSubId : preselectedSubId;
+  if (!categoryId) {
+    subSelect.innerHTML = '<option value="">-- Select Category First --</option>';
+    subSelect.disabled = true;
+    return;
+  }
+  
+  subSelect.disabled = false;
+  subSelect.innerHTML = '<option value="">Loading subcategories...</option>';
+
+  try {
+    let items = [];
+    // 1. Try internal admin subcategories API
+    const res = await fetch(`/admin/subcategories/api/list?categoryId=${encodeURIComponent(categoryId)}`, {
+      credentials: 'same-origin'
+    });
+    if (res.ok) {
+      const json = await res.json();
+      items = json.items || [];
+    } else {
+      // 2. Fallback to API v1
+      const v1Res = await fetch(`/api/v1/subcategories?categoryId=${categoryId}&pageSize=100`);
+      const v1Json = await v1Res.json();
+      items = v1Json.data?.items || [];
+    }
+
+    if (items.length === 0) {
+      subSelect.innerHTML = '<option value="">-- No Subcategories In Category --</option>';
+      return;
+    }
+
+    subSelect.innerHTML = '<option value="">-- Select Subcategory --</option>';
+    items.forEach(sub => {
+      const opt = document.createElement('option');
+      opt.value = sub.id;
+      opt.textContent = sub.name;
+      if (desiredSub && sub.id === desiredSub) {
+        opt.selected = true;
+      }
+      subSelect.appendChild(opt);
+    });
+    if (desiredSub) {
+      subSelect.value = desiredSub;
+    }
+    checkStagedConflicts();
+  } catch (err) {
+    console.error('Failed to load subcategories', err);
+    subSelect.innerHTML = '<option value="">Failed to load subcategories</option>';
+  }
+}
+
+function getNextCandidateName(filename, takenSet) {
+  const lastDot = filename.lastIndexOf('.');
+  const ext = lastDot !== -1 ? filename.slice(lastDot) : '';
+  const stem = lastDot !== -1 ? filename.slice(0, lastDot) : filename;
+  const match = stem.match(/^(.*?)([_\-\s]?)(\d+)$/);
+  let baseStem = stem;
+  let sep = '_';
+  let counter = 1;
+  if (match && match[1]) {
+    baseStem = match[1];
+    sep = match[2] || '_';
+    counter = parseInt(match[3], 10) + 1;
+  }
+  while (true) {
+    const candidate = `${baseStem}${sep}${counter}${ext}`;
+    if (!takenSet.has(candidate.toLowerCase())) {
+      return candidate;
+    }
+    counter++;
+  }
+}
+
+async function handleFileSelect(files, forceCrop = false) {
+  if (!files || files.length === 0) return;
+  const activeTypes = getSelectedDataTypes();
+  if (activeTypes.length === 0) {
+    alert('Please select at least one data type (Images, Videos, Audio, JSON, Frames) before adding files.');
+    return;
+  }
+
+  const rawFileArray = Array.from(files);
+  const fileArray = [];
+  const skippedNames = [];
+
+  for (const f of rawFileArray) {
+    const detected = classifyFile(f, activeTypes);
+    if (detected) {
+      fileArray.push({ file: f, detectedType: detected });
+    } else {
+      skippedNames.push(f.name);
+    }
+  }
+
+  if (skippedNames.length > 0) {
+    alert(`Skipped ${skippedNames.length} file(s) because their format does not match any selected data type:\n• ${skippedNames.slice(0, 8).join('\n• ')}${skippedNames.length > 8 ? '\n...and more' : ''}`);
+  }
+
+  if (fileArray.length === 0) {
+    const bInput = document.getElementById('bulkFileInput');
+    if (bInput) bInput.value = '';
+    const bcInput = document.getElementById('bulkCropFileInput');
+    if (bcInput) bcInput.value = '';
+    return;
+  }
+
+  const shouldCrop = forceCrop || (document.getElementById('bulkCropDataToggle') && document.getElementById('bulkCropDataToggle').checked);
+  const catId = document.getElementById('bulkCategory').value;
+  const subId = document.getElementById('bulkSubcategory').value;
+
+  // Pre-check filenames with server if category & subcategory are selected
+  let matchMap = {};
+  if (catId && subId) {
+    try {
+      const res = await fetch('/api/v1/media/check-similarity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filenames: fileArray.map(item => item.file.name),
+          categoryId: catId,
+          subCategoryId: subId,
+          existingStaged: stagedFiles.map(it => it.file.name)
+        })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.matches) {
+          json.matches.forEach(m => {
+            matchMap[m.filename] = m;
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Similarity check failed:', e);
+    }
+  }
+
+  const takenInSession = new Set();
+  stagedFiles.forEach(it => {
+    takenInSession.add(it.file.name.toLowerCase());
+  });
+
+  for (let i = 0; i < fileArray.length; i++) {
+    let fileItem = fileArray[i];
+    let file = fileItem.file;
+    const isVisual = fileItem.detectedType === 'image' || fileItem.detectedType === 'frames';
+
+    if (shouldCrop && window.MediaCropper && isVisual) {
+      try {
+        const cropped = await window.MediaCropper.open(file, {
+          queueIndex: i,
+          queueTotal: fileArray.length
+        });
+        if (cropped) {
+          file = cropped;
+          if (cropped.skipRemainingCrops) {
+            shouldCrop = false;
+          }
+        }
+      } catch (cropErr) {
+        console.log('Cropping cancelled or skipped for file:', file.name, cropErr);
+      }
+    }
+
+    const match = matchMap[file.name];
+    let isClash = match && match.has_conflict;
+    let conflictType = match ? match.conflict_type : null;
+    let matchedName = match ? match.matched_name : null;
+    let suggestedName = match ? match.suggested_filename : null;
+
+    if (suggestedName && takenInSession.has(suggestedName.toLowerCase())) {
+      suggestedName = getNextCandidateName(suggestedName, takenInSession);
+    }
+
+    if (isClash) {
+      // Open editor as popup allowing user to rename the new filename
+      const renamed = await showRenameModal({
+        filename: file.name,
+        existingMatch: matchedName,
+        conflictType: conflictType,
+        suggestedFilename: suggestedName,
+        title: 'Rename File — Filename Conflict Detected'
+      });
+      if (renamed && renamed !== file.name) {
+        file = new File([file], renamed, { type: file.type, lastModified: file.lastModified || Date.now() });
+        isClash = false;
+      }
+    }
+
+    takenInSession.add(file.name.toLowerCase());
+
+    const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ").trim();
+    const displayName = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+    const fileStem = file.name.replace(/\.[^/.]+$/, "").toLowerCase();
+    const matchedThumb = stagedCustomThumbs.get(fileStem) || null;
+    stagedFiles.push({
+      file: file,
+      customThumbFile: matchedThumb,
+      name: displayName,
+      detectedType: fileItem.detectedType,
+      size: (file.size / 1024).toFixed(1) + ' KB',
+      status: 'Ready',
+      hasConflict: isClash,
+      conflictType: conflictType,
+      matchedName: matchedName,
+      suggestedFilename: suggestedName
+    });
+    renderStaged();
+  }
+
+  // Clear file inputs so the same file selection can be re-triggered if chosen again
+  const bInput = document.getElementById('bulkFileInput');
+  if (bInput) bInput.value = '';
+  const bcInput = document.getElementById('bulkCropFileInput');
+  if (bcInput) bcInput.value = '';
+}
+
+async function checkStagedConflicts() {
+  const catId = document.getElementById('bulkCategory').value;
+  const subId = document.getElementById('bulkSubcategory').value;
+  if (!catId || !subId || stagedFiles.length === 0) return;
+
+  try {
+    const res = await fetch('/api/v1/media/check-similarity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filenames: stagedFiles.map(it => it.file.name),
+        categoryId: catId,
+        subCategoryId: subId
+      })
+    });
+    if (!res.ok) return;
+    const json = await res.json();
+    if (!json.matches) return;
+
+    const takenInSession = new Set();
+    for (let i = 0; i < stagedFiles.length; i++) {
+      const match = json.matches.find(m => m.filename === stagedFiles[i].file.name);
+      if (match) {
+        stagedFiles[i].hasConflict = match.has_conflict;
+        stagedFiles[i].conflictType = match.conflict_type;
+        stagedFiles[i].matchedName = match.matched_name;
+        let suggested = match.suggested_filename;
+        if (suggested && takenInSession.has(suggested.toLowerCase())) {
+          suggested = getNextCandidateName(suggested, takenInSession);
+        }
+        stagedFiles[i].suggestedFilename = suggested;
+
+        if (match.has_conflict) {
+          const renamed = await showRenameModal({
+            filename: stagedFiles[i].file.name,
+            existingMatch: match.matched_name,
+            conflictType: match.conflict_type,
+            suggestedFilename: suggested,
+            title: 'Rename File — Filename Conflict Detected'
+          });
+          if (renamed && renamed !== stagedFiles[i].file.name) {
+            applyRenameToStaged(i, renamed);
+          }
+        }
+      }
+      takenInSession.add(stagedFiles[i].file.name.toLowerCase());
+    }
+    renderStaged();
+  } catch (e) {
+    console.warn('Failed to check staged conflicts:', e);
+  }
+}
+
+async function openRenameModalForStaged(idx) {
+  const item = stagedFiles[idx];
+  if (!item) return;
+  const renamed = await showRenameModal({
+    filename: item.file.name,
+    existingMatch: item.matchedName || '',
+    conflictType: item.conflictType || 'similar',
+    suggestedFilename: item.suggestedFilename || '',
+    title: 'Rename Staged Asset File'
+  });
+  if (renamed && renamed !== item.file.name) {
+    applyRenameToStaged(idx, renamed);
+  }
+}
+
+function applyRenameToStaged(idx, newFilename) {
+  const item = stagedFiles[idx];
+  if (!item) return;
+  const oldFile = item.file;
+  item.file = new File([oldFile], newFilename, { type: oldFile.type, lastModified: oldFile.lastModified || Date.now() });
+  const cleanName = newFilename.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ").trim();
+  item.name = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+  item.hasConflict = false;
+  item.conflictType = null;
+  item.status = 'Ready';
+  renderStaged();
+}
+
+function renderStaged() {
+  const section = document.getElementById('stagedSection');
+  const tbody = document.getElementById('stagedTableBody');
+  const countEl = document.getElementById('stagedCount');
+  
+  if (stagedFiles.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+  
+  section.style.display = 'block';
+  countEl.textContent = stagedFiles.length;
+  tbody.innerHTML = '';
+  const activeTypes = getSelectedDataTypes();
+  
+  stagedFiles.forEach((item, idx) => {
+    const tr = document.createElement('tr');
+    const isVisual = item.detectedType === 'image' || item.detectedType === 'frames';
+    tr.innerHTML = `
+      <td>${idx + 1}</td>
+      <td>
+        <input type="text" class="input" value="${escapeHtml(item.name)}" onchange="stagedFiles[${idx}].name = this.value" style="min-height:36px; padding:0.25rem 0.5rem;">
+      </td>
+      <td style="color:var(--md-sys-color-on-surface-variant); font-size:0.85rem;">
+        <span style="font-family:monospace; font-weight:500;">${escapeHtml(item.file.name)}</span>
+        ${item.hasConflict ? `<span class="badge ${item.conflictType === 'exact' ? 'badge-error' : 'badge-warning'}" style="margin-left:0.5rem; font-size:0.7rem;">${item.conflictType === 'exact' ? 'Collision' : 'Similar Name'}</span>` : ''}
+        ${item.customThumbFile ? `<span class="badge badge-success" style="margin-left:0.5rem; font-size:0.7rem;" title="Custom thumbnail matched by filename stem">📸 ${escapeHtml(item.customThumbFile.name)}</span>` : ''}
+      </td>
+      <td>
+        ${renderDataTypeCell(item, idx, activeTypes)}
+      </td>
+      <td style="font-size:0.85rem;">${item.size}</td>
+      <td><span class="badge ${item.status === 'Ready' ? 'badge-primary' : (item.status === 'Uploaded' ? 'badge-success' : 'badge-error')}">${item.status}</span></td>
+      <td style="text-align:right; white-space:nowrap;">
+        ${isVisual ? `<button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.75rem; margin-right:0.35rem;" onclick="openCropModalForStaged(${idx})" title="Crop / Cut File">✂️ Crop data</button>` : ''}
+        <button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.75rem;" onclick="openRenameModalForStaged(${idx})" title="Rename File">✏️ Rename</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderDataTypeCell(item, idx, activeTypes) {
+  const isImageOrFrame = item.detectedType === 'image' || item.detectedType === 'frames';
+  const canToggleFrame = isImageOrFrame && activeTypes.includes('image') && activeTypes.includes('frames');
+  
+  if (canToggleFrame) {
+    return `
+      <select class="select" style="min-height:28px; padding:0.15rem 0.35rem; font-size:0.78rem; border-radius:var(--radius-sm);" onchange="updateStagedType(${idx}, this.value)">
+        <option value="image" ${item.detectedType === 'image' ? 'selected' : ''}>🖼️ Image</option>
+        <option value="frames" ${item.detectedType === 'frames' ? 'selected' : ''}>🖼️ Frame</option>
+      </select>
+    `;
+  }
+  
+  const BADGES = {
+    image: '<span class="badge badge-primary" style="font-size:0.75rem;">🖼️ Image</span>',
+    videos: '<span class="badge" style="background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container); font-size:0.75rem;">🎬 Video</span>',
+    video: '<span class="badge" style="background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container); font-size:0.75rem;">🎬 Video</span>',
+    audio: '<span class="badge" style="background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container); font-size:0.75rem;">🎵 Audio</span>',
+    json: '<span class="badge" style="background:var(--md-sys-color-surface-variant); color:var(--md-sys-color-on-surface-variant); font-size:0.75rem;">📄 JSON</span>',
+    frames: '<span class="badge" style="background:#fef08a; color:#854d0e; font-size:0.75rem;">🖼️ Frame</span>'
+  };
+  return BADGES[item.detectedType] || `<span class="badge">${escapeHtml(item.detectedType)}</span>`;
+}
+
+function updateStagedType(idx, newType) {
+  if (stagedFiles[idx]) {
+    stagedFiles[idx].detectedType = newType;
+    renderStaged();
+  }
+}
+
+async function openCropModalForStaged(idx) {
+  const item = stagedFiles[idx];
+  if (!item || !window.MediaCropper) return;
+  try {
+    const cropped = await window.MediaCropper.open(item.file);
+    if (cropped && !cropped.cropCancelled && cropped !== item.file) {
+      item.file = cropped;
+      const cleanName = cropped.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ").trim();
+      item.name = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+      item.size = (cropped.size / 1024).toFixed(1) + ' KB';
+      item.status = 'Ready';
+      renderStaged();
+    }
+  } catch (e) {
+    console.log('Crop cancelled:', e);
+  }
+}
+
+function clearStaged() {
+  stagedFiles = [];
+  renderStaged();
+  document.getElementById('bulkFileInput').value = '';
+}
+
+// Drag & drop listeners
+const dropzone = document.getElementById('bulkDropzone');
+['dragenter', 'dragover'].forEach(name => {
+  dropzone.addEventListener(name, (e) => {
+    e.preventDefault();
+    dropzone.classList.add('active');
+  });
+});
+['dragleave', 'drop'].forEach(name => {
+  dropzone.addEventListener(name, (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('active');
+  });
+});
+dropzone.addEventListener('drop', (e) => {
+  if (e.dataTransfer.files) {
+    handleFileSelect(e.dataTransfer.files);
+  }
+});
+
+async function startBulkUpload() {
+  const catId = document.getElementById('bulkCategory').value;
+  const subId = document.getElementById('bulkSubcategory').value;
+  const btn = document.getElementById('startUploadBtn');
+  
+  if (!catId || !subId) {
+    alert('Please select both a target category and subcategory.');
+    return;
+  }
+  if (stagedFiles.length === 0) {
+    alert('Please select at least one file to ingest.');
+    return;
+  }
+  
+  btn.disabled = true;
+  btn.textContent = 'Ingesting assets...';
+  
+  for (let i = 0; i < stagedFiles.length; i++) {
+    const item = stagedFiles[i];
+    item.status = 'Uploading...';
+    renderStaged();
+    
+    try {
+      // Step 1: Upload media file to hierarchical storage
+      let uploadData = null;
+      if (window.BackgroundUploader) {
+        try {
+          uploadData = await window.BackgroundUploader.upload(item.file, {
+            folder: 'assets',
+            categoryId: catId,
+            subCategoryId: subId,
+            assetName: item.name,
+            onProgress: (p) => {
+              item.status = `Uploading (${p.percent}%)...`;
+              renderStaged();
+            }
+          });
+        } catch (upErr) {
+          const upErrMsg = upErr.message || 'Upload failed';
+          if ((upErrMsg.includes('clash') || upErrMsg.includes('already exists') || upErrMsg.includes('rename') || upErrMsg.includes('409')) && typeof showRenameModal === 'function') {
+            const renamed = await showRenameModal({
+              filename: item.file.name,
+              existingMatch: item.file.name,
+              conflictType: 'exact',
+              title: 'Filename Collision — Rename File'
+            });
+            if (renamed && renamed !== item.file.name) {
+              applyRenameToStaged(i, renamed);
+              i--; // Retry this item with the renamed file
+              continue;
+            }
+          }
+          throw upErr;
+        }
+      } else {
+        const formData = new FormData();
+        formData.append('file', item.file);
+        formData.append('folder', 'assets');
+        formData.append('categoryId', catId);
+        formData.append('subCategoryId', subId);
+        if (item.name) {
+          formData.append('assetName', item.name);
+        }
+        
+        const upRes = await fetch('/api/v1/media/upload', {
+          method: 'POST',
+          body: formData
+        });
+        const upJson = await upRes.json().catch(() => ({}));
+        
+        if (!upRes.ok) {
+          const upErrMsg = upJson.error?.message || upJson.message || 'Upload failed';
+          if ((upRes.status === 409 || upErrMsg.includes('clash') || upErrMsg.includes('already exists') || upErrMsg.includes('rename')) && typeof showRenameModal === 'function') {
+            const renamed = await showRenameModal({
+              filename: item.file.name,
+              existingMatch: item.file.name,
+              conflictType: 'exact',
+              title: 'Filename Collision — Rename File'
+            });
+            if (renamed && renamed !== item.file.name) {
+              applyRenameToStaged(i, renamed);
+              i--; // Retry this item with the renamed file
+              continue;
+            }
+          }
+          throw new Error(upErrMsg);
+        }
+        uploadData = upJson.data || upJson || {};
+      }
+      const mediaUrl = uploadData.url || '';
+      
+      // Step 2: Create Central Asset with valid typed block based on detectedType
+      const rawType = item.detectedType || 'image';
+      const detectedType = (rawType === 'videos') ? 'video' : rawType;
+      let moreFieldsPayload = {};
+
+      if (detectedType === 'json') {
+        let parsedData = {};
+        try {
+          const txt = await item.file.text();
+          parsedData = JSON.parse(txt);
+        } catch (pe) {
+          console.warn('Failed to parse JSON file content', pe);
+        }
+        moreFieldsPayload = {
+          json: {
+            type: 'json',
+            data: (typeof parsedData === 'object' && parsedData !== null && !Array.isArray(parsedData)) ? parsedData : { data: parsedData, file_url: mediaUrl }
+          }
+        };
+      } else if (detectedType === 'frames') {
+        let frameImgUrl = mediaUrl;
+        let coordinates = [];
+
+        if (item.file.name.toLowerCase().endsWith('.json')) {
+          try {
+            const parsed = JSON.parse(await item.file.text());
+            const rawCoords = parsed.coordinates || parsed.placeholders || [];
+            if (Array.isArray(rawCoords) && rawCoords.length > 0) {
+              coordinates = rawCoords;
+            }
+            if (parsed.image_url || parsed.imageUrl) frameImgUrl = parsed.image_url || parsed.imageUrl;
+          } catch (e) {}
+        }
+
+        // Auto-detect placeholders via API if not provided in JSON
+        if (coordinates.length === 0 && frameImgUrl) {
+          try {
+            const detectRes = await fetch(`/api/v1/media/detect-frames?imageUrl=${encodeURIComponent(frameImgUrl)}`);
+            if (detectRes.ok) {
+              const detectData = await detectRes.json();
+              if (detectData.coordinates && Array.isArray(detectData.coordinates)) {
+                coordinates = detectData.coordinates;
+              }
+            }
+          } catch (e) {
+            console.warn('Auto frame placeholder detection failed:', e);
+          }
+        }
+
+        // Ensure clean integer coordinates with rotation between -45 and 45
+        const cleanCoordinates = coordinates.map((c, idx) => {
+          let rot = parseFloat(c.rotation || 0) || 0;
+          let w = parseFloat(c.width || 0) || 0;
+          let h = parseFloat(c.height || 0) || 0;
+          while (rot > 45) { rot -= 90; const t = w; w = h; h = t; }
+          while (rot < -45) { rot += 90; const t = w; w = h; h = t; }
+          rot = Math.max(-45, Math.min(45, Math.round(rot * 100) / 100));
+          return {
+            x: Math.round(parseFloat(c.x || 0)),
+            y: Math.round(parseFloat(c.y || 0)),
+            height: Math.round(h),
+            width: Math.round(w),
+            rotation: rot,
+            elevation: c.elevation !== undefined ? parseInt(c.elevation, 10) : idx
+          };
+        });
+
+        moreFieldsPayload = {
+          frames: {
+            image_url: frameImgUrl,
+            coordinates: cleanCoordinates
+          }
+        };
+      } else {
+        // Media types: image, video, audio
+        const blockMeta = {
+          url: mediaUrl,
+          filename: uploadData.filename || item.file.name,
+          mime: item.file.type || (detectedType === 'audio' ? 'audio/mpeg' : (detectedType === 'video' ? 'video/mp4' : 'image/png')),
+          filesize: uploadData.filesize || uploadData.size_bytes || item.file.size,
+          size_bytes: uploadData.size_bytes || uploadData.filesize || item.file.size
+        };
+        if (detectedType !== 'audio') {
+          if (uploadData.width) blockMeta.width = uploadData.width;
+          if (uploadData.height) blockMeta.height = uploadData.height;
+          if (uploadData.dimensions) blockMeta.dimensions = uploadData.dimensions;
+          else if (uploadData.width && uploadData.height) blockMeta.dimensions = `${uploadData.width}x${uploadData.height}`;
+        }
+        if (uploadData.duration) blockMeta.duration = uploadData.duration;
+        if (uploadData.duration_ms) blockMeta.duration_ms = uploadData.duration_ms;
+
+        moreFieldsPayload = {
+          [detectedType]: [blockMeta]
+        };
+      }
+      
+      // Step 3: Determine Thumbnail based on chosen thumbnail mode
+      const thumbModeRadio = document.querySelector('input[name="asset_thumb_mode"]:checked');
+      const thumbMode = thumbModeRadio ? thumbModeRadio.value : 'auto_create';
+
+      let finalThumbUrl = null;
+      if (thumbMode === 'custom' && item.customThumbFile) {
+        try {
+          let cFile = item.customThumbFile;
+          if (!cFile.name.startsWith('thumb_')) {
+            cFile = new File([cFile], 'thumb_' + cFile.name, { type: cFile.type, lastModified: cFile.lastModified || Date.now() });
+          }
+          const thumbForm = new FormData();
+          thumbForm.append('file', cFile);
+          thumbForm.append('folder', 'assets/thumbnails');
+          thumbForm.append('categoryId', catId);
+          thumbForm.append('subCategoryId', subId);
+          const tRes = await fetch('/api/v1/media/upload', { method: 'POST', body: thumbForm });
+          if (tRes.ok) {
+            const tJson = await tRes.json();
+            finalThumbUrl = (tJson.data && tJson.data.url) || tJson.url;
+          }
+        } catch (tErr) {
+          console.warn('Custom thumbnail upload failed:', tErr);
+        }
+      }
+
+      if (!finalThumbUrl) {
+        if (thumbMode === 'original' && detectedType === 'image') {
+          finalThumbUrl = mediaUrl;
+        } else if (detectedType === 'audio' || detectedType === 'json') {
+          finalThumbUrl = '/static/thumbnail_default.png';
+        } else if (detectedType === 'frames') {
+          finalThumbUrl = mediaUrl;
+        } else {
+          const isVideoUrl = uploadData.thumbnail_url && /\.(mp4|webm|mov|avi|mkv)(\?.*)?$/i.test(uploadData.thumbnail_url);
+          if (uploadData.thumbnail_url && !isVideoUrl) {
+            finalThumbUrl = uploadData.thumbnail_url;
+          } else if (detectedType === 'image') {
+            finalThumbUrl = mediaUrl;
+          } else {
+            finalThumbUrl = null;
+          }
+        }
+      }
+
+      const assetPayload = {
+        name: item.name,
+        description: `Imported asset from ${item.file.name}`,
+        categoryId: catId,
+        subCategoryId: subId,
+        thumbnailUrl: finalThumbUrl,
+        moreFields: moreFieldsPayload
+      };
+      
+      const createRes = await fetch('/api/v1/assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(assetPayload)
+      });
+      
+      if (!createRes.ok) {
+        const errJson = await createRes.json().catch(() => ({}));
+        const msg = errJson.error?.message || errJson.message || 'Failed to create asset record';
+        if (createRes.status === 409 || msg.includes('already exists') || msg.includes('clash')) {
+          const renamed = await showRenameModal({
+            filename: item.file.name,
+            existingMatch: item.name,
+            conflictType: 'exact',
+            title: 'Asset Name Clash — Rename Filename'
+          });
+          if (renamed && renamed !== item.file.name) {
+            applyRenameToStaged(i, renamed);
+            i--; // Retry this item with the renamed file
+            continue;
+          }
+        }
+        throw new Error(msg);
+      }
+      item.status = 'Uploaded';
+    } catch (err) {
+      console.error(err);
+      item.status = (err.message && (err.message.includes('clash') || err.message.includes('already exists') || err.message.includes('rename') || err.message.includes('Rename')))
+        ? 'Clash! Please Rename'
+        : 'Error';
+    }
+    renderStaged();
+  }
+  
+  const hasErrors = stagedFiles.some(f => f.status !== 'Uploaded');
+  if (hasErrors) {
+    btn.disabled = false;
+    btn.textContent = 'Retry Upload';
+    showToast('One or more assets had conflicts. Please rename them and retry.', 'warning');
+  } else {
+    btn.textContent = 'All Uploaded! Redirecting...';
+    showToast('All assets uploaded successfully!', 'success');
+    setTimeout(() => {
+      window.location.href = '/admin/assets';
+    }, 1200);
+  }
+}
+
+// Initial boot
+const initCatVal = document.getElementById('bulkCategory').value;
+const initSubSelect = document.getElementById('bulkSubcategory');
+if (preselectedSubId && initSubSelect) {
+  initSubSelect.value = preselectedSubId;
+}
+if (initCatVal && initSubSelect && initSubSelect.options.length <= 1) {
+  loadSubcategories(initCatVal, preselectedSubId);
+}
+onDataTypeChange();
+</script>
+{% endblock %}

@@ -1,0 +1,87 @@
+<nav class="nav-drawer" id="navDrawer" aria-label="Main Navigation">
+  <div class="nav-brand">
+    <a href="/admin/dashboard" class="brand-content" title="Asset Admin Home">
+      <span class="brand-icon">🎨</span>
+      <span class="brand-text">Asset Admin</span>
+    </a>
+    <button type="button" class="sidebar-collapse-btn" id="sidebarCollapseBtn" aria-label="Collapse Sidebar" title="Collapse Sidebar">
+      <svg class="collapse-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="10 3 5 8 10 13"/>
+      </svg>
+    </button>
+  </div>
+
+
+  <ul class="nav-links">
+    <li>
+      <a href="/admin/dashboard" class="nav-link {% if active_tab == 'dashboard' %}active{% endif %}" title="Dashboard">
+        <span class="nav-icon">📊</span>
+        <span class="nav-text">Dashboard</span>
+      </a>
+    </li>
+    <li>
+      <a href="/admin/categories" class="nav-link {% if active_tab == 'categories' %}active{% endif %}" title="Categories">
+        <span class="nav-icon">📁</span>
+        <span class="nav-text">Categories</span>
+      </a>
+    </li>
+    <li>
+      <a href="/admin/subcategories" class="nav-link {% if active_tab == 'subcategories' %}active{% endif %}" title="Subcategories">
+        <span class="nav-icon">📂</span>
+        <span class="nav-text">Subcategories</span>
+      </a>
+    </li>
+    <li>
+      <a href="/admin/assets" class="nav-link {% if active_tab == 'assets' %}active{% endif %}" title="Assets">
+        <span class="nav-icon">🖼️</span>
+        <span class="nav-text">Assets</span>
+      </a>
+    </li>
+    <li>
+      <a href="/admin/instances" class="nav-link {% if active_tab == 'instances' %}active{% endif %}" title="App Instances">
+        <span class="nav-icon">📱</span>
+        <span class="nav-text">App Instances</span>
+      </a>
+    </li>
+    <li>
+      <a href="/admin/keys" class="nav-link {% if active_tab == 'keys' %}active{% endif %}" title="API Keys">
+        <span class="nav-icon">🔑</span>
+        <span class="nav-text">API Keys</span>
+      </a>
+    </li>
+    <li>
+      <a href="/admin/analytics" class="nav-link {% if active_tab == 'analytics' %}active{% endif %}" title="Analytics">
+        <span class="nav-icon">📈</span>
+        <span class="nav-text">Analytics</span>
+      </a>
+    </li>
+  </ul>
+
+  <!-- Bottom Actions: User Info, Settings, Theme Toggle & Logout -->
+  <div class="nav-drawer-footer">
+    {% if session and session.username %}
+    <div class="nav-user-section" title="Logged in as {{ session.username }}">
+      <div class="nav-user-avatar">
+        {{ (session.username[:1] if session and session.username else 'A')|upper }}
+      </div>
+      <div class="nav-user-details">
+        <span class="nav-username">{{ session.username }}</span>
+        <span class="nav-user-badge">Administrator</span>
+      </div>
+    </div>
+    {% endif %}
+    <a href="/admin/settings" class="nav-footer-action {% if active_tab == 'settings' %}active{% endif %}" title="Settings" style="text-decoration:none;">
+      <span class="nav-icon">⚙️</span>
+      <span class="nav-text" style="text-decoration:none;">Settings</span>
+    </a>
+    <button type="button" class="nav-footer-action theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle Theme" title="Toggle Theme" style="text-decoration:none;">
+      <span class="nav-icon" id="themeIcon">🌙</span>
+      <span class="nav-text" id="themeText" style="text-decoration:none;">Theme</span>
+    </button>
+    <a href="/admin/logout" class="nav-footer-action nav-logout-action" title="Sign Out" style="text-decoration:none;">
+      <span class="nav-icon">🚪</span>
+      <span class="nav-text" style="text-decoration:none;">Logout</span>
+    </a>
+  </div>
+</nav>
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>

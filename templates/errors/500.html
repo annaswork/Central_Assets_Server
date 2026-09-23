@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Internal Server Error (500) — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="text-align:center; padding:4rem 1rem; max-width:600px; margin:0 auto;">
+  <div style="font-size:4rem; margin-bottom:1rem;">⚠️</div>
+  <h1 style="margin-bottom:0.75rem; color:var(--md-sys-color-error);">500 — Server Error</h1>
+  <p style="color:var(--md-sys-color-on-surface-variant); margin-bottom:2rem; font-size:1.05rem;">
+    An unexpected error occurred while processing your request. The operational event has been logged for diagnosis.
+  </p>
+  <a href="/admin/dashboard" class="btn btn-primary">Return to Dashboard</a>
+</div>
+{% endblock %}

@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}Unresolved References — {{ instance.name }}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+  <a href="/admin/instances/{{ instance.id }}/content" style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
+    ← Back to {{ instance.name }}
+  </a>
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+    <div>
+      <h1 style="color:var(--md-sys-color-error);">⚠️ Unresolved References Tray</h1>
+      <p style="color:var(--md-sys-color-on-surface-variant);">
+        These creative items were deleted from the central library while still referenced in <strong>{{ instance.name }}</strong>.
+      </p>
+    </div>
+
+    {% if unresolved.total_unresolved > 0 %}
+      <button type="button" class="btn btn-destructive" onclick="pruneAllUnresolved()">
+        Prune All Unresolved References
+      </button>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card" style="padding:0; overflow:hidden;">
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Target Type</th>
+          <th>Referenced Target ID</th>
+          <th>Resolution Status</th>
+          <th style="text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cat in unresolved.categories %}
+          <tr>
+            <td><span class="badge badge-warning">Category</span></td>
+            <td>
+              <code>{{ cat.targetId or cat.target_id or cat.source_id or cat.reference_id }}</code>
+              {% if cat.name %}
+                <div style="font-size:0.85rem; font-weight:600; margin-top:2px;">{{ cat.name }}</div>
+              {% endif %}
+            </td>
+            <td style="color:var(--md-sys-color-error); font-weight:500;">Missing Central Document</td>
+            <td style="text-align:right;">
+              <button type="button" class="btn btn-destructive" style="min-height:32px; padding:0.2rem 0.6rem; font-size:0.85rem;" onclick="removeUnresolved('category', '{{ cat.source_id or cat.reference_id }}')">
+                Prune
+              </button>
+            </td>
+          </tr>
+        {% endfor %}
+
+        {% for sub in unresolved.subcategories %}
+          <tr>
+            <td><span class="badge badge-warning">Subcategory</span></td>
+            <td>
+              <code>{{ sub.targetId or sub.target_id or sub.source_id or sub.reference_id }}</code>
+              {% if sub.name %}
+                <div style="font-size:0.85rem; font-weight:600; margin-top:2px;">{{ sub.name }}</div>
+              {% endif %}
+            </td>
+            <td style="color:var(--md-sys-color-error); font-weight:500;">Missing Central Document</td>
+            <td style="text-align:right;">
+              <button type="button" class="btn btn-destructive" style="min-height:32px; padding:0.2rem 0.6rem; font-size:0.85rem;" onclick="removeUnresolved('subcategory', '{{ sub.source_id or sub.reference_id }}')">
+                Prune
+              </button>
+            </td>
+          </tr>
+        {% endfor %}
+
+        {% for asset in unresolved.assets %}
+          <tr>
+            <td><span class="badge badge-error">Asset</span></td>
+            <td>
+              <code>{{ asset.targetId or asset.target_id or asset.source_id or asset.reference_id }}</code>
+              {% if asset.name %}
+                <div style="font-size:0.85rem; font-weight:600; margin-top:2px;">{{ asset.name }}</div>
+              {% endif %}
+            </td>
+            <td style="color:var(--md-sys-color-error); font-weight:500;">Missing Central Document</td>
+            <td style="text-align:right;">
+              <button type="button" class="btn btn-destructive" style="min-height:32px; padding:0.2rem 0.6rem; font-size:0.85rem;" onclick="removeUnresolved('asset', '{{ asset.source_id or asset.reference_id }}')">
+                Prune
+              </button>
+            </td>
+          </tr>
+        {% endfor %}
+
+        {% if unresolved.total_unresolved == 0 %}
+          <tr>
+            <td colspan="4" style="text-align:center; padding:3rem; color:var(--md-sys-color-on-surface-variant);">
+              <span style="font-size:2rem; display:block; margin-bottom:0.5rem;">🎉</span>
+              All referenced items in this instance correspond to healthy central documents.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const instanceId = "{{ instance.id }}";
+
+async function removeUnresolved(type, targetId) {
+  if (!targetId) return;
+  if (!confirm(`Prune missing ${type} reference from this instance?`)) return;
+
+  try {
+    let endpoint = '';
+    if (type === 'category') {
+      endpoint = `/admin/instances/${instanceId}/categories/${targetId}`;
+    } else if (type === 'subcategory') {
+      endpoint = `/admin/instances/${instanceId}/subcategories/${targetId}`;
+    } else {
+      endpoint = `/admin/instances/${instanceId}/assets/${targetId}`;
+    }
+
+    const res = await fetch(endpoint, {
+      method: 'DELETE'
+    });
+    if (!res.ok) throw new Error('Failed to prune reference');
+    window.location.reload();
+  } catch (err) {
+    alert('Error pruning reference: ' + err.message);
+  }
+}
+
+async function pruneAllUnresolved() {
+  if (!confirm('Are you sure you want to prune all unresolved references?')) return;
+
+  try {
+    const res = await fetch(`/admin/instances/${instanceId}/prune-unresolved`, {
+      method: 'POST'
+    });
+    if (!res.ok) throw new Error('Failed to prune references');
+    window.location.reload();
+  } catch (err) {
+    alert('Error pruning references: ' + err.message);
+  }
+}
+</script>
+{% endblock %}

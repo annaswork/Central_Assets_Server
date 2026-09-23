@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Bulk Add Subcategories — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="max-width:800px; margin:0 auto;">
+  <div style="margin-bottom:1.5rem;">
+    <h1>Bulk Add Subcategories</h1>
+    <a href="/admin/subcategories">← Back to Subcategories</a>
+  </div>
+
+  {% if results %}
+    <div class="card" style="margin-bottom:1.5rem;">
+      <h2>Import Results</h2>
+      <p>Created: <strong style="color:var(--app-success);">{{ results.created }}</strong> |
+         Skipped: <strong style="color:var(--app-premium);">{{ results.skipped }}</strong> |
+         Failed: <strong style="color:var(--md-sys-color-error);">{{ results.failed }}</strong></p>
+
+      <div class="table-responsive" style="margin-top:1rem;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Status</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in results['items'] %}
+              <tr>
+                <td>{{ r.index + 1 }}</td>
+                <td>
+                  {% if r.status == 'created' %}
+                    <span class="badge badge-success">Created</span>
+                  {% elif r.status == 'skipped' %}
+                    <span class="badge badge-premium">Skipped</span>
+                  {% else %}
+                    <span class="badge badge-source-deleted">Failed</span>
+                  {% endif %}
+                </td>
+                <td>{{ r.id or r.error or '' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="card">
+    <form method="POST" action="/admin/subcategories/bulk" enctype="multipart/form-data">
+      <div class="form-group">
+        <label class="form-label" for="category_id">Target Parent Category *</label>
+        <select id="category_id" name="category_id" class="select" required>
+          <option value="">Select a Category...</option>
+          {% for cat in categories %}
+            <option value="{{ cat.id }}">{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-bottom:1.25rem;">
+        <label class="form-label" style="font-weight:600; margin-bottom:0.4rem; display:block;">Thumbnail Mode for Created Subcategories</label>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:0.65rem; margin-bottom:1rem;">
+          <label style="display:flex; align-items:center; gap:0.5rem; padding:0.6rem 0.75rem; border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer;">
+            <input type="radio" name="thumb_option" value="custom" checked onchange="updateThumbOptionUI('custom')">
+            <div>
+              <div style="font-weight:600; font-size:0.83rem;">Custom Thumbnail</div>
+              <div style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant);">Upload custom thumbnail</div>
+            </div>
+          </label>
+          <label style="display:flex; align-items:center; gap:0.5rem; padding:0.6rem 0.75rem; border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer;">
+            <input type="radio" name="thumb_option" value="auto_create" onchange="updateThumbOptionUI('auto_create')">
+            <div>
+              <div style="font-weight:600; font-size:0.83rem;">Create from Banner</div>
+              <div style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant);">Auto 1/3rd scale thumbnail</div>
+            </div>
+          </label>
+          <label style="display:flex; align-items:center; gap:0.5rem; padding:0.6rem 0.75rem; border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer;">
+            <input type="radio" name="thumb_option" value="original" onchange="updateThumbOptionUI('original')">
+            <div>
+              <div style="font-weight:600; font-size:0.83rem;">Use Original Image</div>
+              <div style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant);">Use banner image directly</div>
+            </div>
+          </label>
+        </div>
+
+        <!-- Custom Thumbnail Dropzone Container -->
+        <div id="customThumbDropzoneWrap">
+          <div class="dropzone" id="thumbDropzone" onclick="document.getElementById('thumbnail_file').click()">
+            <div class="dropzone-icon">📸</div>
+            <div class="dropzone-text">Drag &amp; drop thumbnail here, or <span>browse</span></div>
+            <div class="dropzone-hint">PNG, JPG, WEBP, GIF (Max 50MB)</div>
+            <input type="file" id="thumbnail_file" name="thumbnail_file" accept="image/*" style="display:none;" onchange="handleThumbFileSelect(this)">
+          </div>
+
+          <div id="thumbPreviewContainer" class="dropzone-preview" style="display:none; margin-top:0.75rem;">
+            <img id="thumbPreviewImg" class="dropzone-preview-img" src="" alt="Thumbnail preview">
+            <div class="dropzone-preview-info">
+              <div id="thumbPreviewFilename" class="dropzone-preview-filename">Selected Thumbnail</div>
+              <div id="thumbPreviewMeta" class="dropzone-preview-meta"></div>
+            </div>
+            <button type="button" class="btn btn-text" style="color:var(--md-sys-color-error); font-size:0.85rem; padding:0.25rem 0.5rem;" onclick="clearThumbFile()">
+              ✕ Remove
+            </button>
+          </div>
+        </div>
+
+        <div id="autoCreateThumbNotice" style="display:none; font-size:0.8rem; color:var(--app-teal); background:var(--md-sys-color-surface-container); padding:0.75rem; border-radius:var(--radius-sm); border:1px solid var(--md-sys-color-outline-variant); margin-top:0.5rem;">
+          ✨ Auto-scales to 1/3rd size thumbnail from the subcategory hero/banner image on save.
+        </div>
+
+        <div id="originalThumbNotice" style="display:none; font-size:0.8rem; color:var(--md-sys-color-primary); background:var(--md-sys-color-surface-container); padding:0.75rem; border-radius:var(--radius-sm); border:1px solid var(--md-sys-color-outline-variant); margin-top:0.5rem;">
+          🖼️ The original hero/banner image URL will be used directly as the thumbnail.
+        </div>
+
+        <input type="hidden" id="thumbnail_url" name="thumbnail_url" value="">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="names_list">Paste-a-List (one subcategory name per line)</label>
+        <textarea id="names_list" name="names_list" class="textarea" placeholder="Birthday&#10;Wedding&#10;Anniversary&#10;Holidays"></textarea>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.5rem;">
+        <a href="/admin/subcategories" class="btn btn-outlined">Cancel</a>
+        <button type="submit" class="btn btn-primary">Bulk Add</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function setupDragAndDrop(dropzoneId, inputId, handleFilesFn) {
+    const dz = document.getElementById(dropzoneId);
+    if (!dz) return;
+
+    ['dragenter', 'dragover'].forEach(name => {
+      dz.addEventListener(name, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dz.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(name => {
+      dz.addEventListener(name, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dz.classList.remove('dragover');
+      });
+    });
+
+    dz.addEventListener('drop', (e) => {
+      const dt = e.dataTransfer;
+      if (dt && dt.files && dt.files.length > 0) {
+        const file = dt.files[0];
+        const input = document.getElementById(inputId);
+        const container = new DataTransfer();
+        container.items.add(file);
+        input.files = container.files;
+        handleFilesFn(file);
+      }
+    });
+  }
+
+  function handleThumbFileSelect(input) {
+    if (input.files && input.files[0]) {
+      renderThumbPreview(input.files[0]);
+    }
+  }
+
+  function renderThumbPreview(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      document.getElementById('thumbPreviewImg').src = e.target.result;
+      document.getElementById('thumbPreviewFilename').textContent = file.name;
+      document.getElementById('thumbPreviewMeta').textContent = `${(file.size / 1024).toFixed(1)} KB — Upload file staged`;
+      document.getElementById('thumbPreviewContainer').style.display = 'flex';
+      const urlInput = document.getElementById('thumbnail_url');
+      if (urlInput) urlInput.value = '';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearThumbFile() {
+    const input = document.getElementById('thumbnail_file');
+    if (input) input.value = '';
+    const urlInput = document.getElementById('thumbnail_url');
+    if (urlInput) urlInput.value = '';
+    const preview = document.getElementById('thumbPreviewContainer');
+    if (preview) preview.style.display = 'none';
+    const img = document.getElementById('thumbPreviewImg');
+    if (img) img.src = '';
+  }
+
+  function updateThumbOptionUI(mode) {
+    const wrap = document.getElementById('customThumbDropzoneWrap');
+    const autoNotice = document.getElementById('autoCreateThumbNotice');
+    const origNotice = document.getElementById('originalThumbNotice');
+    if (!wrap || !autoNotice || !origNotice) return;
+
+    if (mode === 'custom') {
+      wrap.style.display = 'block';
+      autoNotice.style.display = 'none';
+      origNotice.style.display = 'none';
+    } else if (mode === 'auto_create') {
+      wrap.style.display = 'none';
+      autoNotice.style.display = 'block';
+      origNotice.style.display = 'none';
+    } else if (mode === 'original') {
+      wrap.style.display = 'none';
+      autoNotice.style.display = 'none';
+      origNotice.style.display = 'block';
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    setupDragAndDrop('thumbDropzone', 'thumbnail_file', renderThumbPreview);
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+
+{% block title %}Assets — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
+  <div>
+    <h1>Central Asset Library</h1>
+    <p style="color:var(--md-sys-color-on-surface-variant);">Shippable creative items authored centrally</p>
+  </div>
+
+  <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+    <!-- View Switcher -->
+    <div class="view-toggle-container">
+      <button type="button" class="view-toggle-btn active" id="viewBtnList" onclick="setAssetView('list')" title="List View">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6"></line>
+          <line x1="8" y1="12" x2="21" y2="12"></line>
+          <line x1="8" y1="18" x2="21" y2="18"></line>
+          <line x1="3" y1="6" x2="3.01" y2="6"></line>
+          <line x1="3" y1="12" x2="3.01" y2="12"></line>
+          <line x1="3" y1="18" x2="3.01" y2="18"></line>
+        </svg>
+        <span>List</span>
+      </button>
+      <button type="button" class="view-toggle-btn" id="viewBtnBlock" onclick="setAssetView('block')" title="Block View">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"></rect>
+          <rect x="14" y="3" width="7" height="7"></rect>
+          <rect x="14" y="14" width="7" height="7"></rect>
+          <rect x="3" y="14" width="7" height="7"></rect>
+        </svg>
+        <span>Block</span>
+      </button>
+    </div>
+
+    <button type="button" class="btn btn-outlined" onclick="openCentralReorderModal('asset', { categoryId: '{{ selected_cat or '' }}', subCategoryId: '{{ selected_sub or '' }}' })">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;">
+        <line x1="8" y1="6" x2="21" y2="6"></line>
+        <line x1="8" y1="12" x2="21" y2="12"></line>
+        <line x1="8" y1="18" x2="21" y2="18"></line>
+        <line x1="3" y1="6" x2="3.01" y2="6"></line>
+        <line x1="3" y1="12" x2="3.01" y2="12"></line>
+        <line x1="3" y1="18" x2="3.01" y2="18"></line>
+      </svg>
+      Reorder
+    </button>
+    <button type="button" class="btn btn-outlined" onclick="openCsvUpdateModal('/admin/assets/upload-csv')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="17 8 12 3 7 8"></polyline>
+        <line x1="12" y1="3" x2="12" y2="15"></line>
+      </svg>
+      Upload CSV
+    </button>
+    <a href="/admin/assets/new-single{% if selected_cat or selected_sub %}?{% if selected_cat %}categoryId={{ selected_cat }}{% endif %}{% if selected_cat and selected_sub %}&{% endif %}{% if selected_sub %}subCategoryId={{ selected_sub }}{% endif %}{% endif %}" class="btn btn-outlined">Bulk Single-File Add</a>
+    <a href="/admin/assets/new-multi{% if selected_cat or selected_sub %}?{% if selected_cat %}categoryId={{ selected_cat }}{% endif %}{% if selected_cat and selected_sub %}&{% endif %}{% if selected_sub %}subCategoryId={{ selected_sub }}{% endif %}{% endif %}" class="btn btn-primary">+ Multi-File Asset</a>
+  </div>
+</div>
+
+<!-- Filters & Search -->
+<div class="card search-filter-card" style="padding:0.85rem 1rem; margin-bottom:1.5rem; overflow-x:auto;">
+  <form method="GET" action="/admin/assets" class="search-filter-form" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem; width:100%;">
+    <div class="filter-group-left" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; flex-shrink:0; white-space:nowrap;">
+      <select name="categoryId" id="categoryFilter" class="select" style="max-width:200px;" onchange="document.getElementById('subCategoryFilter').value=''; this.form.submit();">
+        <option value="">All Categories</option>
+        {% for cat in categories %}
+          <option value="{{ cat.id }}" {% if selected_cat == cat.id %}selected{% endif %}>{{ cat.name }}</option>
+        {% endfor %}
+      </select>
+
+      <select name="subCategoryId" id="subCategoryFilter" class="select" style="max-width:200px;" onchange="var opt = this.options[this.selectedIndex]; if (opt && opt.dataset.categoryId && !document.getElementById('categoryFilter').value) { document.getElementById('categoryFilter').value = opt.dataset.categoryId; } this.form.submit();">
+        <option value="">All Subcategories</option>
+        {% for sub in subcategories %}
+          <option value="{{ sub.id }}" data-category-id="{{ sub.category_id }}" {% if selected_sub == sub.id %}selected{% endif %}>{{ sub.name }}</option>
+        {% endfor %}
+      </select>
+
+      <select name="type" id="typeFilter" class="select" style="min-width:130px; max-width:160px;" onchange="this.form.submit();">
+        <option value="">All Types</option>
+        <option value="images" {% if selected_type == 'images' %}selected{% endif %}>Images</option>
+        <option value="videos" {% if selected_type == 'videos' %}selected{% endif %}>Videos</option>
+        <option value="audios" {% if selected_type == 'audios' %}selected{% endif %}>Audios</option>
+        <option value="json" {% if selected_type == 'json' %}selected{% endif %}>JSON</option>
+        <option value="frames" {% if selected_type == 'frames' %}selected{% endif %}>Frames</option>
+      </select>
+
+      <select name="sort" id="assetSortSelect" class="select" style="min-width:160px; max-width:190px;" onchange="this.form.submit();">
+        <option value="sequence" {% if current_sort == 'sequence' or not current_sort %}selected{% endif %}>Sequence / Custom</option>
+        <option value="name" {% if current_sort == 'name' %}selected{% endif %}>By Name</option>
+        <option value="newest" {% if current_sort == 'newest' %}selected{% endif %}>Newest First</option>
+        <option value="most_viewed" {% if current_sort == 'most_viewed' %}selected{% endif %}>Most Viewed</option>
+        <option value="most_downloaded" {% if current_sort == 'most_downloaded' %}selected{% endif %}>Most Downloaded</option>
+        <option value="oldest" {% if current_sort == 'oldest' %}selected{% endif %}>Oldest First</option>
+      </select>
+
+      {% if selected_cat or selected_sub or selected_type or (current_sort and current_sort not in ('sequence', '')) %}
+        <a href="/admin/assets{% if search %}?q={{ search }}{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
+      {% endif %}
+    </div>
+
+    <div class="search-group-right" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; margin-left:auto; white-space:nowrap; flex-shrink:0;">
+      <input type="text" name="q" class="input" placeholder="Search asset name..." value="{{ search }}" style="max-width:260px;">
+      <button type="submit" class="btn btn-outlined btn-filter">Search</button>
+      {% if search %}
+        <a href="/admin/assets?{% if selected_cat %}categoryId={{ selected_cat }}&{% endif %}{% if selected_sub %}subCategoryId={{ selected_sub }}&{% endif %}{% if selected_type %}type={{ selected_type }}&{% endif %}{% if current_sort and current_sort not in ('sequence', '') %}sort={{ current_sort }}&{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+<!-- Bulk Actions Toolbar -->
+{% include "partials/bulk_actions_bar.html" %}
+
+<!-- Data Table (List View) -->
+<div id="assetListView" class="table-responsive card asset-view-container" style="padding:0;">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th class="table-checkbox-cell"><input type="checkbox" id="masterSelectAll" title="Select All" onchange="toggleMasterSelect(this.checked)"></th>
+        <th style="width:60px;">Thumb</th>
+        <th>Asset Name</th>
+        <th class="th-sortable {% if sort == 'views' %}active{% endif %}" title="Sort by views">
+          {% set next_views_order = 'asc' if (sort == 'views' and order == 'desc') else 'desc' %}
+          <a href="/admin/assets?sort=views&order={{ next_views_order }}{% if selected_cat %}&categoryId={{ selected_cat }}{% endif %}{% if selected_sub %}&subCategoryId={{ selected_sub }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if search %}&q={{ search }}{% endif %}" class="th-sort-link">
+            <span>Views</span>
+            <span class="th-sort-icon">
+              {% if sort == 'views' %}
+                {% if order == 'asc' %}▲{% else %}▼{% endif %}
+              {% else %}
+                ↕
+              {% endif %}
+            </span>
+          </a>
+        </th>
+        <th class="th-sortable {% if sort == 'downloads' %}active{% endif %}" title="Sort by downloads">
+          {% set next_dl_order = 'asc' if (sort == 'downloads' and order == 'desc') else 'desc' %}
+          <a href="/admin/assets?sort=downloads&order={{ next_dl_order }}{% if selected_cat %}&categoryId={{ selected_cat }}{% endif %}{% if selected_sub %}&subCategoryId={{ selected_sub }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if search %}&q={{ search }}{% endif %}" class="th-sort-link">
+            <span>Downloads</span>
+            <span class="th-sort-icon">
+              {% if sort == 'downloads' %}
+                {% if order == 'asc' %}▲{% else %}▼{% endif %}
+              {% else %}
+                ↕
+              {% endif %}
+            </span>
+          </a>
+        </th>
+        <th class="th-sortable {% if sort in ('created_at', 'created', 'newest', 'oldest') %}active{% endif %}" title="Sort by created time">
+          {% set next_created_order = 'asc' if (sort in ('created_at', 'created', 'newest') and order == 'desc') else 'desc' %}
+          <a href="/admin/assets?sort=created_at&order={{ next_created_order }}{% if selected_cat %}&categoryId={{ selected_cat }}{% endif %}{% if selected_sub %}&subCategoryId={{ selected_sub }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if search %}&q={{ search }}{% endif %}" class="th-sort-link">
+            <span>CREATED</span>
+            <span class="th-sort-icon">
+              {% if sort in ('created_at', 'created', 'newest', 'oldest') %}
+                {% if order == 'asc' %}▲{% else %}▼{% endif %}
+              {% else %}
+                ↕
+              {% endif %}
+            </span>
+          </a>
+        </th>
+        <th style="text-align:right;">ACTIONS</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in data['items'] %}
+        <tr data-asset-id="{{ item.id }}" {% if item.is_enabled is defined and item.is_enabled == False %}style="opacity:0.75;"{% endif %}>
+          <td class="table-checkbox-cell" data-label="Select">
+            <input type="checkbox" class="row-select-checkbox" value="{{ item.id }}" onchange="updateBulkActionsBar()">
+          </td>
+          <td data-label="Thumbnail" onclick="openAssetPreviewModal('{{ item.id }}')" style="cursor:pointer;" title="Click to preview asset">
+            {% if item.thumbnail_url %}
+              <img src="{{ item.thumbnail_url }}" alt="{{ item.name }}" class="table-thumb">
+            {% else %}
+              <div class="table-thumb" style="display:flex; align-items:center; justify-content:center; font-size:1.2rem;">🖼️</div>
+            {% endif %}
+          </td>
+          <td data-label="Name">
+            <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
+              <a href="javascript:void(0)" onclick="openAssetPreviewModal('{{ item.id }}')" class="asset-preview-link" style="color:inherit; text-decoration:none; cursor:pointer;" title="Click to preview asset"><strong>{{ item.name }}</strong></a>
+              {% if item.is_premium %}
+                <span class="badge badge-premium" style="font-size:0.7rem; padding:0.15rem 0.45rem;">★ Premium</span>
+              {% endif %}
+              {% if item.is_enabled is defined and item.is_enabled == False %}
+                <span class="badge badge-secondary" style="font-size:0.7rem; padding:0.15rem 0.45rem;">Disabled</span>
+              {% endif %}
+            </div>
+            {% if item.description %}
+              <div style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">{{ item.description[:60] }}</div>
+            {% endif %}
+          </td>
+          <td data-label="Views">
+            <span style="display:inline-flex; align-items:center; gap:0.3rem; font-weight:500;">
+              <span style="opacity:0.65;">👁</span> {{ item.views | default(0) }}
+            </span>
+          </td>
+          <td data-label="Downloads">
+            <span style="display:inline-flex; align-items:center; gap:0.3rem; font-weight:500;">
+              <span style="opacity:0.65;">⬇</span> {{ item.downloads | default(0) }}
+            </span>
+          </td>
+          <td data-label="Created" class="table-date-cell" data-utc="{{ item.created_at }}">
+            {% if item.created_at %}
+              {{ item.created_at | format_datetime }}
+            {% else %}
+              <span style="color:var(--md-sys-color-on-surface-variant);">—</span>
+            {% endif %}
+          </td>
+          <td data-label="ACTIONS" style="text-align:right;">
+            <div class="action-buttons">
+              <a href="/admin/assets/{{ item.id }}/edit" class="action-btn-circle action-btn-edit" title="Edit Asset">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                </svg>
+              </a>
+              <form id="delForm_{{ item.id }}" method="POST" action="/admin/assets/{{ item.id }}/delete" style="display:none;"></form>
+              <button type="button" class="action-btn-circle action-btn-delete" title="Delete Asset" onclick="promptDeleteAsset('{{ item.id }}', '{{ item.name }}')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="6" style="text-align:center; padding:2rem; color:var(--md-sys-color-on-surface-variant);">
+            No assets found matching filters.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Card / Block View -->
+<div id="assetBlockView" class="asset-grid asset-view-container" style="display:none;">
+  {% for item in data['items'] %}
+    <div class="asset-card {% if item.is_enabled is defined and item.is_enabled == False %}card-disabled{% endif %}" id="assetCard_{{ item.id }}" draggable="false">
+      <!-- Top bar with Checkbox -->
+      <div class="asset-card-topbar" title="Click or swipe across to multi-select">
+        <input type="checkbox" class="row-select-checkbox" value="{{ item.id }}" title="Select {{ item.name }}" onchange="updateBulkActionsBar()">
+      </div>
+
+      <!-- Thumbnail Image -->
+      <div class="asset-card-img-wrapper" onclick="openAssetPreviewModal('{{ item.id }}')" style="cursor:pointer;" title="Click to preview asset">
+        {% if item.thumbnail_url %}
+          <img src="{{ item.thumbnail_url }}" alt="{{ item.name }}" class="asset-card-img" loading="lazy" draggable="false">
+        {% else %}
+          <div class="asset-card-placeholder">🖼️</div>
+        {% endif %}
+        <!-- Hover Stats on Picture -->
+        <div class="asset-card-hover-stats">
+          <span class="hover-stat-item"><span class="hover-stat-icon">👁</span> {{ item.views | default(0) }}</span>
+          <span class="hover-stat-item"><span class="hover-stat-icon">⬇</span> {{ item.downloads | default(0) }}</span>
+        </div>
+      </div>
+
+      <!-- Card Body -->
+      <div class="asset-card-body">
+        <a href="javascript:void(0)" onclick="openAssetPreviewModal('{{ item.id }}')" class="asset-card-title asset-preview-link" title="{{ item.name }}" style="cursor:pointer;">
+          {{ item.name }}
+        </a>
+
+        <div class="asset-card-meta">
+          <span class="asset-card-category">
+            {% if category_map and category_map.get(item.category_id) %}
+              {{ category_map.get(item.category_id) | upper }}
+            {% else %}
+              PORTRAIT
+            {% endif %}
+          </span>
+
+          {% if item.is_premium %}
+            <span class="asset-card-premium-pill">PREMIUM</span>
+          {% endif %}
+
+          {% if item.is_enabled is defined and item.is_enabled == False %}
+            <span class="asset-card-disabled-pill">DISABLED</span>
+          {% endif %}
+
+          {% if subcategory_map and subcategory_map.get(item.sub_category_id) %}
+            <span class="asset-card-sub">· {{ subcategory_map.get(item.sub_category_id) }}</span>
+          {% endif %}
+        </div>
+
+        <div class="asset-card-divider"></div>
+
+        <div class="asset-card-actions">
+          <a href="/admin/assets/{{ item.id }}/edit" class="asset-card-btn-edit">Edit</a>
+          <button type="button" class="asset-card-btn-delete" onclick="promptDeleteAsset('{{ item.id }}', '{{ item.name }}')">Delete</button>
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="card" style="grid-column: 1 / -1; text-align:center; padding:3rem; color:var(--md-sys-color-on-surface-variant);">
+      No assets found matching filters.
+    </div>
+  {% endfor %}
+</div>
+
+{% include "partials/pagination.html" %}
+
+<script>
+function promptDeleteAsset(id, name) {
+  showConfirmModal({
+    title: 'Delete Asset & File',
+    body: `Are you sure you want to delete asset <strong>"${name}"</strong>?<br><br><div class="alert alert-error" style="margin-bottom:0; font-size:0.88rem;">⚠️ This will delete the database record AND permanently remove the media file from its storage folder on disk.</div>`,
+    confirmText: 'Delete Asset & File',
+    cancelText: 'Cancel',
+    isCritical: true,
+    onConfirm: () => {
+      let form = document.getElementById('delForm_' + id);
+      if (!form) {
+        form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/admin/assets/${id}/delete`;
+        document.body.appendChild(form);
+      }
+      form.submit();
+    }
+  });
+}
+</script>
+{% include "partials/csv_update_modal.html" %}
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_edit or (instance and instance.id) %}Edit {{ instance.name }} — Asset Admin{% else %}New App Instance — Asset Admin{% endif %}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+  <a href="/admin/instances" style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
+    ← Back to Instances
+  </a>
+  <h1>{% if is_edit or (instance and instance.id) %}Edit App Instance{% else %}Register New App Instance{% endif %}</h1>
+  <p style="color:var(--md-sys-color-on-surface-variant);">
+    {% if is_edit or (instance and instance.id) %}
+      Update instance configuration, package identifier, or display name.
+    {% else %}
+      Create an isolated application context to reference creative content, customize sequences, and apply non-destructive overrides.
+    {% endif %}
+  </p>
+</div>
+
+{% if error %}
+  <div class="banner banner-error" style="margin-bottom:1.5rem;">
+    {{ error }}
+  </div>
+{% endif %}
+
+<form method="POST" action="{% if is_edit or (instance and instance.id) %}/admin/instances/{{ instance.id }}/edit{% else %}/admin/instances/new{% endif %}" class="card" style="max-width:600px;">
+  <div class="form-group">
+    <label class="label" for="instanceName">Instance Name *</label>
+    <input type="text" id="instanceName" name="name" class="input" required value="{{ instance.name if instance else '' }}" placeholder="e.g. PhotoFrame Pro (iOS)">
+  </div>
+
+  <div class="form-group">
+    <label class="label" for="packageName">Package / Bundle Identifier</label>
+    <input type="text" id="packageName" name="package_name" class="input" value="{{ instance.packageName or instance.package_name if (instance and (instance.packageName or instance.package_name) and (instance.packageName != 'None' and instance.package_name != 'None')) else '' }}" placeholder="e.g. com.company.photoframe.pro">
+    <span style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant); display:block; margin-top:0.25rem;">
+      Used for client SDK matching and telemetry aggregation.
+    </span>
+  </div>
+
+  <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.5rem; border-top:1px solid var(--md-sys-color-outline-variant); padding-top:1rem;">
+    <a href="/admin/instances" class="btn btn-outlined">Cancel</a>
+    <button type="submit" class="btn btn-primary">{% if is_edit or (instance and instance.id) %}Save Changes{% else %}Create Instance{% endif %}</button>
+  </div>
+</form>
+{% endblock %}

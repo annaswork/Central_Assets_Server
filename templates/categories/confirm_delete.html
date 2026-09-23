@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Confirm Category Delete — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="max-width:600px; margin:0 auto;">
+  <div class="card" style="border-color:var(--md-sys-color-error);">
+    <div style="display:flex; align-items:center; gap:0.75rem; color:var(--md-sys-color-error);">
+      <span style="font-size:2rem;">⚠️</span>
+      <h2>Cascade Delete Confirmation</h2>
+    </div>
+
+    <p>{{ message }}</p>
+
+    <div class="alert alert-error" style="margin:1rem 0;">
+      <ul style="margin-left:1.25rem;">
+        <li>Subcategories to delete centrally: <strong>{{ details.subcategories_count }}</strong></li>
+        <li>Assets to delete centrally: <strong>{{ details.assets_count }}</strong></li>
+        <li>App instance references affected: <strong>{{ details.referenced_by_instances_count }}</strong> (will become unresolvable)</li>
+      </ul>
+    </div>
+
+    <p style="font-size:0.9rem; color:var(--md-sys-color-on-surface-variant);">
+      This action soft-deletes the category and all its children from the central library.
+      App instances referencing these items will flag them as "Source removed" but will not lose local settings.
+    </p>
+
+    <form method="POST" action="/admin/categories/{{ category.id }}/delete" style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.5rem;">
+      <input type="hidden" name="cascade" value="true">
+      <a href="/admin/categories" class="btn btn-outlined">Cancel</a>
+      <button type="submit" class="btn btn-destructive">Confirm Cascade Delete</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

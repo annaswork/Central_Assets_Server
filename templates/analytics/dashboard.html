@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics Dashboard — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
+  <div>
+    <h1>Telemetry & Analytics</h1>
+    <p style="color:var(--md-sys-color-on-surface-variant);">
+      Real-time operational monitoring and hourly metric rollups across allowed API surfaces.
+    </p>
+  </div>
+
+  <div style="display:flex; gap:0.5rem;">
+    <a href="/admin/analytics/allowed-paths" class="btn btn-outlined">
+      Configure Allowed Paths ⚙️
+    </a>
+  </div>
+</div>
+
+<!-- Stats Grid (Single Line on Desktop) -->
+<div class="grid grid-4" style="margin-bottom:2rem;">
+  <div class="card" style="padding:1.25rem; display:flex; flex-direction:column; justify-content:space-between; min-height:120px;">
+    <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.25rem;">Total Events Tracked</div>
+    <div style="font-size:2rem; font-weight:700; color:var(--md-sys-color-primary); line-height:1.2;">
+      {{ summary.total_events if summary.total_events is defined else 0 }}
+    </div>
+    <div style="font-size:0.75rem; color:var(--app-teal); margin-top:0.25rem; font-weight:500;">● Ingestion Active</div>
+  </div>
+
+  <div class="card" style="padding:1.25rem; display:flex; flex-direction:column; justify-content:space-between; min-height:120px;">
+    <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.25rem;">Monitored Endpoints</div>
+    <div style="font-size:2rem; font-weight:700; color:var(--md-sys-color-secondary); line-height:1.2;">
+      {{ summary.monitored_endpoints_count if summary.monitored_endpoints_count is defined else 0 }}
+    </div>
+    <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.25rem;">Strict allowlist filter</div>
+  </div>
+
+  <div class="card" style="padding:1.25rem; display:flex; flex-direction:column; justify-content:space-between; min-height:120px;">
+    <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.25rem;">Average Latency</div>
+    <div style="font-size:2rem; font-weight:700; color:var(--md-sys-color-primary); line-height:1.2;">
+      {{ summary.avg_latency_ms if summary.avg_latency_ms is defined else '0.0' }} <span style="font-size:1rem; font-weight:400;">ms</span>
+    </div>
+    <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.25rem;">p95 within SLA</div>
+  </div>
+
+  <div class="card" style="padding:1.25rem; display:flex; flex-direction:column; justify-content:space-between; min-height:120px;">
+    <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.25rem;">Error Rate</div>
+    <div style="font-size:2rem; font-weight:700; color:var(--md-sys-color-error); line-height:1.2;">
+      {{ summary.error_rate if summary.error_rate is defined else '0.00' }}%
+    </div>
+    <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.25rem;">24-hour rolling window</div>
+  </div>
+</div>
+
+<!-- Traffic Breakdown Table -->
+<div class="table-responsive card" style="padding:0; margin-bottom:2rem;">
+  <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center;">
+    <h3 style="margin:0;">Endpoint Traffic Breakdown</h3>
+    <span style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">Aggregated hourly rollups</span>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Method</th>
+        <th>Path Template</th>
+        <th style="text-align:right;">Request Volume</th>
+        <th style="text-align:right;">Avg Latency</th>
+        <th style="text-align:right;">Error Count</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if summary.endpoint_stats %}
+        {% for ep in summary.endpoint_stats %}
+          <tr>
+            <td>
+              <span class="badge {% if ep.method == 'GET' %}badge-primary{% elif ep.method == 'POST' %}badge-success{% else %}badge-warning{% endif %}">
+                {{ ep.method }}
+              </span>
+            </td>
+            <td><code>{{ ep.path_template }}</code></td>
+            <td style="text-align:right; font-weight:600;">{{ ep.hits }}</td>
+            <td style="text-align:right;">{{ "%.1f"|format(ep.avg_latency_ms) }} ms</td>
+            <td style="text-align:right; {% if ep.errors > 0 %}color:var(--md-sys-color-error); font-weight:600;{% endif %}">
+              {{ ep.errors }}
+            </td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td colspan="5" style="text-align:center; padding:2.5rem; color:var(--md-sys-color-on-surface-variant);">
+            No telemetry data recorded yet. API traffic to allowlisted endpoints will populate automatically.
+          </td>
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

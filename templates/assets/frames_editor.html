@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% set hide_refresh = true %}
+
+{% block title %}Frame Placeholder Editor — {{ asset.name }}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+  <a href="/admin/assets/{{ asset.id }}/edit" style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
+    ← Back to Edit Asset
+  </a>
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+    <div>
+      <h1>Visual Frame Placeholder Editor</h1>
+      <p style="color:var(--md-sys-color-on-surface-variant);">
+        Asset: <strong>{{ asset.name }}</strong> — Configure sub-bounding boxes for dynamic image/photo injection.
+      </p>
+    </div>
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+      <input type="file" id="editorPhotoInput" accept="image/*" style="display:none;" onchange="uploadEditorFramePhoto(this.files[0])">
+      <button type="button" class="btn btn-outlined" onclick="document.getElementById('editorPhotoInput').click()">
+        📤 Upload / Change Photo
+      </button>
+      <button type="button" class="btn btn-outlined" onclick="autoDetectFrames()">
+        🤖 Auto-Detect (OpenCV)
+      </button>
+      <button type="button" class="btn btn-primary" onclick="saveFrames()">
+        Save Changes
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="grid grid-2" style="grid-template-columns: 2fr 1fr; align-items:start; gap:1.5rem;">
+  <!-- Canvas Workspace -->
+  <div class="card" style="padding:1rem; overflow:auto; display:flex; flex-direction:column; align-items:center;">
+    <div style="margin-bottom:0.75rem; width:100%; display:flex; justify-content:space-between; align-items:center;">
+      <span style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">
+        Click and drag on the canvas to draw new placeholder slots. Select a slot to resize or rotate.
+      </span>
+      <button type="button" class="btn btn-outlined" style="min-height:30px; font-size:0.8rem; padding:2px 8px;" onclick="addManualSlot()">+ Add Slot</button>
+    </div>
+
+    <div style="border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--radius-sm); background:repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%) 50% / 20px 20px; display:inline-block;">
+      <canvas id="frameCanvas" style="max-width:100%; height:auto; display:block; cursor:crosshair;"></canvas>
+    </div>
+  </div>
+
+  <!-- Inspector Sidebar -->
+  <div class="card" style="padding:1rem;">
+    <h3 style="margin-bottom:1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.5rem;">
+      Configured Slots
+    </h3>
+
+    <div id="placeholderInspector" style="display:flex; flex-direction:column; gap:1rem; max-height:600px; overflow-y:auto; padding-right:0.25rem;">
+      <!-- Slot cards dynamically injected by frames.js -->
+    </div>
+  </div>
+</div>
+
+<input type="hidden" id="moreFieldsJson" value="">
+
+<script src="/admin-assets/js/frames.js"></script>
+<script>
+const assetData = {{ asset | tojson }};
+const framesField = (assetData.moreFields && assetData.moreFields.frames) || (assetData.more_fields && assetData.more_fields.frames) || {};
+let currentFrameImageUrl = framesField.image_url || framesField.imageUrl || assetData.thumbnailUrl || assetData.thumbnail_url || '';
+let currentPlaceholders = framesField.coordinates || framesField.placeholders || [];
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (currentFrameImageUrl) {
+    window.initFrameEditor({
+      imageUrl: currentFrameImageUrl,
+      width: framesField.width || 1080,
+      height: framesField.height || 1080,
+      placeholders: currentPlaceholders
+    });
+  } else {
+    drawEmptyCanvasPrompt();
+  }
+});
+
+function drawEmptyCanvasPrompt() {
+  const canvas = document.getElementById('frameCanvas');
+  if (canvas) {
+    canvas.width = 640;
+    canvas.height = 420;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(0, 0, 640, 420);
+    ctx.fillStyle = '#475569';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🖼️ No Frame Photo Assigned', 320, 190);
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.fillText('Click "Upload / Change Photo" above to upload a frame image', 320, 220);
+  }
+}
+
+async function uploadEditorFramePhoto(file) {
+  if (!file) return;
+  const btn = document.querySelector('button[onclick*="editorPhotoInput"]');
+  const origText = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = 'Uploading photo...'; btn.disabled = true; }
+
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('folder', 'assets');
+    if (assetData.categoryId || assetData.category_id) formData.append('categoryId', assetData.categoryId || assetData.category_id);
+    if (assetData.subCategoryId || assetData.sub_category_id) formData.append('subCategoryId', assetData.subCategoryId || assetData.sub_category_id);
+    if (assetData.name) formData.append('assetName', assetData.name);
+    if (assetData.id) formData.append('assetId', assetData.id);
+
+    const upRes = await fetch('/api/v1/media/upload', {
+      method: 'POST',
+      body: formData
+    });
+    const upJson = await upRes.json();
+    if (!upRes.ok) throw new Error(upJson.message || 'Upload failed');
+
+    const newUrl = upJson.data?.url || upJson.url;
+    currentFrameImageUrl = newUrl;
+
+    if (btn) btn.textContent = 'Detecting placeholders...';
+    let detected = [];
+    let dW = upJson.data?.width || 1080;
+    let dH = upJson.data?.height || 1080;
+
+    try {
+      const detectRes = await fetch(`/api/v1/media/detect-frames?imageUrl=${encodeURIComponent(newUrl)}`, {
+        method: 'POST'
+      });
+      if (detectRes.ok) {
+        const dJson = await detectRes.json();
+        detected = dJson.coordinates || dJson.placeholders || [];
+        if (dJson.width) dW = dJson.width;
+        if (dJson.height) dH = dJson.height;
+      }
+    } catch (e) {
+      console.warn('Auto detect failed:', e);
+    }
+
+    currentPlaceholders = detected;
+    window.initFrameEditor({
+      imageUrl: newUrl,
+      width: dW,
+      height: dH,
+      placeholders: detected
+    });
+    alert(`Photo uploaded successfully with ${detected.length} placeholder slot(s) detected! Click "Save Changes" to save.`);
+  } catch (err) {
+    alert('Failed to upload frame photo: ' + err.message);
+  } finally {
+    if (btn) { btn.textContent = origText; btn.disabled = false; }
+  }
+}
+
+async function autoDetectFrames() {
+  if (!currentFrameImageUrl) {
+    alert('No frame photo available. Please click "Upload / Change Photo" first.');
+    return;
+  }
+  
+  const btn = event.target;
+  const origText = btn.textContent;
+  btn.textContent = 'Analyzing contours...';
+  btn.disabled = true;
+  
+  try {
+    const res = await fetch(`/api/v1/media/detect-frames?imageUrl=${encodeURIComponent(currentFrameImageUrl)}`, {
+      method: 'POST'
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Auto-detection failed');
+    
+    const detected = json.coordinates || json.data?.slots || json.placeholders || [];
+    if (detected.length === 0) {
+      alert('No transparent or distinct frame regions were detected in this image. You can draw them manually.');
+    } else {
+      alert(`Successfully detected ${detected.length} frame placeholder(s)!`);
+      currentPlaceholders = detected;
+      window.initFrameEditor({
+        imageUrl: currentFrameImageUrl,
+        width: json.width || framesField.width || 1080,
+        height: json.height || framesField.height || 1080,
+        placeholders: detected
+      });
+    }
+  } catch (err) {
+    alert('Error detecting frames: ' + err.message);
+  } finally {
+    btn.textContent = origText;
+    btn.disabled = false;
+  }
+}
+
+async function saveFrames() {
+  const hiddenJson = document.getElementById('moreFieldsJson').value;
+  let parsed = {};
+  try {
+    parsed = hiddenJson ? JSON.parse(hiddenJson) : {};
+  } catch (e) {}
+
+  const rawCoords = (parsed.frames && (parsed.frames.coordinates || parsed.frames.placeholders)) || currentPlaceholders;
+  const cleanCoordinates = (Array.isArray(rawCoords) ? rawCoords : []).map((c, idx) => {
+    let rot = parseFloat(c.rotation || 0) || 0;
+    let w = parseFloat(c.width || 0) || 0;
+    let h = parseFloat(c.height || 0) || 0;
+    while (rot > 45) { rot -= 90; const t = w; w = h; h = t; }
+    while (rot < -45) { rot += 90; const t = w; w = h; h = t; }
+    rot = Math.max(-45, Math.min(45, Math.round(rot * 100) / 100));
+    return {
+      x: Math.round(parseFloat(c.x || 0)),
+      y: Math.round(parseFloat(c.y || 0)),
+      height: Math.round(h),
+      width: Math.round(w),
+      rotation: rot,
+      elevation: c.elevation !== undefined ? parseInt(c.elevation, 10) : idx
+    };
+  });
+
+  const currentMoreFields = assetData.moreFields || assetData.more_fields || {};
+  currentMoreFields['frames'] = {
+    image_url: currentFrameImageUrl,
+    coordinates: cleanCoordinates
+  };
+
+  try {
+    const res = await fetch(`/api/v1/assets/${assetData.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        moreFields: currentMoreFields
+      })
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to update asset frames');
+    
+    alert('Frame placeholders saved successfully!');
+    window.location.href = `/admin/assets/${assetData.id}/edit`;
+  } catch (err) {
+    alert('Failed to save frames: ' + err.message);
+  }
+}
+</script>
+{% endblock %}
+

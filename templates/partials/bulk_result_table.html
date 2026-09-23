@@ -1,0 +1,45 @@
+<!-- bulk_result_table.html: Detailed outcome report for bulk operations (created, skipped, failed) -->
+<div class="card" style="padding:0; margin-top:1.5rem;">
+  <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center;">
+    <h3 style="margin:0;">Bulk Processing Outcome</h3>
+    <div style="display:flex; gap:0.5rem;">
+      <span class="badge badge-success">Created: {{ result.created|length if result and result.created else 0 }}</span>
+      <span class="badge badge-warning">Skipped: {{ result.skipped|length if result and result.skipped else 0 }}</span>
+      <span class="badge badge-error">Failed: {{ result.errors|length if result and result.errors else 0 }}</span>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th style="width:70px;">Row</th>
+        <th>Item Name</th>
+        <th>Status</th>
+        <th>Details / Reason</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if result and result.errors %}
+        {% for err in result.errors %}
+          <tr>
+            <td>{{ err.row or '—' }}</td>
+            <td><strong>{{ err.name or 'Item' }}</strong></td>
+            <td><span class="badge badge-error">Failed</span></td>
+            <td style="color:var(--md-sys-color-error); font-size:0.85rem;">{{ err.error or err.reason }}</td>
+          </tr>
+        {% endfor %}
+      {% endif %}
+
+      {% if result and result.created %}
+        {% for item in result.created %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td><strong>{{ item.name }}</strong></td>
+            <td><span class="badge badge-success">Created</span></td>
+            <td style="color:var(--md-sys-color-on-surface-variant); font-size:0.85rem;">ID: <code>{{ item.id }}</code></td>
+          </tr>
+        {% endfor %}
+      {% endif %}
+    </tbody>
+  </table>
+</div>

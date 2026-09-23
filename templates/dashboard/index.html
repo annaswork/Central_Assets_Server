@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
+  <div>
+    <h1>Platform Dashboard</h1>
+    <p style="color:var(--md-sys-color-on-surface-variant);">Overview of central library and app instances</p>
+  </div>
+
+  <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+    <a href="/admin/categories/new" class="btn btn-primary">+ Category</a>
+    <a href="/admin/assets/new-single" class="btn btn-primary">+ Asset</a>
+    <a href="/admin/instances/new" class="btn btn-secondary">+ App Instance</a>
+  </div>
+</div>
+
+<!-- Key Stat Cards Grid -->
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:1.25rem; margin-bottom:2rem;">
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <span style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem; font-weight:600;">CATEGORIES</span>
+      <span style="font-size:1.5rem;">📁</span>
+    </div>
+    <div style="font-size:2rem; font-weight:700; color:var(--md-sys-color-primary);">{{ counts.categories }}</div>
+    <a href="/admin/categories" style="font-size:0.85rem;">Manage categories →</a>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <span style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem; font-weight:600;">SUBCATEGORIES</span>
+      <span style="font-size:1.5rem;">📂</span>
+    </div>
+    <div style="font-size:2rem; font-weight:700; color:var(--md-sys-color-primary);">{{ counts.subcategories }}</div>
+    <a href="/admin/subcategories" style="font-size:0.85rem;">Manage subcategories →</a>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <span style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem; font-weight:600;">CENTRAL ASSETS</span>
+      <span style="font-size:1.5rem;">🖼️</span>
+    </div>
+    <div style="font-size:2rem; font-weight:700; color:var(--md-sys-color-primary);">{{ counts.assets }}</div>
+    <a href="/admin/assets" style="font-size:0.85rem;">Browse assets →</a>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <span style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem; font-weight:600;">APP INSTANCES</span>
+      <span style="font-size:1.5rem;">📱</span>
+    </div>
+    <div style="font-size:2rem; font-weight:700; color:var(--md-sys-color-secondary);">{{ counts.app_instances }}</div>
+    <a href="/admin/instances" style="font-size:0.85rem;">Manage instances →</a>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <span style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem; font-weight:600;">ACTIVE API KEYS</span>
+      <span style="font-size:1.5rem;">🔑</span>
+    </div>
+    <div style="font-size:2rem; font-weight:700; color:var(--app-accent);">{{ counts.active_keys }}</div>
+    <a href="/admin/keys" style="font-size:0.85rem;">Key settings →</a>
+  </div>
+</div>
+
+<!-- Analytics Performance Summary -->
+<div class="card">
+  <h2>Traffic & Analytics (Past 24 Hours)</h2>
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-top:0.5rem;">
+    <div>
+      <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">Total API Requests</div>
+      <div style="font-size:1.5rem; font-weight:700;">{{ summary.total_requests }}</div>
+    </div>
+    <div>
+      <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">Error Rate</div>
+      <div style="font-size:1.5rem; font-weight:700; color:{% if summary.error_rate > 5 %}var(--md-sys-color-error){% else %}var(--app-success){% endif %};">
+        {{ summary.error_rate }}%
+      </div>
+    </div>
+    <div>
+      <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">Avg Request Latency</div>
+      <div style="font-size:1.5rem; font-weight:700;">{{ summary.avg_duration_ms }} ms</div>
+    </div>
+    <div>
+      <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">Bytes Transferred</div>
+      <div style="font-size:1.5rem; font-weight:700;">{{ (summary.total_bytes / 1024)|round(1) }} KB</div>
+    </div>
+  </div>
+  <div style="margin-top:0.75rem;">
+    <a href="/admin/analytics" class="btn btn-outlined" style="display:inline-flex;">View Full Analytics Dashboard →</a>
+  </div>
+</div>
+{% endblock %}

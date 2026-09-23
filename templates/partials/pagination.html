@@ -1,0 +1,17 @@
+{% if data and data.total > data.page_size %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-top:1.5rem; flex-wrap:wrap; gap:1rem;">
+  <span style="font-size:0.9rem; color:var(--md-sys-color-on-surface-variant);">
+    Showing {{ ((data.page - 1) * data.page_size) + 1 }} - {{ [data.page * data.page_size, data.total]|min }} of {{ data.total }} items
+  </span>
+
+  <div style="display:flex; gap:0.5rem;">
+    {% if data.page > 1 %}
+      <a href="?page={{ data.page - 1 }}{% if search %}{% if active_tab == 'assets' %}&q={{ search }}{% else %}&search={{ search }}{% endif %}{% endif %}{% if selected_cat %}&categoryId={{ selected_cat }}{% elif selected_category_id %}&categoryId={{ selected_category_id }}{% endif %}{% if selected_sub %}&subCategoryId={{ selected_sub }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% elif sort %}&sort={{ sort }}{% endif %}{% if order %}&order={{ order }}{% endif %}" class="btn btn-outlined">Previous</a>
+    {% endif %}
+
+    {% if data.has_next %}
+      <a href="?page={{ data.page + 1 }}{% if search %}{% if active_tab == 'assets' %}&q={{ search }}{% else %}&search={{ search }}{% endif %}{% endif %}{% if selected_cat %}&categoryId={{ selected_cat }}{% elif selected_category_id %}&categoryId={{ selected_category_id }}{% endif %}{% if selected_sub %}&subCategoryId={{ selected_sub }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% elif sort %}&sort={{ sort }}{% endif %}{% if order %}&order={{ order }}{% endif %}" class="btn btn-outlined">Next</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}

@@ -1,0 +1,7 @@
+<!-- override_badge.html: Visual badge showing an item has been customized for this app instance with optional reset -->
+<span class="badge badge-warning" style="display:inline-flex; align-items:center; gap:0.25rem; font-size:0.75rem;">
+  <span>✏️ Edited for this app</span>
+  {% if on_reset %}
+    <button type="button" onclick="{{ on_reset }}" style="background:none; border:none; cursor:pointer; color:inherit; padding:0; margin-left:0.25rem;" title="Reset to central defaults">✕</button>
+  {% endif %}
+</span>

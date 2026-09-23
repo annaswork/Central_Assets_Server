@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}Categories — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
+  <div>
+    <h1>Central Categories</h1>
+    <p style="color:var(--md-sys-color-on-surface-variant);">Top-level browse buckets for creative assets</p>
+  </div>
+
+  <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+    <button type="button" class="btn btn-outlined" onclick="openCentralReorderModal('category')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;">
+        <line x1="8" y1="6" x2="21" y2="6"></line>
+        <line x1="8" y1="12" x2="21" y2="12"></line>
+        <line x1="8" y1="18" x2="21" y2="18"></line>
+        <line x1="3" y1="6" x2="3.01" y2="6"></line>
+        <line x1="3" y1="12" x2="3.01" y2="12"></line>
+        <line x1="3" y1="18" x2="3.01" y2="18"></line>
+      </svg>
+      Reorder
+    </button>
+    <button type="button" class="btn btn-outlined" onclick="openCsvUpdateModal('/admin/categories/upload-csv')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="17 8 12 3 7 8"></polyline>
+        <line x1="12" y1="3" x2="12" y2="15"></line>
+      </svg>
+      Upload CSV
+    </button>
+    <a href="/admin/categories/bulk" class="btn btn-outlined">Bulk Add</a>
+    <a href="/admin/categories/new" class="btn btn-primary">+ New Category</a>
+  </div>
+</div>
+
+<!-- Search Bar -->
+<div class="card search-filter-card" style="padding:0.85rem 1rem; margin-bottom:1.5rem; overflow-x:auto;">
+  <form method="GET" action="/admin/categories" class="search-filter-form" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem; width:100%;">
+    <div class="filter-group-left" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; flex-shrink:0; white-space:nowrap;">
+      <select name="sort" id="categorySortSelect" class="select" style="min-width:140px; max-width:180px;" onchange="this.form.submit()">
+        <option value="sequence" {% if sort == 'sequence' or not sort %}selected{% endif %}>Sequence / Custom</option>
+        <option value="newest" {% if sort == 'newest' %}selected{% endif %}>Newest First</option>
+        <option value="oldest" {% if sort == 'oldest' %}selected{% endif %}>Oldest First</option>
+      </select>
+      {% if (sort and sort in ('newest', 'oldest')) and not search %}
+        <a href="/admin/categories" class="btn btn-outlined btn-filter">Clear</a>
+      {% endif %}
+    </div>
+
+    <div class="search-group-right" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; margin-left:auto; white-space:nowrap; flex-shrink:0;">
+      <input type="text" name="search" class="input" placeholder="Search categories by name..." value="{{ search }}" style="max-width:380px;">
+      <button type="submit" class="btn btn-outlined btn-filter">Search</button>
+      {% if search or (sort and sort in ('newest', 'oldest')) %}
+        <a href="/admin/categories" class="btn btn-outlined btn-filter">Clear</a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+<!-- Bulk Actions Toolbar -->
+{% include "partials/bulk_actions_bar.html" %}
+
+<!-- Data Table (Stacking cards on mobile <600px) -->
+<div class="table-responsive card" style="padding:0;">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th class="table-checkbox-cell"><input type="checkbox" id="masterSelectAll" title="Select All" onchange="toggleMasterSelect(this.checked)"></th>
+        <th style="width:60px;">Thumb</th>
+        <th>Category Name</th>
+        <th>Contents</th>
+        <th>CREATED</th>
+        <th style="text-align:right;">ACTIONS</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in data['items'] %}
+        <tr {% if item.is_enabled is defined and item.is_enabled == False %}style="opacity:0.75;"{% endif %}>
+          <td class="table-checkbox-cell" data-label="Select">
+            <input type="checkbox" class="row-select-checkbox" value="{{ item.id }}" onchange="updateBulkActionsBar()">
+          </td>
+          <td data-label="Thumbnail">
+            {% if item.thumbnail_url %}
+              <img src="{{ item.thumbnail_url }}" alt="{{ item.name }}" class="table-thumb">
+            {% else %}
+              <div class="table-thumb" style="display:flex; align-items:center; justify-content:center; font-size:1.2rem;">📁</div>
+            {% endif %}
+          </td>
+          <td data-label="Name">
+            <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
+              <a href="/admin/subcategories?categoryId={{ item.id }}" style="color:inherit; text-decoration:none;"><strong>{{ item.name }}</strong></a>
+              {% if item.is_premium %}
+                <span class="badge badge-premium" style="font-size:0.7rem; padding:0.15rem 0.45rem;">★ Premium</span>
+              {% endif %}
+              {% if item.is_enabled is defined and item.is_enabled == False %}
+                <span class="badge badge-secondary" style="font-size:0.7rem; padding:0.15rem 0.45rem;">Disabled</span>
+              {% endif %}
+            </div>
+          </td>
+          <td data-label="Contents">
+            <div style="display:flex; gap:0.35rem; flex-wrap:wrap;">
+              <a href="/admin/subcategories?categoryId={{ item.id }}" class="badge {{ 'badge-primary' if (item.subcategory_count and item.subcategory_count > 0) else 'badge-secondary' }}" style="text-decoration:none;" title="View Subcategories">{{ item.subcategory_count | default(0) }} Subs</a>
+              <a href="/admin/assets?categoryId={{ item.id }}" class="badge {{ 'badge-premium' if (item.asset_count and item.asset_count > 0) else 'badge-secondary' }}" style="text-decoration:none;" title="View Assets">{{ item.asset_count | default(0) }} Assets</a>
+            </div>
+          </td>
+          <td data-label="CREATED" class="table-date-cell" data-utc="{{ item.created_at }}">
+            {% if item.created_at %}
+              {{ item.created_at | format_datetime }}
+            {% else %}
+              <span style="color:var(--md-sys-color-on-surface-variant);">—</span>
+            {% endif %}
+          </td>
+          <td data-label="ACTIONS" style="text-align:right;">
+            <div class="action-buttons">
+              <a href="/admin/categories/{{ item.id }}/edit" class="action-btn-circle action-btn-edit" title="Edit Category">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                </svg>
+              </a>
+              <form id="delCatForm_{{ item.id }}" method="POST" action="/admin/categories/{{ item.id }}/delete" style="display:none;">
+                <input type="hidden" name="cascade" value="false">
+              </form>
+              <button type="button" class="action-btn-circle action-btn-delete" title="Delete Category" onclick="promptDeleteCategory('{{ item.id }}', '{{ item.name }}', {{ item.subcategory_count | default(0) }}, {{ item.asset_count | default(0) }})">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="5" style="text-align:center; padding:2rem; color:var(--md-sys-color-on-surface-variant);">
+            No categories found. Click "+ New Category" or "Bulk Add" to get started.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% include "partials/pagination.html" %}
+
+<script>
+function promptDeleteCategory(id, name, subCount, assetCount) {
+  const hasChildren = subCount > 0 || assetCount > 0;
+  if (hasChildren) {
+    showConfirmModal({
+      title: 'CRITICAL WARNING: Active Hierarchy Detected',
+      body: `Category <strong>"${name}"</strong> currently contains <strong>${subCount} subcategor${subCount === 1 ? 'y' : 'ies'}</strong> and <strong>${assetCount} asset${assetCount === 1 ? '' : 's'}</strong>.<br><br>
+             <div class="alert alert-error" style="margin-bottom:0; font-size:0.9rem;">
+               🚨 <strong>CRITICAL IMPACT:</strong> Deleting this category will permanently cascade delete all subcategories, all child assets, and remove the category storage folder from disk! This action cannot be undone.
+             </div>`,
+      confirmText: 'Confirm Cascade Delete',
+      cancelText: 'Cancel',
+      isCritical: true,
+      onConfirm: () => {
+        const form = document.getElementById('delCatForm_' + id);
+        if (form) {
+          form.querySelector('input[name="cascade"]').value = 'true';
+          form.submit();
+        }
+      }
+    });
+  } else {
+    showConfirmModal({
+      title: 'Delete Empty Category',
+      body: `Are you sure you want to delete empty category <strong>"${name}"</strong>?<br><br>Its storage folder will be removed from disk.`,
+      confirmText: 'Delete Category',
+      cancelText: 'Cancel',
+      isCritical: false,
+      onConfirm: () => {
+        const form = document.getElementById('delCatForm_' + id);
+        if (form) form.submit();
+      }
+    });
+  }
+}
+</script>
+{% include "partials/csv_update_modal.html" %}
+{% endblock %}

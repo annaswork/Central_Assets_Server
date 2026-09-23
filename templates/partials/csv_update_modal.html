@@ -1,0 +1,319 @@
+<!-- Reusable CSV Column Update Modal -->
+<div id="csvUpdateModal" class="modal-overlay" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.65); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding:1rem;" onclick="handleCsvModalBackdrop(event)">
+  <div class="modal-container" style="background:var(--md-sys-color-surface, #1e293b); color:var(--md-sys-color-on-surface, #f8fafc); border:1px solid var(--md-sys-color-outline-variant, #334155); border-radius:14px; max-width:560px; width:100%; box-shadow:var(--md-sys-elevation-3, 0 10px 25px rgba(0,0,0,0.5)); overflow:hidden; display:flex; flex-direction:column; animation:modalPopIn 0.2s ease-out;" onclick="event.stopPropagation()">
+    
+    <!-- Modal Header -->
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:1.1rem 1.4rem; border-bottom:1px solid var(--md-sys-color-outline-variant, #334155); background:var(--md-sys-color-surface-container-high, #1e293b);">
+      <div style="display:flex; align-items:center; gap:0.6rem;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--md-sys-color-primary, #60a5fa)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="17 8 12 3 7 8"></polyline>
+          <line x1="12" y1="3" x2="12" y2="15"></line>
+        </svg>
+        <h3 style="margin:0; font-size:1.15rem; font-weight:700; color:var(--md-sys-color-on-surface, #f8fafc);" id="csvModalTitle">Update Data via CSV</h3>
+      </div>
+      <button type="button" onclick="closeCsvUpdateModal()" style="background:transparent; border:none; color:var(--md-sys-color-on-surface-variant, #94a3b8); cursor:pointer; font-size:1.25rem; line-height:1; padding:0.25rem; border-radius:6px;" title="Close">✕</button>
+    </div>
+
+    <!-- Modal Body -->
+    <div style="padding:1.4rem; display:flex; flex-direction:column; gap:1.1rem;">
+      
+      <!-- Filter Scoping Alert Banner -->
+      <div id="csvModalFilterNotice" style="padding:0.75rem 1rem; border-radius:8px; font-size:0.875rem; line-height:1.4; display:flex; align-items:flex-start; gap:0.6rem;">
+        <!-- Dynamically populated -->
+      </div>
+
+      <!-- File Dropzone -->
+      <div id="csvDropzone" style="border:2px dashed var(--md-sys-color-outline-variant, #475569); border-radius:10px; padding:1.8rem 1.2rem; text-align:center; background:var(--md-sys-color-surface-container-lowest, #0f172a); cursor:pointer; transition:border-color 0.2s, background 0.2s;" onclick="document.getElementById('csvModalFileInput').click()" ondragover="handleCsvDragOver(event)" ondragleave="handleCsvDragLeave(event)" ondrop="handleCsvDrop(event)">
+        <input type="file" id="csvModalFileInput" accept=".csv" style="display:none;" onchange="handleCsvFileSelected(event)">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--md-sys-color-primary, #60a5fa)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:0.5rem;">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        <div id="csvFileSelectPrompt">
+          <p style="margin:0 0 0.35rem 0; font-weight:600; font-size:0.95rem;">Click to browse or drag & drop CSV file</p>
+          <span style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant, #94a3b8);">Only .csv files supported</span>
+        </div>
+        <div id="csvFileSelectedInfo" style="display:none;">
+          <p style="margin:0; font-weight:700; color:var(--app-success, #4ade80); font-size:0.95rem;" id="csvSelectedFileName">filename.csv</p>
+          <span style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant, #94a3b8);" id="csvSelectedFileSize">0 KB</span>
+        </div>
+      </div>
+
+      <!-- Instructions Hint -->
+      <div style="font-size:0.82rem; color:var(--md-sys-color-on-surface-variant, #94a3b8); line-height:1.45; background:rgba(255,255,255,0.03); padding:0.75rem 0.9rem; border-radius:8px;">
+        <strong style="color:var(--md-sys-color-on-surface, #f8fafc);">How it works:</strong>
+        <ul style="margin:0.35rem 0 0 1.1rem; padding:0;">
+          <li>Your CSV must contain a <code style="color:var(--md-sys-color-primary, #60a5fa); background:rgba(255,255,255,0.08); padding:1px 4px; border-radius:4px;">name</code> column to match existing records.</li>
+          <li>All other columns will update the matching item's data attributes.</li>
+          <li>If an active filter is applied on this page, only items matching the filter will be updated.</li>
+        </ul>
+      </div>
+
+      <!-- Result Banner & Details (Hidden by default) -->
+      <div id="csvModalResults" style="display:none; flex-direction:column; gap:0.6rem;">
+        <div id="csvResultsSummary" style="padding:0.75rem 1rem; border-radius:8px; font-weight:600; font-size:0.9rem;"></div>
+        <div id="csvResultsDetails" style="max-height:160px; overflow-y:auto; font-size:0.8rem; border-radius:6px; padding:0.5rem; background:rgba(0,0,0,0.25); border:1px solid var(--md-sys-color-outline-variant, #334155); display:none;"></div>
+      </div>
+
+    </div>
+
+    <!-- Modal Footer -->
+    <div style="display:flex; justify-content:flex-end; gap:0.75rem; padding:1rem 1.4rem; border-top:1px solid var(--md-sys-color-outline-variant, #334155); background:var(--md-sys-color-surface-container, #1e293b);">
+      <button type="button" id="csvModalCancelBtn" class="btn btn-outlined" onclick="closeCsvUpdateModal()">Cancel</button>
+      <button type="button" id="csvModalSubmitBtn" class="btn btn-primary" onclick="submitCsvUpdate()" disabled>
+        <span id="csvSubmitBtnText">Upload & Update</span>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<style>
+@keyframes modalPopIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+#csvDropzone.dragover {
+  border-color: var(--md-sys-color-primary, #60a5fa) !important;
+  background: rgba(96, 165, 250, 0.08) !important;
+}
+</style>
+
+<script>
+let currentCsvTargetEndpoint = '';
+let selectedCsvFile = null;
+let hasPerformedCsvUpdate = false;
+
+function openCsvUpdateModal(endpoint) {
+  currentCsvTargetEndpoint = endpoint;
+  selectedCsvFile = null;
+  hasPerformedCsvUpdate = false;
+
+  const modal = document.getElementById('csvUpdateModal');
+  const fileInput = document.getElementById('csvModalFileInput');
+  const prompt = document.getElementById('csvFileSelectPrompt');
+  const fileInfo = document.getElementById('csvFileSelectedInfo');
+  const submitBtn = document.getElementById('csvModalSubmitBtn');
+  const resultsDiv = document.getElementById('csvModalResults');
+  const cancelBtn = document.getElementById('csvModalCancelBtn');
+  const submitText = document.getElementById('csvSubmitBtnText');
+
+  if (fileInput) fileInput.value = '';
+  if (prompt) prompt.style.display = 'block';
+  if (fileInfo) fileInfo.style.display = 'none';
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.style.display = 'inline-flex';
+  }
+  if (submitText) submitText.textContent = 'Upload & Update';
+  if (cancelBtn) cancelBtn.textContent = 'Cancel';
+  if (resultsDiv) resultsDiv.style.display = 'none';
+
+  // Analyze active filters in current URL
+  const searchParams = new URLSearchParams(window.location.search);
+  const filterNotice = document.getElementById('csvModalFilterNotice');
+  const activeFilters = [];
+
+  if (searchParams.get('categoryId')) {
+    activeFilters.push(`Category ID: ${searchParams.get('categoryId')}`);
+  }
+  if (searchParams.get('subCategoryId')) {
+    activeFilters.push(`Subcategory ID: ${searchParams.get('subCategoryId')}`);
+  }
+  if (searchParams.get('search')) {
+    activeFilters.push(`Search: "${searchParams.get('search')}"`);
+  }
+  if (searchParams.get('q')) {
+    activeFilters.push(`Search: "${searchParams.get('q')}"`);
+  }
+
+  if (filterNotice) {
+    if (activeFilters.length > 0) {
+      filterNotice.style.background = 'var(--app-premium-container, #78350f)';
+      filterNotice.style.color = 'var(--app-premium, #fbbf24)';
+      filterNotice.style.border = '1px solid rgba(251, 191, 36, 0.3)';
+      filterNotice.innerHTML = `
+        <span style="font-size:1.1rem; line-height:1;">⚠️</span>
+        <div>
+          <strong>Active filter applied:</strong> ${activeFilters.join(', ')}<br>
+          <span style="font-size:0.8rem; opacity:0.9;">CSV updates will <strong>only apply</strong> to items matching this filter. Other items in the CSV will be safely skipped.</span>
+        </div>
+      `;
+    } else {
+      filterNotice.style.background = 'var(--md-sys-color-surface-container, #1e293b)';
+      filterNotice.style.color = 'var(--md-sys-color-on-surface-variant, #94a3b8)';
+      filterNotice.style.border = '1px solid var(--md-sys-color-outline-variant, #334155)';
+      filterNotice.innerHTML = `
+        <span style="font-size:1.1rem; line-height:1;">ℹ️</span>
+        <div>
+          <strong>No active filter:</strong> CSV updates will match against all items in this section.
+        </div>
+      `;
+    }
+  }
+
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeCsvUpdateModal() {
+  const modal = document.getElementById('csvUpdateModal');
+  if (modal) modal.style.display = 'none';
+  if (hasPerformedCsvUpdate) {
+    window.location.reload();
+  }
+}
+
+function handleCsvModalBackdrop(event) {
+  if (event.target.id === 'csvUpdateModal') {
+    closeCsvUpdateModal();
+  }
+}
+
+function handleCsvDragOver(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const dz = document.getElementById('csvDropzone');
+  if (dz) dz.classList.add('dragover');
+}
+
+function handleCsvDragLeave(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const dz = document.getElementById('csvDropzone');
+  if (dz) dz.classList.remove('dragover');
+}
+
+function handleCsvDrop(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const dz = document.getElementById('csvDropzone');
+  if (dz) dz.classList.remove('dragover');
+
+  if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+    const file = event.dataTransfer.files[0];
+    if (file.name.toLowerCase().endsWith('.csv')) {
+      setSelectedCsvFile(file);
+    } else {
+      alert('Please select a valid .csv file.');
+    }
+  }
+}
+
+function handleCsvFileSelected(event) {
+  const file = event.target.files && event.target.files[0];
+  if (file) {
+    if (file.name.toLowerCase().endsWith('.csv')) {
+      setSelectedCsvFile(file);
+    } else {
+      alert('Please select a valid .csv file.');
+      event.target.value = '';
+    }
+  }
+}
+
+function setSelectedCsvFile(file) {
+  selectedCsvFile = file;
+  const prompt = document.getElementById('csvFileSelectPrompt');
+  const fileInfo = document.getElementById('csvFileSelectedInfo');
+  const nameEl = document.getElementById('csvSelectedFileName');
+  const sizeEl = document.getElementById('csvSelectedFileSize');
+  const submitBtn = document.getElementById('csvModalSubmitBtn');
+
+  if (prompt) prompt.style.display = 'none';
+  if (fileInfo) fileInfo.style.display = 'block';
+  if (nameEl) nameEl.textContent = file.name;
+  if (sizeEl) sizeEl.textContent = `${(file.size / 1024).toFixed(1)} KB`;
+  if (submitBtn) submitBtn.disabled = false;
+}
+
+async function submitCsvUpdate() {
+  if (!selectedCsvFile || !currentCsvTargetEndpoint) return;
+
+  const submitBtn = document.getElementById('csvModalSubmitBtn');
+  const submitText = document.getElementById('csvSubmitBtnText');
+  const cancelBtn = document.getElementById('csvModalCancelBtn');
+  const resultsDiv = document.getElementById('csvModalResults');
+  const summaryEl = document.getElementById('csvResultsSummary');
+  const detailsEl = document.getElementById('csvResultsDetails');
+
+  if (submitBtn) submitBtn.disabled = true;
+  if (submitText) submitText.textContent = 'Updating...';
+
+  const formData = new FormData();
+  formData.append('csv_file', selectedCsvFile);
+
+  // Preserve active filters in form data and endpoint query
+  const searchParams = new URLSearchParams(window.location.search);
+  for (const [key, val] of searchParams.entries()) {
+    formData.append(key, val);
+  }
+
+  const separator = currentCsvTargetEndpoint.includes('?') ? '&' : '?';
+  const targetUrl = `${currentCsvTargetEndpoint}${window.location.search ? separator + window.location.search.substring(1) : ''}`;
+
+  try {
+    const res = await fetch(targetUrl, {
+      method: 'POST',
+      body: formData
+    });
+
+    const data = await res.json();
+    if (resultsDiv) resultsDiv.style.display = 'flex';
+
+    if (data.success) {
+      hasPerformedCsvUpdate = true;
+      if (summaryEl) {
+        summaryEl.style.background = 'var(--app-success-bg, #14532d)';
+        summaryEl.style.color = 'var(--app-success, #4ade80)';
+        summaryEl.style.border = '1px solid rgba(74, 222, 128, 0.3)';
+        summaryEl.innerHTML = `✓ ${data.message || `Updated ${data.updated_count} item(s).`}`;
+      }
+
+      let detailsHtml = '';
+      if (data.updated && data.updated.length > 0) {
+        detailsHtml += `<div style="color:var(--app-success, #4ade80); font-weight:600; margin-bottom:4px;">Updated:</div>`;
+        data.updated.forEach(u => {
+          detailsHtml += `<div style="padding:2px 0;">• <strong>${u.name}</strong> (fields: ${u.fields.join(', ')})</div>`;
+        });
+      }
+      if (data.skipped && data.skipped.length > 0) {
+        detailsHtml += `<div style="color:var(--app-premium, #fbbf24); font-weight:600; margin-top:8px; margin-bottom:4px;">Skipped / Unmatched in Filter:</div>`;
+        data.skipped.forEach(s => {
+          detailsHtml += `<div style="padding:2px 0; color:var(--md-sys-color-on-surface-variant, #94a3b8);">• <em>${s.name || 'Unnamed'}</em>: ${s.reason || 'Not found'}</div>`;
+        });
+      }
+
+      if (detailsEl) {
+        detailsEl.innerHTML = detailsHtml;
+        detailsEl.style.display = 'block';
+      }
+
+      if (submitBtn) submitBtn.style.display = 'none';
+      if (cancelBtn) cancelBtn.textContent = 'Done (Reload)';
+    } else {
+      if (summaryEl) {
+        summaryEl.style.background = 'rgba(239, 68, 68, 0.15)';
+        summaryEl.style.color = 'var(--md-sys-color-error, #f87171)';
+        summaryEl.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+        summaryEl.innerHTML = `✕ Error: ${data.message || 'Failed to apply CSV updates'}`;
+      }
+      if (submitBtn) submitBtn.disabled = false;
+      if (submitText) submitText.textContent = 'Try Again';
+    }
+  } catch (err) {
+    if (resultsDiv) resultsDiv.style.display = 'flex';
+    if (summaryEl) {
+      summaryEl.style.background = 'rgba(239, 68, 68, 0.15)';
+      summaryEl.style.color = 'var(--md-sys-color-error, #f87171)';
+      summaryEl.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+      summaryEl.innerHTML = `✕ Request error: ${err.message}`;
+    }
+    if (submitBtn) submitBtn.disabled = false;
+    if (submitText) submitText.textContent = 'Try Again';
+  }
+}
+</script>

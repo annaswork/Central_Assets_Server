@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Asset Platform Admin{% endblock %}</title>
+
+  <!-- Inline Script to prevent Theme and Sidebar Flash before first paint -->
+  <script>
+    (function() {
+      var storedTheme = localStorage.getItem('ui.theme');
+      var theme = storedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+
+      var storedSidebar = localStorage.getItem('ui.sidebar_collapsed');
+      if (storedSidebar === 'true') {
+        document.documentElement.classList.add('sidebar-collapsed');
+      }
+    })();
+  </script>
+
+  <!-- CSS Design Tokens, Reset, Components, Responsive, and Admin Styles -->
+  <link rel="stylesheet" href="/admin-assets/css/tokens.css?v=3">
+  <link rel="stylesheet" href="/admin-assets/css/base.css?v=3">
+  <link rel="stylesheet" href="/admin-assets/css/components.css?v=4">
+  <link rel="stylesheet" href="/admin-assets/css/responsive.css?v=3">
+  <link rel="stylesheet" href="/admin-assets/css/admin.css?v=3">
+
+  <script defer src="/admin-assets/js/theme.js"></script>
+  <script defer src="/admin-assets/js/sidebar.js"></script>
+  <script defer src="/admin-assets/js/dialogs.js"></script>
+  <script defer src="/admin-assets/js/bulk_actions.js"></script>
+  <script defer src="/admin-assets/js/uploader.js"></script>
+  <script defer src="/admin-assets/js/media_cropper.js?v=2"></script>
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  <div class="app-container">
+    {% if session %}
+      <!-- Desktop Navigation Drawer (905px+) -->
+      {% include "partials/nav_drawer.html" %}
+
+      <!-- Tablet Navigation Rail (600px - 904px) -->
+      {% include "partials/nav_rail.html" %}
+    {% endif %}
+
+    <div class="main-content">
+      {% if session and not (request and request.url.path.endswith('/login')) %}
+      {% set current_path = (request.url.path.rstrip('/') if (request and request.url and request.url.path) else '') %}
+      {% set show_global_search = current_path in ['/admin', '/admin/dashboard', '/admin/categories', '/admin/subcategories', '/admin/assets', '/admin/instances', '/admin/keys'] %}
+      {% set is_add_page = request and ('/new' in request.url.path or '/bulk' in request.url.path) %}
+      {% set show_refresh = active_tab != 'settings' and not (request and request.url.path.endswith('/settings')) and not (request and ('/edit' in request.url.path)) and not (request and ('/frames' in request.url.path)) and not is_add_page and not hide_refresh %}
+
+      {% if show_global_search or show_refresh %}
+      <!-- Top-Bar Actions (Global Search & Refresh Button) -->
+      <div class="page-top-actions">
+        {% if show_global_search %}
+        <!-- Global Search Container -->
+        <div class="global-search-container" id="globalSearchContainer">
+          <div class="global-search-bar" id="globalSearchBar">
+            <svg class="global-search-icon" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="globalSearchInput" class="global-search-input" placeholder="Search categories, subcategories, assets, instances, keys... (Ctrl+K)" autocomplete="off" spellcheck="false">
+            <button type="button" id="globalSearchClearBtn" class="global-search-clear-btn" aria-label="Clear search" style="display:none;" onclick="clearGlobalSearch()">✕</button>
+            <div id="globalSearchSpinner" class="global-search-spinner" style="display:none;"></div>
+            <span class="global-search-kbd-hint">Ctrl K</span>
+          </div>
+
+          <!-- Dropdown Results -->
+          <div id="globalSearchDropdown" class="global-search-dropdown" style="display:none;">
+            <div id="globalSearchResults" class="global-search-results"></div>
+          </div>
+        </div>
+        {% endif %}
+
+        {% if show_refresh %}
+        <!-- Refresh Button -->
+        <button type="button" class="btn-page-refresh" id="pageRefreshBtn" onclick="refreshCurrentPage(this)" aria-label="Refresh Page" title="Refresh page to see latest changes" style="{% if not show_global_search %}margin-left:auto;{% endif %}">
+          <svg class="refresh-icon-svg" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+          </svg>
+          <span class="refresh-label">Refresh</span>
+        </button>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% endif %}
+
+      <main class="content-body" id="mainContent" {% if toast_message %}data-toast-message="{{ toast_message }}"{% endif %}>
+        {% block content %}{% endblock %}
+      </main>
+
+      {% if session %}
+        <!-- Mobile Bottom Navigation Bar (0 - 599px) -->
+        {% include "partials/nav_bottom.html" %}
+      {% endif %}
+    </div>
+  </div>
+
+  <script>
+    function refreshCurrentPage(btn) {
+      if (btn) {
+        btn.classList.add('refreshing');
+      }
+      window.location.reload();
+    }
+
+    // Global Search Functionality
+    let searchDebounceTimer = null;
+    let currentHighlightedIndex = -1;
+
+    function clearGlobalSearch() {
+      const input = document.getElementById('globalSearchInput');
+      const clearBtn = document.getElementById('globalSearchClearBtn');
+      const dropdown = document.getElementById('globalSearchDropdown');
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+      if (clearBtn) clearBtn.style.display = 'none';
+      if (dropdown) dropdown.style.display = 'none';
+      currentHighlightedIndex = -1;
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function highlightMatch(text, query) {
+      if (!text || !query) return escapeHtml(text);
+      const escaped = escapeHtml(text);
+      const qClean = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(${qClean})`, 'gi');
+      return escaped.replace(regex, '<mark class="gs-highlight">$1</mark>');
+    }
+
+    function renderGlobalSearchResults(data, query) {
+      const dropdown = document.getElementById('globalSearchDropdown');
+      const container = document.getElementById('globalSearchResults');
+      if (!dropdown || !container) return;
+
+      const total = (data.categories?.length || 0)
+                  + (data.subcategories?.length || 0)
+                  + (data.assets?.length || 0)
+                  + (data.instances?.length || 0)
+                  + (data.keys?.length || 0);
+      currentHighlightedIndex = -1;
+
+      if (total === 0) {
+        container.innerHTML = `
+          <div class="gs-empty-state">
+            <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="1.8" fill="none"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <p>No matches found for "<strong>${escapeHtml(query)}</strong>"</p>
+          </div>
+        `;
+        dropdown.style.display = 'block';
+        return;
+      }
+
+      let html = '';
+
+      // 1. Categories
+      if (data.categories && data.categories.length > 0) {
+        html += `
+          <div class="gs-section-header">
+            <span class="gs-section-title">📁 Categories (${data.categories.length})</span>
+          </div>
+          <div class="gs-section-items">
+        `;
+        data.categories.forEach(cat => {
+          const thumb = cat.thumbnail_url
+            ? `<img src="${cat.thumbnail_url}" class="gs-item-thumb" alt="" onerror="this.style.display='none'">`
+            : `<div class="gs-item-icon">📁</div>`;
+          html += `
+            <a href="/admin/categories?q=${encodeURIComponent(cat.name)}" class="gs-result-item" data-type="category">
+              ${thumb}
+              <div class="gs-item-info">
+                <div class="gs-item-name">${highlightMatch(cat.name, query)}</div>
+                <div class="gs-item-meta">Category • /${escapeHtml(cat.folder_name || '')}</div>
+              </div>
+              <span class="gs-item-tag">View Category →</span>
+            </a>
+          `;
+        });
+        html += `</div>`;
+      }
+
+      // 2. Subcategories
+      if (data.subcategories && data.subcategories.length > 0) {
+        html += `
+          <div class="gs-section-header">
+            <span class="gs-section-title">📂 Subcategories (${data.subcategories.length})</span>
+          </div>
+          <div class="gs-section-items">
+        `;
+        data.subcategories.forEach(sub => {
+          const thumb = sub.thumbnail_url
+            ? `<img src="${sub.thumbnail_url}" class="gs-item-thumb" alt="" onerror="this.style.display='none'">`
+            : `<div class="gs-item-icon">📂</div>`;
+          const catName = sub.category_name || 'Category';
+          html += `
+            <a href="/admin/subcategories?categoryId=${encodeURIComponent(sub.category_id)}&q=${encodeURIComponent(sub.name)}" class="gs-result-item" data-type="subcategory">
+              ${thumb}
+              <div class="gs-item-info">
+                <div class="gs-item-name">${highlightMatch(sub.name, query)}</div>
+                <div class="gs-item-meta">Subcategory in <strong>${escapeHtml(catName)}</strong></div>
+              </div>
+              <span class="gs-item-tag">View Subcategory →</span>
+            </a>
+          `;
+        });
+        html += `</div>`;
+      }
+
+      // 3. Assets
+      if (data.assets && data.assets.length > 0) {
+        html += `
+          <div class="gs-section-header">
+            <span class="gs-section-title">🎨 Assets (${data.assets.length})</span>
+          </div>
+          <div class="gs-section-items">
+        `;
+        data.assets.forEach(asset => {
+          const thumb = asset.thumbnail_url
+            ? `<img src="${asset.thumbnail_url}" class="gs-item-thumb" alt="" onerror="this.style.display='none'">`
+            : `<div class="gs-item-icon">🎨</div>`;
+          const catSub = [asset.category_name, asset.subcategory_name].filter(Boolean).join(' › ');
+          html += `
+            <a href="/admin/assets/${asset.id}/edit" class="gs-result-item" data-type="asset">
+              ${thumb}
+              <div class="gs-item-info">
+                <div class="gs-item-name">${highlightMatch(asset.name, query)}</div>
+                <div class="gs-item-meta">${escapeHtml(catSub || 'Central Asset')}</div>
+              </div>
+              <span class="gs-item-tag gs-tag-edit">Edit Asset ✏️</span>
+            </a>
+          `;
+        });
+        html += `</div>`;
+      }
+
+      // 4. App Instances
+      if (data.instances && data.instances.length > 0) {
+        html += `
+          <div class="gs-section-header">
+            <span class="gs-section-title">📱 App Instances (${data.instances.length})</span>
+          </div>
+          <div class="gs-section-items">
+        `;
+        data.instances.forEach(inst => {
+          const thumb = inst.icon_url
+            ? `<img src="${inst.icon_url}" class="gs-item-thumb" alt="" onerror="this.style.display='none'">`
+            : `<div class="gs-item-icon">📱</div>`;
+          const pkg = inst.package_name ? `Package: ${escapeHtml(inst.package_name)}` : 'App Instance';
+          html += `
+            <a href="/admin/instances/${inst.id}/content" class="gs-result-item" data-type="instance">
+              ${thumb}
+              <div class="gs-item-info">
+                <div class="gs-item-name">${highlightMatch(inst.name, query)}</div>
+                <div class="gs-item-meta">${pkg}</div>
+              </div>
+              <span class="gs-item-tag">Manage Content →</span>
+            </a>
+          `;
+        });
+        html += `</div>`;
+      }
+
+      // 5. API Keys
+      if (data.keys && data.keys.length > 0) {
+        html += `
+          <div class="gs-section-header">
+            <span class="gs-section-title">🔑 API Keys (${data.keys.length})</span>
+          </div>
+          <div class="gs-section-items">
+        `;
+        data.keys.forEach(k => {
+          const prefixInfo = k.key_prefix ? `Prefix: <code>${escapeHtml(k.key_prefix)}</code>` : 'API Key';
+          const scopeInfo = k.app_instance_name ? ` • App: ${escapeHtml(k.app_instance_name)}` : '';
+          const statusDot = k.is_active
+            ? `<span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:#22c55e; margin-left:0.35rem;" title="Active"></span>`
+            : `<span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:#ef4444; margin-left:0.35rem;" title="Revoked"></span>`;
+          html += `
+            <a href="/admin/keys" class="gs-result-item" data-type="key">
+              <div class="gs-item-icon">🔑</div>
+              <div class="gs-item-info">
+                <div class="gs-item-name" style="display:flex; align-items:center;">
+                  <span>${highlightMatch(k.name, query)}</span>
+                  ${statusDot}
+                </div>
+                <div class="gs-item-meta">${prefixInfo}${scopeInfo}</div>
+              </div>
+              <span class="gs-item-tag">View Keys →</span>
+            </a>
+          `;
+        });
+        html += `</div>`;
+      }
+
+      // Footer
+      html += `
+        <div class="gs-footer">
+          <a href="/admin/assets?q=${encodeURIComponent(query)}" class="gs-footer-link">
+            Search all assets for "<strong>${escapeHtml(query)}</strong>" →
+          </a>
+        </div>
+      `;
+
+      container.innerHTML = html;
+      dropdown.style.display = 'block';
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const searchInput = document.getElementById('globalSearchInput');
+      const clearBtn = document.getElementById('globalSearchClearBtn');
+      const spinner = document.getElementById('globalSearchSpinner');
+      const dropdown = document.getElementById('globalSearchDropdown');
+
+      if (searchInput) {
+        searchInput.addEventListener('input', function(e) {
+          const query = e.target.value.trim();
+          if (clearBtn) clearBtn.style.display = query ? 'inline-flex' : 'none';
+
+          if (!query) {
+            if (dropdown) dropdown.style.display = 'none';
+            if (spinner) spinner.style.display = 'none';
+            currentHighlightedIndex = -1;
+            return;
+          }
+
+          clearTimeout(searchDebounceTimer);
+          searchDebounceTimer = setTimeout(async () => {
+            if (spinner) spinner.style.display = 'block';
+            try {
+              const res = await fetch(`/admin/api/search?q=${encodeURIComponent(query)}&limit=6`);
+              if (!res.ok) throw new Error('Search failed');
+              const data = await res.json();
+              renderGlobalSearchResults(data, query);
+            } catch (err) {
+              console.error('Global search error:', err);
+            } finally {
+              if (spinner) spinner.style.display = 'none';
+            }
+          }, 200);
+        });
+
+        searchInput.addEventListener('keydown', function(e) {
+          const items = dropdown ? dropdown.querySelectorAll('.gs-result-item') : [];
+          if (!dropdown || dropdown.style.display === 'none') {
+            if (e.key === 'Enter') {
+              const val = searchInput.value.trim();
+              if (val) {
+                window.location.href = `/admin/assets?q=${encodeURIComponent(val)}`;
+              }
+            }
+            return;
+          }
+
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (items.length > 0) {
+              currentHighlightedIndex = (currentHighlightedIndex + 1) % items.length;
+              items.forEach((it, idx) => it.classList.toggle('gs-highlighted', idx === currentHighlightedIndex));
+              items[currentHighlightedIndex]?.scrollIntoView({ block: 'nearest' });
+            }
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (items.length > 0) {
+              currentHighlightedIndex = (currentHighlightedIndex - 1 + items.length) % items.length;
+              items.forEach((it, idx) => it.classList.toggle('gs-highlighted', idx === currentHighlightedIndex));
+              items[currentHighlightedIndex]?.scrollIntoView({ block: 'nearest' });
+            }
+          } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (currentHighlightedIndex >= 0 && items[currentHighlightedIndex]) {
+              window.location.href = items[currentHighlightedIndex].href;
+            } else {
+              const val = searchInput.value.trim();
+              if (val) {
+                window.location.href = `/admin/assets?q=${encodeURIComponent(val)}`;
+              }
+            }
+          } else if (e.key === 'Escape') {
+            dropdown.style.display = 'none';
+            searchInput.blur();
+          }
+        });
+
+        // Focus search when dropdown opens on click if query present
+        searchInput.addEventListener('focus', function() {
+          if (searchInput.value.trim() && dropdown && dropdown.innerHTML.trim()) {
+            dropdown.style.display = 'block';
+          }
+        });
+      }
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', function(e) {
+        const container = document.getElementById('globalSearchContainer');
+        if (container && !container.contains(e.target) && dropdown) {
+          dropdown.style.display = 'none';
+          currentHighlightedIndex = -1;
+        }
+      });
+
+      // Global keyboard shortcut: Ctrl+K or Cmd+K or '/'
+      document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+          if (searchInput) {
+            e.preventDefault();
+            searchInput.focus();
+            searchInput.select();
+          }
+        } else if (e.key === '/' && document.activeElement !== searchInput) {
+          const tag = (document.activeElement?.tagName || '').toLowerCase();
+          if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') {
+            if (searchInput) {
+              e.preventDefault();
+              searchInput.focus();
+              searchInput.select();
+            }
+          }
+        }
+      });
+
+      // Format UTC dates
+      document.querySelectorAll('.table-date-cell[data-utc]').forEach(function(el) {
+        var raw = el.getAttribute('data-utc');
+        if (!raw) return;
+        var d = new Date(raw);
+        if (!isNaN(d.getTime())) {
+          el.textContent = d.toLocaleString('en-US', {
+            month: 'numeric',
+            day: 'numeric',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          });
+        }
+      });
+    });
+  </script>
+  {% include "partials/reorder_modal.html" %}
+  {% include "partials/asset_preview_modal.html" %}
+  <div id="bgUploadPopupContainer" class="bg-upload-container"></div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

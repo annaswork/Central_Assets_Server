@@ -1,0 +1,148 @@
+/* Material 3 Design Tokens - Generated from color_palette.md
+   Single source of color truth. Zero baseline Material Purple. */
+
+:root,
+[data-theme="light"] {
+  /* Primary (Ocean Indigo) */
+  --md-sys-color-primary: #1D4ED8;
+  --md-sys-color-on-primary: #FFFFFF;
+  --md-sys-color-primary-container: #DBEAFE;
+  --md-sys-color-on-primary-container: #1E3A8A;
+
+  /* Secondary (Teal Slate) */
+  --md-sys-color-secondary: #0F766E;
+  --md-sys-color-on-secondary: #FFFFFF;
+  --md-sys-color-secondary-container: #CCFBF1;
+  --md-sys-color-on-secondary-container: #115E59;
+
+  /* Tertiary (Cyan Accent) */
+  --md-sys-color-tertiary: #0284C7;
+  --md-sys-color-on-tertiary: #FFFFFF;
+  --md-sys-color-tertiary-container: #E0F2FE;
+  --md-sys-color-on-tertiary-container: #075985;
+
+  /* Surface & Background */
+  --md-sys-color-background: #F8FAFC;
+  --md-sys-color-on-background: #0F172A;
+  --md-sys-color-surface: #FFFFFF;
+  --md-sys-color-on-surface: #0F172A;
+  --md-sys-color-surface-variant: #F1F5F9;
+  --md-sys-color-on-surface-variant: #475569;
+
+  /* Elevation Surface Containers */
+  --md-sys-color-surface-container-lowest: #FFFFFF;
+  --md-sys-color-surface-container-low: #F8FAFC;
+  --md-sys-color-surface-container: #F1F5F9;
+  --md-sys-color-surface-container-high: #E2E8F0;
+  --md-sys-color-surface-container-highest: #CBD5E1;
+
+  /* Outlines & Borders */
+  --md-sys-color-outline: #94A3B8;
+  --md-sys-color-outline-variant: #E2E8F0;
+
+  /* Error & Alerts */
+  --md-sys-color-error: #DC2626;
+  --md-sys-color-on-error: #FFFFFF;
+  --md-sys-color-error-container: #FEE2E2;
+  --md-sys-color-on-error-container: #991B1B;
+
+  /* App Domain Tokens */
+  --app-premium: #D97706;
+  --app-premium-container: #FEF3C7;
+  --app-premium-on-container: #92400E;
+  --app-accent: #0D9488;
+  --app-badge-edited: #2563EB;
+  --app-badge-edited-bg: #EFF6FF;
+  --app-badge-source-deleted: #DC2626;
+  --app-badge-source-deleted-bg: #FEF2F2;
+  --app-success: #16A34A;
+  --app-success-bg: #F0FDF4;
+
+  /* Frame Canvas Overlays */
+  --app-frame-placeholder: rgba(29, 78, 216, 0.85);
+  --app-frame-placeholder-fill: rgba(219, 234, 254, 0.35);
+  --app-frame-active: rgba(217, 119, 6, 0.95);
+
+  /* Shadows */
+  --md-sys-elevation-1: 0px 1px 3px 1px rgba(0, 0, 0, 0.1), 0px 1px 2px 0px rgba(0, 0, 0, 0.06);
+  --md-sys-elevation-2: 0px 4px 6px -1px rgba(0, 0, 0, 0.1), 0px 2px 4px -2px rgba(0, 0, 0, 0.06);
+  --md-sys-elevation-3: 0px 10px 15px -3px rgba(0, 0, 0, 0.1), 0px 4px 6px -4px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] {
+  /* Primary (Luminous Sky Indigo) */
+  --md-sys-color-primary: #60A5FA;
+  --md-sys-color-on-primary: #0F172A;
+  --md-sys-color-primary-container: #1E3A8A;
+  --md-sys-color-on-primary-container: #DBEAFE;
+
+  /* Secondary (Luminous Mint Teal) */
+  --md-sys-color-secondary: #2DD4BF;
+  --md-sys-color-on-secondary: #042F2E;
+  --md-sys-color-secondary-container: #134E4A;
+  --md-sys-color-on-secondary-container: #99F6E4;
+
+  /* Tertiary (Bright Cyan) */
+  --md-sys-color-tertiary: #38BDF8;
+  --md-sys-color-on-tertiary: #082F49;
+  --md-sys-color-tertiary-container: #075985;
+  --md-sys-color-on-tertiary-container: #E0F2FE;
+
+  /* Surface & Background (Deep Obsidian Slate) */
+  --md-sys-color-background: #0B0F19;
+  --md-sys-color-on-background: #F1F5F9;
+  --md-sys-color-surface: #111827;
+  --md-sys-color-on-surface: #F9FAFB;
+  --md-sys-color-surface-variant: #1F2937;
+  --md-sys-color-on-surface-variant: #9CA3AF;
+
+  /* Elevation Surface Containers */
+  --md-sys-color-surface-container-lowest: #0B0F19;
+  --md-sys-color-surface-container-low: #111827;
+  --md-sys-color-surface-container: #1F2937;
+  --md-sys-color-surface-container-high: #2D3748;
+  --md-sys-color-surface-container-highest: #374151;
+
+  /* Outlines & Borders */
+  --md-sys-color-outline: #4B5563;
+  --md-sys-color-outline-variant: #374151;
+
+  /* Error & Alerts */
+  --md-sys-color-error: #F87171;
+  --md-sys-color-on-error: #450A0A;
+  --md-sys-color-error-container: #7F1D1D;
+  --md-sys-color-on-error-container: #FEE2E2;
+
+  /* App Domain Tokens */
+  --app-premium: #FBBF24;
+  --app-premium-container: #78350F;
+  --app-premium-on-container: #FDE68A;
+  --app-accent: #2DD4BF;
+  --app-badge-edited: #60A5FA;
+  --app-badge-edited-bg: #1E3A8A;
+  --app-badge-source-deleted: #F87171;
+  --app-badge-source-deleted-bg: #7F1D1D;
+  --app-success: #4ADE80;
+  --app-success-bg: #14532D;
+
+  /* Frame Canvas Overlays */
+  --app-frame-placeholder: rgba(96, 165, 250, 0.85);
+  --app-frame-placeholder-fill: rgba(30, 58, 138, 0.45);
+  --app-frame-active: rgba(251, 191, 36, 0.95);
+
+  /* Shadows */
+  --md-sys-elevation-1: 0px 1px 3px 1px rgba(0, 0, 0, 0.4), 0px 1px 2px 0px rgba(0, 0, 0, 0.3);
+  --md-sys-elevation-2: 0px 4px 6px -1px rgba(0, 0, 0, 0.5), 0px 2px 4px -2px rgba(0, 0, 0, 0.4);
+  --md-sys-elevation-3: 0px 10px 15px -3px rgba(0, 0, 0, 0.6), 0px 4px 6px -4px rgba(0, 0, 0, 0.5);
+}
+
+/* Global Font and Transition Tokens */
+:root {
+  --font-sans: Arial, "Helvetica Neue", Helvetica, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+  --transition-speed: 150ms;
+}

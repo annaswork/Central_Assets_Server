@@ -1,0 +1,199 @@
+/* Responsive Layout Breakpoints: Mobile-First Strategy
+   0-599: compact (bottom navigation bar, stacked table cards, mobile drawer)
+   600-904: medium (navigation rail)
+   905-1239: expanded (collapsible navigation drawer)
+   1240+: large (full layout grid) */
+
+/* Base Desktop Layout (default expanded) */
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.app-container {
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+}
+
+.main-content {
+  flex: 1;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.content-body {
+  padding: 2rem 1.75rem;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+  flex: 1;
+}
+
+/* Nav Drawer (Desktop 905px+) */
+.nav-drawer {
+  width: 260px;
+  height: 100%;
+  background-color: var(--md-sys-color-surface);
+  border-right: 1px solid var(--md-sys-color-outline-variant);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 30;
+}
+
+/* Sidebar Collapsed State (Desktop 905px+) */
+html.sidebar-collapsed .nav-drawer {
+  width: 72px;
+}
+
+.nav-rail {
+  display: none;
+}
+
+.nav-bottom {
+  display: none;
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+/* Medium Breakpoint (600px - 904px): Navigation Rail */
+@media (max-width: 904px) and (min-width: 600px) {
+  .nav-drawer {
+    display: none;
+  }
+  .nav-rail {
+    display: flex;
+    flex-direction: column;
+    width: 80px;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    background-color: var(--md-sys-color-surface);
+    border-right: 1px solid var(--md-sys-color-outline-variant);
+    align-items: center;
+    padding-top: 1rem;
+    flex-shrink: 0;
+  }
+}
+
+/* Compact Breakpoint (0 - 599px): Mobile bottom navigation & Table Cards */
+@media (max-width: 599px) {
+  .nav-drawer, .nav-rail {
+    display: none;
+  }
+
+  /* When mobile drawer is opened via hamburger toggle */
+  html.sidebar-mobile-open .nav-drawer {
+    display: flex !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    height: 100%;
+    z-index: 100;
+    box-shadow: var(--md-sys-elevation-4);
+    animation: slideInDrawer 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  @keyframes slideInDrawer {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  .sidebar-backdrop {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 90;
+    backdrop-filter: blur(2px);
+  }
+
+  html.sidebar-mobile-open .sidebar-backdrop {
+    display: block;
+  }
+
+  .nav-bottom {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    background-color: var(--md-sys-color-surface);
+    border-top: 1px solid var(--md-sys-color-outline-variant);
+    z-index: 50;
+    justify-content: space-around;
+    align-items: center;
+  }
+
+  .content-body {
+    padding: 1rem;
+    margin-bottom: 72px; /* clearance for bottom bar */
+  }
+
+  /* Table collapsed to stacked cards below 600px */
+  .data-table thead {
+    display: none;
+  }
+
+  .data-table, .data-table tbody, .data-table tr, .data-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .data-table tr {
+    margin-bottom: 1rem;
+    background-color: var(--md-sys-color-surface);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: var(--radius-md);
+    padding: 0.75rem;
+    box-shadow: var(--md-sys-elevation-1);
+  }
+
+  .data-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+    text-align: right;
+  }
+
+  .data-table td:last-child {
+    border-bottom: none;
+  }
+
+  .data-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--md-sys-color-on-surface-variant);
+    text-align: left;
+    margin-right: 1rem;
+  }
+}

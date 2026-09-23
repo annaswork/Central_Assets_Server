@@ -1,0 +1,44 @@
+<!-- override_form.html: Modal or standalone form to edit sparse overrides for an asset/category inside an app instance context -->
+<div class="card" style="max-width:600px; margin:1.5rem auto;">
+  <div style="margin-bottom:1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.5rem;">
+    <h3>Instance-Specific Override</h3>
+    <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.85rem;">
+      Modifying this item applies only to this app instance. The central library item is preserved unmodified.
+    </p>
+  </div>
+
+  <form id="overrideForm" onsubmit="submitOverrideForm(event)">
+    <div class="form-group">
+      <label class="label">Custom Display Name</label>
+      <input type="text" id="overrideName" name="name" class="input" placeholder="Leave blank to use central default">
+    </div>
+
+    <div class="form-group">
+      <label class="label">Custom Description</label>
+      <textarea id="overrideDescription" name="description" class="textarea" rows="2" placeholder="Leave blank to use central default"></textarea>
+    </div>
+
+    <div class="grid grid-2" style="margin-bottom:1rem;">
+      <div class="form-group">
+        <label class="label">Sequence Order</label>
+        <input type="number" id="overrideSequence" name="sequence" class="input">
+      </div>
+
+      <div class="form-group" style="display:flex; flex-direction:column; justify-content:center;">
+        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+          <input type="checkbox" id="overrideIsPremium" name="is_premium">
+          <span>Mark as Premium</span>
+        </label>
+        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; margin-top:0.5rem;">
+          <input type="checkbox" id="overrideIsEnabled" name="is_enabled" checked>
+          <span>Enabled in this App</span>
+        </label>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+      <button type="button" class="btn btn-outlined" onclick="window.history.back()">Cancel</button>
+      <button type="submit" class="btn btn-primary">Save Overrides</button>
+    </div>
+  </form>
+</div>

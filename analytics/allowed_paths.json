@@ -1,0 +1,138 @@
+[
+  {
+    "method": "GET",
+    "path_template": "/api/v1/app-instances",
+    "is_active": true,
+    "sample_rate": 1.0,
+    "retain_days": 30,
+    "notes": "List app instances"
+  },
+  {
+    "method": "GET",
+    "path_template": "/api/v1/app-instances/{id}",
+    "is_active": true,
+    "sample_rate": 1.0,
+    "retain_days": 30,
+    "notes": "Read single app instance details"
+  },
+  {
+    "method": "GET",
+    "path_template": "/api/v1/app-instances/{id}/categories",
+    "is_active": true,
+    "sample_rate": 1.0,
+    "retain_days": 30,
+    "notes": "Read app instance categories"
+  },
+  {
+    "method": "GET",
+    "path_template": "/api/v1/app-instances/{id}/subcategories",
+    "is_active": true,
+    "sample_rate": 1.0,
+    "retain_days": 30,
+    "notes": "Read app instance subcategories"
+  },
+  {
+    "method": "GET",
+    "path_template": "/api/v1/app-instances/{id}/assets",
+    "is_active": true,
+    "sample_rate": 1.0,
+    "retain_days": 30,
+    "notes": "Read app instance assets"
+  },
+  {
+    "method": "GET",
+    "path_template": "/api/v1/app-instances/{id}/assets/{assetId}",
+    "is_active": true,
+    "sample_rate": 1.0,
+    "retain_days": 30,
+    "notes": "Read app instance single asset"
+  },
+  {
+    "method": "POST",
+    "path_template": "/api/v1/app-instances/{id}/assets/{assetId}/track",
+    "is_active": true,
+    "sample_rate": 1.0,
+    "retain_days": 30,
+    "notes": "Track app instance asset views and downloads"
+  },
+  {
+    "method": "GET",
+    "path_template": "/api/v1/instance/{id}/catalog",
+    "is_active": true,
+    "sample_rate": 1.0,
+    "retain_days": 30,
+    "notes": "Client app catalog reads"
+  },
+  {
+    "method": "GET",
+    "path_template": "/api/v1/instance/{id}/categories",
+    "is_active": true,
+    "sample_rate": 1.0,
+    "retain_days": 30,
+    "notes": "Client app instance categories reads"
+  },
+  {
+    "method": "GET",
+    "path_template": "/api/v1/instance/{id}/subcategories",
+    "is_active": true,
+    "sample_rate": 1.0,
+    "retain_days": 30,
+    "notes": "Client app instance subcategories reads"
+  },
+  {
+    "method": "GET",
+    "path_template": "/api/v1/instance/{id}/assets",
+    "is_active": true,
+    "sample_rate": 1.0,
+    "retain_days": 30,
+    "notes": "Client app instance assets reads"
+  },
+  {
+    "method": "GET",
+    "path_template": "/api/v1/instance/{id}/assets/{assetId}",
+    "is_active": true,
+    "sample_rate": 1.0,
+    "retain_days": 30,
+    "notes": "Client app instance single asset reads"
+  },
+  {
+    "method": "POST",
+    "path_template": "/api/v1/instance/{id}/assets/{assetId}/track",
+    "is_active": true,
+    "sample_rate": 1.0,
+    "retain_days": 30,
+    "notes": "Client asset view/download counter updates"
+  },
+  {
+    "method": "GET",
+    "path_template": "/api/v1/categories",
+    "is_active": true,
+    "sample_rate": 1.0,
+    "retain_days": 30,
+    "notes": "Central categories listing"
+  },
+  {
+    "method": "GET",
+    "path_template": "/api/v1/subcategories",
+    "is_active": true,
+    "sample_rate": 1.0,
+    "retain_days": 30,
+    "notes": "Central subcategories listing"
+  },
+  {
+    "method": "GET",
+    "path_template": "/api/v1/assets",
+    "is_active": true,
+    "sample_rate": 1.0,
+    "retain_days": 30,
+    "notes": "Central asset search and browsing"
+  },
+  {
+    "method": "GET",
+    "path_template": "/api/v1/assets/{id}",
+    "is_active": true,
+    "sample_rate": 1.0,
+    "retain_days": 30,
+    "notes": "Single asset retrieval"
+  }
+]

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}API Key Generated — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="max-width:700px; margin:2rem auto;">
+  <div class="banner banner-warning" style="margin-bottom:1.5rem;">
+    <strong style="display:block; margin-bottom:0.25rem;">⚠️ Save this API key now</strong>
+    This is the only time the full unhashed secret key will be shown. If lost, you will need to revoke it and issue a new one.
+  </div>
+
+  <div class="card" style="padding:2rem;">
+    <h2 style="margin-bottom:0.5rem; color:var(--md-sys-color-primary);">API Key Created Successfully</h2>
+    <p style="color:var(--md-sys-color-on-surface-variant); margin-bottom:1.5rem;">
+      Key Description: <strong>{{ key.name }}</strong>
+    </p>
+
+    <div class="form-group" style="margin-bottom:1.5rem;">
+      <label class="label">Full Secret Key</label>
+      <div style="display:flex; gap:0.5rem;">
+        <input type="text" id="fullApiKeyInput" class="input" readonly value="{{ key.full_key }}" style="font-family:monospace; font-weight:600; color:var(--app-teal); background:var(--md-sys-color-surface-container);">
+        <button type="button" class="btn btn-primary" onclick="copyKeyToClipboard()">Copy</button>
+      </div>
+      <span id="copyConfirmMsg" style="color:var(--app-teal); font-size:0.8rem; display:none; margin-top:0.25rem;">Copied to clipboard!</span>
+    </div>
+
+    <div style="background:var(--md-sys-color-surface-container-low); padding:1rem; border-radius:var(--radius-sm); margin-bottom:1.5rem; font-size:0.85rem;">
+      <div><strong>Rate Limit:</strong> {{ key.rate_limit_per_min or key.rateLimitPerMin }} requests/minute</div>
+      <div style="margin-top:0.5rem;"><strong>Authorized Scopes:</strong></div>
+      <div style="display:flex; flex-wrap:wrap; gap:0.25rem; margin-top:0.25rem;">
+        {% for sc in key.scopes %}
+          <span class="badge badge-success">{{ sc }}</span>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end;">
+      <a href="/admin/keys" class="btn btn-outlined">Return to API Keys</a>
+    </div>
+  </div>
+</div>
+
+<script>
+function copyKeyToClipboard() {
+  const input = document.getElementById('fullApiKeyInput');
+  input.select();
+  navigator.clipboard.writeText(input.value).then(() => {
+    const msg = document.getElementById('copyConfirmMsg');
+    msg.style.display = 'block';
+    setTimeout(() => { msg.style.display = 'none'; }, 2500);
+  });
+}
+</script>
+{% endblock %}

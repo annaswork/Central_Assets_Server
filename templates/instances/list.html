@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}App Instances — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
+  <div>
+    <h1>App Instances</h1>
+    <p style="color:var(--md-sys-color-on-surface-variant);">
+      Manage consumer applications, referenced creative bundles, sequences, and overrides.
+    </p>
+  </div>
+
+  <div>
+    <a href="/admin/instances/new" class="btn btn-primary">+ New App Instance</a>
+  </div>
+</div>
+
+<!-- Search Bar -->
+<div class="card search-filter-card" style="padding:0.85rem 1rem; margin-bottom:1.5rem; overflow-x:auto;">
+  <form method="GET" action="/admin/instances" class="search-filter-form" style="display:flex; justify-content:flex-end; align-items:center; flex-wrap:nowrap; gap:0.75rem; width:100%;">
+    <div class="search-group-right" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; margin-left:auto; white-space:nowrap; flex-shrink:0;">
+      <input type="text" name="search" class="input" placeholder="Search by instance name or package..." value="{{ search }}" style="max-width:320px;">
+      <button type="submit" class="btn btn-outlined btn-filter">Search</button>
+      {% if search %}
+        <a href="/admin/instances" class="btn btn-outlined btn-filter">Clear</a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+<!-- Instances Table -->
+<div class="table-responsive card" style="padding:0;">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Instance Name</th>
+        <th>Package Name</th>
+        <th>Created At</th>
+        <th style="text-align:right;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for inst in data['items'] %}
+        <tr>
+          <td data-label="Name">
+            <strong>{{ inst.name }}</strong>
+            <div style="font-size:0.8rem; font-family:monospace; color:var(--md-sys-color-on-surface-variant);">ID: {{ inst.id }}</div>
+          </td>
+          <td data-label="Package">
+            <code>{{ inst.packageName or '—' }}</code>
+          </td>
+          <td data-label="Created">
+            {{ (inst.created_at|string)[:10] if inst.created_at else 'N/A' }}
+          </td>
+          <td data-label="Actions" style="text-align:right;">
+            <div style="display:inline-flex; gap:0.5rem;">
+              <a href="/admin/instances/{{ inst.id }}/content" class="btn btn-primary" style="min-height:36px; padding:0.25rem 0.75rem;">
+                Browse Content
+              </a>
+              <a href="/admin/instances/{{ inst.id }}/edit" class="btn btn-outlined" style="min-height:36px; padding:0.25rem 0.6rem;">
+                Edit
+              </a>
+              <a href="/admin/instances/{{ inst.id }}/picker" class="btn btn-outlined" style="min-height:36px; padding:0.25rem 0.6rem;">
+                + Add Central Items
+              </a>
+              <form method="POST" action="/admin/instances/{{ inst.id }}/delete" style="display:inline;" onsubmit="return confirm('Delete app instance {{ inst.name }}? This will remove all reference links and overrides.');">
+                <button type="submit" class="btn btn-destructive" style="min-height:36px; padding:0.25rem 0.6rem;">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="4" style="text-align:center; padding:2rem; color:var(--md-sys-color-on-surface-variant);">
+            No app instances configured yet. Click "+ New App Instance" to get started.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% include "partials/pagination.html" %}
+{% endblock %}

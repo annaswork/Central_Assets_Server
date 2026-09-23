@@ -1,0 +1,564 @@
+# .antigravityrules
+
+Rules for any AI agent working in this repository. Read this file fully before
+writing code. If a request conflicts with these rules, say so and propose an
+alternative instead of silently breaking a rule.
+
+---
+
+## 1. What this project is
+
+A central **asset library** with a three-level hierarchy (Category → Subcategory →
+Asset), plus **App Instances**: per-app copies of selected central data that each
+app can enable, reorder, monetize and track independently.
+
+Two surfaces:
+
+- A **JSON API** consumed by client apps (Android/iOS/web), secured by API keys.
+- A server-rendered **admin panel** used by internal operators to manage data.
+
+Two cross-cutting modules:
+
+- **Analytics** — records usage of endpoints that have been added to a monitoring list.
+- **Auth** — API key issuance, validation, scoping and revocation.
+
+---
+
+## 2. Tech stack — fixed
+
+| Layer | Choice | Notes |
+|---|---|---|
+| Language | Python 3.11+ | Type hints mandatory on all public functions |
+| API framework | FastAPI | Async-first |
+| Server | Uvicorn (dev) / Gunicorn + UvicornWorker (prod) | |
+| Database | MongoDB 6+ | Via **Motor** (async). Never PyMongo in request paths |
+| Validation | Pydantic v2 | `model_config`, `Field`, `field_validator` — not v1 syntax |
+| Admin panel | Jinja2 + handwritten HTML/CSS + vanilla JS | |
+| Migrations | Custom scripts in `migrations/` | Idempotent, numbered |
+| Tests | pytest + pytest-asyncio + mongomock-motor / test DB | |
+| Lint/format | ruff + black (line length 100) | |
+
+### Hard bans
+
+- **No ORM/ODM** (no Beanie, MongoEngine, SQLAlchemy). Use Motor collections plus
+  Pydantic models directly.
+- **No frontend framework** in the admin panel. No React, Vue, Svelte, jQuery,
+  Bootstrap, Tailwind CDN. Handwritten CSS only, using the tokens in
+  `color_palette.md`.
+- **No blocking I/O** inside `async def` route handlers. If a library is sync-only,
+  wrap it in `anyio.to_thread.run_sync`.
+- **No business logic in route handlers.** Handlers parse, delegate, and return.
+- **No raw dicts crossing layer boundaries.** Services accept and return Pydantic
+  models or typed dataclasses.
+
+---
+
+## 3. Directory layout
+
+```
+app/
+  main.py                  # FastAPI app factory, lifespan, router mounting
+  config.py                # Settings via pydantic-settings, env-driven
+  db/
+    client.py              # Motor client singleton + get_db() dependency
+    indexes.py             # Declarative index definitions, applied at startup
+  core/
+    security.py            # API key hashing, verification
+    errors.py              # AppError hierarchy + exception handlers
+    pagination.py          # Page/PageParams helpers
+    ids.py                 # ObjectId <-> str helpers, PyObjectId type
+  models/                  # Pydantic schemas ONLY (no DB access)
+    common.py              # TimestampMixin, MongoModel base
+    category.py
+    subcategory.py
+    asset.py
+    app_instance.py
+    instance_content.py    # Per-instance category/subcategory/asset schemas
+    more_fields.py         # moreFields union types incl. frames
+    api_key.py
+    analytics.py
+  repositories/            # Mongo queries ONLY. One file per collection.
+    base.py
+    category_repo.py
+    subcategory_repo.py
+    asset_repo.py
+    app_instance_repo.py
+    instance_content_repo.py
+    api_key_repo.py
+    analytics_repo.py
+  services/                # Business rules, orchestration, transactions
+    category_service.py
+    subcategory_service.py
+    asset_service.py
+    bulk_service.py
+    clone_service.py       # Central -> app instance copying
+    analytics_service.py
+    auth_service.py
+    media_service.py       # Upload handling, frame coordinate detection
+  api/
+    deps.py                # Shared dependencies (db, api key, pagination)
+    v1/
+      __init__.py          # api_v1 router aggregation
+      categories.py
+      subcategories.py
+      assets.py
+      app_instances.py
+      instance_content.py
+      analytics.py
+      keys.py
+  middleware/
+    analytics_middleware.py
+    request_id.py
+  admin/
+    router.py              # Server-rendered admin routes
+    templates/
+      base.html
+      partials/
+      categories/
+      subcategories/
+      assets/
+      instances/
+      analytics/
+      keys/
+    static/
+      css/tokens.css       # Generated from color_palette.md — see rule 9
+      css/base.css
+      css/components.css
+      js/theme.js          # Light/dark toggle
+      js/bulk.js
+      js/frames.js         # Frame placeholder editor
+migrations/
+tests/
+scripts/
+```
+
+Do not invent new top-level directories without saying why.
+
+---
+
+## 4. Data models — canonical definitions
+
+All documents store `_id` as ObjectId and expose it as `id: str` in API responses.
+All timestamps are timezone-aware UTC (`datetime.now(timezone.utc)`), stored as BSON
+dates, serialized as ISO 8601 with `Z`.
+
+### 4.1 Central library
+
+**`categories`**
+
+| Field | Type | Required |
+|---|---|---|
+| `name` | str (1–120) | yes |
+| `created_at` | datetime | yes, server-set |
+| `updated_at` | datetime | yes, server-set |
+| `thumbnail_url` | str \| null | no |
+| `image_url` | str \| null | no |
+
+**`subcategories`**
+
+| Field | Type | Required |
+|---|---|---|
+| `name` | str (1–120) | yes |
+| `category_id` | ObjectId → categories | yes |
+| `created_at` / `updated_at` | datetime | yes |
+| `thumbnail_url`, `image_url` | str \| null | no |
+
+**`assets`**
+
+| Field | Type | Required |
+|---|---|---|
+| `name` | str (1–200) | yes |
+| `description` | str | no, default `""` |
+| `category_id` | ObjectId | yes |
+| `sub_category_id` | ObjectId | yes |
+| `thumbnail_url` | str \| null | no |
+| `created_at` / `updated_at` | datetime | yes |
+| `more_fields` | object (open schema) | yes, default `{}` |
+
+`more_fields` is the extension point. It is a free-form object but every value must
+be a **typed block** (see rule 5). Never store bare scalars at the top level of
+`more_fields` other than primitives explicitly allowed by a block definition.
+
+### 4.2 App instances
+
+**`app_instances`**
+
+| Field | Type | Required |
+|---|---|---|
+| `name` | str | yes, unique |
+| `package_name` | str \| null | no, unique when present |
+| `app_icon` | str \| null | no |
+| `created_at` / `updated_at` | datetime | yes |
+
+**Per-instance content collections** — `instance_categories`,
+`instance_subcategories`, `instance_assets`.
+
+**These are reference rows, not duplicated content.** An instance row does not
+originate a category, subcategory or asset. It points at a central document and
+carries the app's own settings for it, plus any local overrides.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `app_instance_id` | ObjectId | Owning app. Always present, always the first index key |
+| `source_id` | ObjectId | The central document being referenced. Immutable |
+| `is_enabled` | bool | Default `true` |
+| `sequence` | int | Default appended to end; gaps allowed |
+| `overrides` | object | Sparse. Only fields the app has locally changed |
+| `deleted_at` | datetime \| null | Set when removed from this app only |
+| `created_at` / `updated_at` | datetime | Of the reference row, not the source |
+
+Instance assets additionally carry `is_premium` (default `false`), `views` (0) and
+`downloads` (0).
+
+### Two hard rules — these are load-bearing
+
+**R1. An app instance can never create content.** There is no
+`POST /api/v1/app-instances/{id}/categories`, no create form in the instance UI, no
+service method that inserts into `categories`, `subcategories` or `assets` from an
+instance context. The only way content enters an instance is by referencing something
+that already exists centrally. If an operator needs new content for one app, they
+create it in the central library first, then reference it. Reject any instance-scoped
+create with `409 INSTANCE_CANNOT_CREATE_CONTENT` and a message pointing at the
+central endpoint.
+
+**R2. Instance writes never reach central.** Editing an instance item writes to that
+row's `overrides` object. Deleting an instance item soft-deletes that row. Neither
+path may issue a write against `categories`, `subcategories` or `assets` — not an
+update, not a `$inc`, not a `deleted_at`. Services under `services/instance_*.py` and
+repositories reached from an instance context must be physically unable to touch the
+central collections; enforce this with a repository-level guard, not a code review
+habit.
+
+Direction of flow, in one line: **central → instance only, always.**
+
+### Overrides
+
+`overrides` holds only the keys the app changed. Anything absent falls through to the
+live central document at read time.
+
+```json
+{
+  "app_instance_id": "...",
+  "source_id": "...",
+  "is_enabled": true,
+  "sequence": 30,
+  "is_premium": true,
+  "views": 812,
+  "downloads": 140,
+  "overrides": {
+    "name": "Birthday Frame",
+    "more_fields": { "loop_audio": { "type": "audio", "url": "..." } }
+  }
+}
+```
+
+Overridable keys, per type:
+
+| Type | May override |
+|---|---|
+| category | `name`, `thumbnail_url`, `image_url` |
+| subcategory | `name`, `thumbnail_url`, `image_url` |
+| asset | `name`, `description`, `thumbnail_url`, `more_fields` |
+
+Never overridable: `category_id`, `sub_category_id`, `source_id`, any timestamp.
+An app cannot reparent a referenced asset — that would fork the hierarchy.
+
+`more_fields` overrides are **whole-object replacement**, not a deep merge. A partial
+merge across typed blocks is ambiguous and produces content nobody can reason about.
+Store the full replacement object; the admin editor pre-fills it from central.
+
+### Resolution at read time
+
+Every instance read resolves in one step:
+
+```
+effective = { **central_document, **row.overrides }
+        + row.is_enabled, row.sequence, row.is_premium, row.views, row.downloads
+        + row.source_id as "sourceId"
+```
+
+Do this with a `$lookup` on `source_id` plus `$mergeObjects` in the aggregation
+pipeline — one round trip, not N+1 fetches. `services/instance_read_service.py` owns
+this and is the only place the merge is implemented.
+
+Consequences to design around, and to state plainly in the admin UI:
+
+- A central edit is visible immediately in every app that references it, **except**
+  for fields that app has overridden.
+- A central soft-delete makes the item unresolvable. Instance reads must filter out
+  rows whose source is deleted, and the admin panel must show them as
+  "Source removed" with a single action: remove the reference.
+- Clearing an override is a supported action ("Reset to central value") and simply
+  `$unset`s the key.
+
+Composite uniqueness: `(app_instance_id, source_id)` is unique per collection — the
+same central item cannot be referenced twice by one app.
+
+Referential integrity: an instance asset row may only exist if the app also
+references its subcategory and category. Adding an asset reference auto-adds the
+missing parent references. Removing a parent reference requires removing its
+children, with the count shown first.
+
+---
+
+## 5. `more_fields` typed blocks
+
+Every entry in `more_fields` is `{"type": <block_type>, ...payload}`. Supported
+types — do not add new ones without updating `models/more_fields.py` **and**
+`core_features.md`:
+
+| `type` | Payload |
+|---|---|
+| `audio` | `url`, `duration_ms?`, `mime?` |
+| `audio_list` | `items: [audio]` |
+| `image` | `url`, `width?`, `height?`, `mime?` |
+| `image_list` | `items: [image]` |
+| `video` | `url`, `duration_ms?`, `width?`, `height?`, `mime?` |
+| `video_list` | `items: [video]` |
+| `json` | `data: object` (arbitrary, depth ≤ 8, ≤ 256 KB) |
+| `frames` | `image_url`, `placeholders: [placeholder]` |
+| `string_list` | `items: [str]` |
+
+**`placeholder`** — one empty slot detected in a frame image:
+
+```json
+{
+  "x": 120.0,
+  "y": 64.5,
+  "width": 480.0,
+  "height": 640.0,
+  "elevation": 0.0,
+  "rotation": -3.5,
+  "index": 0
+}
+```
+
+Rules for frames:
+
+- Coordinates are **pixels in the source image's own coordinate space**, floats,
+  origin at top-left, `x`/`y` are the top-left corner of the unrotated box.
+- `rotation` is degrees, clockwise-positive, range `[-180, 180]`.
+- `elevation` is a z-order/stacking hint, float, default `0`. Higher draws later.
+- Detection runs server-side on upload (alpha-channel / contour analysis on the
+  transparent regions). Results are a **proposal** — the admin panel must let an
+  operator correct every number before save.
+- Always store the image's `width`/`height` alongside placeholders so clients can
+  scale correctly.
+- `placeholders` must be non-empty for a `frames` block; reject empty with a 422.
+
+Validate `more_fields` with a discriminated union on `type`. Unknown types are
+rejected at the API boundary, not silently stored.
+
+---
+
+## 6. API conventions
+
+- Prefix every client route with `/api/v1`. Admin panel routes live under `/admin`
+  and are **not** versioned.
+- Plural, kebab-free, lowercase resource paths: `/api/v1/app-instances` is fine as a
+  route literal; collection names stay snake_case.
+- Response envelope for lists:
+  ```json
+  { "items": [...], "total": 120, "page": 1, "page_size": 20, "has_next": true }
+  ```
+  Single resources return the object directly. Do not wrap single objects in `data`.
+- Errors always return:
+  ```json
+  { "error": { "code": "CATEGORY_NOT_FOUND", "message": "...", "details": {} } }
+  ```
+  `code` is a stable SCREAMING_SNAKE string. Never leak stack traces or Mongo errors.
+- Status codes: 200 read, 201 create, 204 delete, 207 for partial bulk success,
+  400 malformed, 401 missing/invalid key, 403 key lacks scope, 404 missing,
+  409 conflict/duplicate, 422 validation, 429 rate limited.
+- Bulk endpoints accept `{"items": [...]}` and return per-item results with `index`,
+  `status`, and either `id` or `error`. **Bulk is partial-success by default**; add
+  `"atomic": true` to opt into all-or-nothing.
+- Pagination: `page` (1-based) and `page_size` (default 20, max 100). Offer
+  `cursor` on asset listing where sort is `sequence` or `_id`.
+- Every mutating endpoint accepts an optional `Idempotency-Key` header; replays
+  within 24h return the original response.
+
+---
+
+## 7. Authentication & authorization
+
+- Clients authenticate with a header: `X-API-Key: <key>`. Nothing else. No cookies,
+  no bearer tokens, no query-string keys — ever, including in examples and docs.
+- Key format: `ak_<env>_<22-char base62 id>_<32-char base62 secret>`.
+- Store only `sha256(secret)` plus a short `prefix` for lookup and display. The full
+  key is shown exactly once, at creation.
+- `api_keys` document: `name`, `key_prefix`, `secret_hash`, `app_instance_id?`,
+  `scopes: [str]`, `is_active`, `expires_at?`, `last_used_at`, `rate_limit_per_min`,
+  `created_at`, `revoked_at?`.
+- Scopes are `resource:action` (`assets:read`, `categories:write`, `analytics:read`,
+  `keys:manage`). Enforce with a `require_scope("assets:read")` dependency, never
+  with `if` statements inside handlers.
+- A key bound to an `app_instance_id` can only read/write that instance's content.
+  Enforce this in the **repository layer** by always injecting the instance filter —
+  not just in the route — so a forgotten check cannot leak data.
+- Compare hashes with `hmac.compare_digest`. Never log a key, even partially, beyond
+  its prefix.
+- Admin panel uses session cookies (HttpOnly, SameSite=Lax, Secure in prod) with
+  separate operator accounts. Admin sessions are not API keys and cannot be used
+  against `/api/v1`.
+
+---
+
+## 8. Analytics module
+
+- A monitoring list lives in `monitored_endpoints`: `method`, `path_template`,
+  `is_active`, `sample_rate` (0.0–1.0), `retain_days`, `notes`.
+- `analytics_middleware` runs on every request. It resolves the matched **route
+  template** (`request.scope["route"].path`) — never the raw URL, so IDs don't
+  explode cardinality — and records an event **only if** that template is in the
+  active monitoring list.
+- Event document: `path_template`, `method`, `status_code`, `duration_ms`,
+  `api_key_id`, `app_instance_id`, `country?`, `platform?`, `app_version?`,
+  `request_bytes`, `response_bytes`, `error_code?`, `ts`.
+- Writes are **fire-and-forget**: push to an in-process `asyncio.Queue`, drain in a
+  background task with `insert_many`. Analytics failures must never fail a request,
+  never add latency to the response path, and must be logged at WARNING.
+- Rollups: an hourly job aggregates into `analytics_hourly`
+  (`path_template`, `hour`, `app_instance_id`, `count`, `error_count`, `p50`, `p95`,
+  `p99`, `bytes_out`). Dashboards read rollups, never raw events, for ranges > 24h.
+- Raw events expire via a TTL index on `ts` using the per-endpoint `retain_days`
+  (default 30).
+- Asset `views`/`downloads` counters are separate from analytics events and are
+  incremented with `$inc` on the instance asset document.
+
+---
+
+## 9. Admin panel rules
+
+- Server-rendered Jinja2. Progressive enhancement only: every page must work with
+  JavaScript disabled for read operations and basic forms.
+- **Design tokens come from `color_palette.md`.** `admin/static/css/tokens.css` is
+  the single source of color truth and must match that file exactly. If you change a
+  color, change `color_palette.md` in the same commit.
+- Material 3 color roles. Light and dark themes, toggleable, persisted in
+  `localStorage` under `ui.theme`, with `prefers-color-scheme` as the default. Set
+  `data-theme="light|dark"` on `<html>` before first paint (inline script in
+  `<head>`) to avoid a flash.
+- **Never use the default Material purple.** No `#6750A4`, `#D0BCFF`, `#EADDFF`,
+  `#21005D`, or any near-neighbor of the baseline M3 purple palette anywhere —
+  CSS, SVG, charts, email templates, placeholder art.
+- Responsive, mobile-first. Breakpoints: 0–599 compact, 600–904 medium,
+  905–1239 expanded, 1240+ large. Navigation is a bottom bar on compact, a rail on
+  medium, a drawer on expanded+. Tables collapse to stacked cards below 600px — no
+  horizontal scroll bars as the primary mobile strategy.
+- Touch targets ≥ 48×48 CSS px. Body text ≥ 16px. Never disable zoom.
+- Accessibility is not optional: semantic landmarks, labelled form controls, visible
+  `:focus-visible` outlines, 4.5:1 contrast for text in both themes,
+  `prefers-reduced-motion` respected.
+- Use CSS Grid/Flexbox, logical properties (`margin-inline`, `padding-block`), and
+  `clamp()` for fluid type. No CSS-in-JS, no utility-class soup.
+- Frame editor (`js/frames.js`): canvas overlay on the uploaded image, draggable and
+  resizable placeholder boxes, numeric inputs bound two-way to the boxes, rotation
+  handle, elevation stepper. Autosave is off — explicit "Save placeholders" only.
+
+---
+
+## 10. MongoDB rules
+
+- Collection names: plural snake_case. Field names: snake_case in the database.
+  The API may expose camelCase aliases (`categoryId`, `subCategoryId`, `moreFields`)
+  via Pydantic `alias` + `populate_by_name=True` — the wire format is camelCase for
+  the documented fields, the storage format is snake_case. Be consistent.
+- All indexes are declared in `db/indexes.py` and created at startup with
+  `create_indexes()`. Never create an index ad hoc in a service.
+  Required at minimum:
+  - `categories`: `name` (unique, collation strength 2)
+  - `subcategories`: `(category_id, name)` unique; `category_id`
+  - `assets`: `(category_id, sub_category_id)`; `name` text; `created_at`
+  - `app_instances`: `name` unique; `package_name` unique sparse
+  - `instance_*`: `(app_instance_id, sequence)`; `(app_instance_id, source_id)` unique;
+    `(app_instance_id, is_enabled)`; `source_id` (for reverse "which apps use this?"
+    lookups and for orphan detection after a central delete)
+  - `instance_assets`: `(app_instance_id, category_id, sub_category_id, sequence)`;
+    `(app_instance_id, is_premium)`
+  - `api_keys`: `key_prefix` unique; `is_active`
+  - `analytics_events`: `(path_template, ts)`; `(app_instance_id, ts)`; TTL on `ts`
+  - `monitored_endpoints`: `(method, path_template)` unique
+- Deletes are **soft** for categories, subcategories and assets (`deleted_at`).
+  Every query must filter `deleted_at: None`. Put that filter in `base.py` so it is
+  applied by default and must be explicitly opted out of.
+- Deleting a central category requires its subcategories and assets to be empty or
+  an explicit `cascade=true`. Report the count before cascading.
+- Use `bulk_write` with `ordered=False` for bulk operations. Cap batch size at 500
+  items per request.
+- Use transactions (multi-document) only for cloning and cascade deletes, and only
+  when the deployment is a replica set. Guard with a capability check and a
+  documented non-transactional fallback.
+- Never use `$where`, `mapReduce`, or unindexed `$regex` prefixed with `.*`.
+- **Central write guard.** `repositories/base.py` exposes `CentralRepository` and
+  `InstanceRepository`. `InstanceRepository` binds to the `instance_*` collections
+  only and raises at construction if handed a central collection. Writes to
+  `categories`, `subcategories` or `assets` are reachable only through
+  `CentralRepository`, which is never imported by anything under `services/instance_*`
+  or `api/v1/instance_content.py`. Add an import-linting test asserting this.
+- Deleting a central document must report how many instance references point at it
+  (`countDocuments({source_id})` across the three instance collections) before it
+  proceeds, and must never cascade the delete into those instance rows — the rows are
+  marked unresolvable and surfaced to operators instead.
+
+---
+
+## 11. Code style
+
+- Async everywhere in the request path. Name async functions plainly (`get_category`,
+  not `get_category_async`).
+- Type hints on every function signature, including `-> None`.
+- Pydantic models are the boundary contract: `XxxCreate`, `XxxUpdate` (all fields
+  optional), `XxxOut`, `XxxInDB`. Don't reuse one model for all four.
+- Raise domain errors (`NotFoundError`, `ConflictError`, `ValidationError`,
+  `PermissionError`) from services; translate to HTTP in exception handlers. Do not
+  raise `HTTPException` outside `api/`.
+- Structured logging (JSON) with `request_id` on every line. Log levels: DEBUG for
+  dev tracing, INFO for lifecycle, WARNING for degraded, ERROR for failures.
+- Configuration comes from environment variables only. No secrets in code, fixtures,
+  tests, or comments. `.env.example` lists every variable with a safe placeholder.
+- Docstrings on every service method: one line of what, one line of why if
+  non-obvious. Skip docstrings on trivial repository passthroughs.
+- Comments explain *why*, never *what*.
+
+---
+
+## 12. Testing
+
+- Every new endpoint ships with: a happy-path test, an auth-failure test (missing
+  key, wrong scope, wrong instance), and a validation-failure test.
+- Bulk endpoints additionally need a partial-failure test asserting the 207 body.
+- Reference logic needs tests proving: (a) an instance-scoped create is rejected with
+  `INSTANCE_CANNOT_CREATE_CONTENT`; (b) editing an instance item writes only to
+  `overrides` and leaves the central document byte-identical; (c) deleting an instance
+  item leaves the central document intact and still visible to other instances;
+  (d) a central edit is reflected in a non-overridden field but not in an overridden
+  one; (e) a central delete makes the reference unresolvable rather than corrupting
+  the instance list.
+- Frame parsing needs a test with a known fixture image and expected coordinates
+  within a tolerance.
+- Tests run against a real MongoDB in CI (service container), not mocks, for
+  repository tests. Service tests may mock repositories.
+- No test may depend on another test's data. Each uses a fresh database name.
+
+---
+
+## 13. Agent working agreement
+
+1. **Plan before large changes.** For anything touching more than three files, write
+   the plan first and get confirmation.
+2. **Read before editing.** Open the existing file; match its conventions rather than
+   imposing new ones.
+3. **Small, reviewable commits.** One concern per commit. Message format:
+   `<area>: <imperative summary>` e.g. `assets: add bulk create endpoint`.
+4. **Never delete or rewrite data-model fields** listed in rule 4 without explicit
+   approval — client apps depend on them.
+5. **Don't add dependencies** without stating what it replaces and why the stdlib or
+   existing stack can't do it.
+6. **Update docs in the same change.** New feature → `core_features.md`. New color →
+   `color_palette.md`. New env var → `.env.example`. New endpoint → OpenAPI summary,
+   description, response models and examples.
+7. **When ambiguous, ask.** Especially about data semantics, cloning behavior, and
+   anything involving money (`is_premium`) or counters.
+8. If you cannot follow a rule here, say which rule and why, in the response —
+   don't work around it quietly.

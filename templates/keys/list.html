@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}API Keys — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
+  <div>
+    <h1>API Access Keys</h1>
+    <p style="color:var(--md-sys-color-on-surface-variant);">
+      Issue and manage scoped API keys with rate limits and optional app-instance isolation.
+    </p>
+  </div>
+</div>
+
+<!-- Issue New Key Form -->
+<div class="card" style="margin-bottom:2rem; max-width:850px;">
+  <h3 style="margin-bottom:1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.5rem;">
+    Issue New API Key
+  </h3>
+
+  <form method="POST" action="/admin/keys/new" class="grid grid-2" style="gap:1rem;">
+    <div class="form-group">
+      <label class="label">Key Description / Name *</label>
+      <input type="text" name="name" class="input" required placeholder="e.g. iOS Client Production">
+    </div>
+
+    <div class="form-group">
+      <label class="label">Scoped App Instance (Optional)</label>
+      <select name="app_instance_id" class="select">
+        <option value="">-- Global / Unscoped --</option>
+        {% for inst in instances %}
+          <option value="{{ inst.id }}">{{ inst.name }} ({{ inst.packageName or 'No pkg' }})</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="label">Rate Limit (Requests / Minute)</label>
+      <input type="number" name="rate_limit_per_min" class="input" value="60" min="1" max="10000" required>
+    </div>
+
+    <div class="form-group" style="grid-column: 1 / -1;">
+      <label class="label">Authorized Scopes *</label>
+      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:0.5rem; padding:0.5rem 0;">
+        {% for sc in scopes %}
+          <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.9rem; cursor:pointer;">
+            <input type="checkbox" name="scopes" value="{{ sc }}" {% if 'read' in sc %}checked{% endif %}>
+            <code>{{ sc }}</code>
+          </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end;">
+      <button type="submit" class="btn btn-primary">Generate API Key</button>
+    </div>
+  </form>
+</div>
+
+<!-- Existing Keys Table -->
+<div class="table-responsive card" style="padding:0;">
+  <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant);">
+    <h3 style="margin:0;">Existing Access Keys ({{ keys|length }})</h3>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Key Name</th>
+        <th>Prefix</th>
+        <th>Instance Context</th>
+        <th>Scopes</th>
+        <th style="text-align:center;">Rate Limit</th>
+        <th>Status</th>
+        <th style="text-align:right;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for k in keys %}
+        <tr>
+          <td><strong>{{ k.name }}</strong></td>
+          <td><code>{{ k.prefix }}...</code></td>
+          <td>
+            {% if k.appInstanceId or k.app_instance_id %}
+              <span class="badge badge-primary">Instance: {{ k.appInstanceId or k.app_instance_id }}</span>
+            {% else %}
+              <span style="color:var(--md-sys-color-on-surface-variant); font-size:0.85rem;">Global</span>
+            {% endif %}
+          </td>
+          <td>
+            <div style="display:flex; flex-wrap:wrap; gap:0.25rem; max-width:280px;">
+              {% for sc in k.scopes %}
+                <span class="badge badge-success" style="font-size:0.75rem;">{{ sc }}</span>
+              {% endfor %}
+            </div>
+          </td>
+          <td style="text-align:center;">
+            <form method="POST" action="/admin/keys/{{ k.id }}/rate-limit"
+                  style="display:inline-flex; align-items:center; gap:0.3rem; justify-content:center;">
+              <input type="number" name="rate_limit_per_min"
+                     value="{{ k.rateLimitPerMin or k.rate_limit_per_min }}"
+                     min="1" max="10000" step="1"
+                     style="width:72px; height:28px; padding:0.15rem 0.3rem; font-size:0.82rem;
+                            border:1px solid var(--md-sys-color-outline-variant); border-radius:6px;
+                            text-align:center; background:var(--md-sys-color-surface-container-low);
+                            color:var(--md-sys-color-on-surface);"
+                     id="rateInput_{{ k.id }}"
+                     onchange="document.getElementById('rateSave_{{ k.id }}').style.display='inline-flex'">
+              <button type="submit" id="rateSave_{{ k.id }}"
+                      class="btn btn-primary"
+                      style="display:none; min-height:26px; padding:0.1rem 0.45rem; font-size:0.75rem; border-radius:5px;"
+                      title="Save rate limit">
+                Save
+              </button>
+              <span style="font-size:0.78rem; color:var(--md-sys-color-on-surface-variant);">/ min</span>
+            </form>
+          </td>
+          <td>
+            {% if k.is_revoked or k.revoked_at or not k.is_active or k.isRevoked %}
+              <span class="badge badge-error">Revoked</span>
+            {% else %}
+              <span class="badge badge-success">Active</span>
+            {% endif %}
+          </td>
+          <td style="text-align:right;">
+            <div style="display:inline-flex; align-items:center; gap:0.4rem; justify-content:flex-end;">
+              {% if not (k.is_revoked or k.revoked_at or not k.is_active or k.isRevoked) %}
+                <form method="POST" action="/admin/keys/{{ k.id }}/revoke" style="display:inline;" onsubmit="return confirm('Revoke key {{ k.name }}? Any client using this key will immediately be rejected.');">
+                  <button type="submit" class="btn btn-outlined btn-warning-outlined" style="min-height:30px; padding:0.2rem 0.65rem; font-size:0.8rem; border-color:#f59e0b; color:#f59e0b;" title="Revoke API Key">
+                    Revoke
+                  </button>
+                </form>
+              {% else %}
+                <form method="POST" action="/admin/keys/{{ k.id }}/activate" style="display:inline;" onsubmit="return confirm('Activate key {{ k.name }}? This key will become valid for API requests again.');">
+                  <button type="submit" class="btn btn-outlined btn-success-outlined" style="min-height:30px; padding:0.2rem 0.65rem; font-size:0.8rem; border-color:#10b981; color:#10b981;" title="Activate API Key">
+                    Activate
+                  </button>
+                </form>
+              {% endif %}
+              <form method="POST" action="/admin/keys/{{ k.id }}/delete" style="display:inline;" onsubmit="return confirm('Permanently delete key {{ k.name }}? This action cannot be undone.');">
+                <button type="submit" class="btn btn-destructive" style="min-height:30px; padding:0.2rem 0.65rem; font-size:0.8rem;" title="Delete API Key Permanently">
+                  Delete
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="7" style="text-align:center; padding:2rem; color:var(--md-sys-color-on-surface-variant);">
+            No API keys created yet. Issue a key above to grant programmatic API access.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

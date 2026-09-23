@@ -1,0 +1,36 @@
+<div id="bulkActionsBar" class="bulk-actions-container" style="display:none;">
+  <div class="bulk-actions-info">
+    <span class="bulk-badge-counter"><span id="bulkSelectedCount">0</span> selected</span>
+    <button type="button" class="btn btn-outlined bulk-btn" id="bulkSelectAllBtn" onclick="bulkSelectAll()">Select All</button>
+    <button type="button" class="btn btn-outlined bulk-btn" id="bulkUnselectAllBtn" onclick="bulkUnselectAll()">Unselect All</button>
+  </div>
+  <div class="bulk-actions-buttons">
+    <button type="button" class="btn btn-outlined bulk-btn bulk-btn-enable" onclick="executeBulkAction('enable')" title="Enable selected items">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+        <polyline points="22 4 12 14.01 9 11.01"/>
+      </svg>
+      Enable
+    </button>
+    <button type="button" class="btn btn-outlined bulk-btn bulk-btn-disable" onclick="executeBulkAction('disable')" title="Disable selected items">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+      </svg>
+      Disable
+    </button>
+    <button type="button" class="btn btn-outlined bulk-btn bulk-btn-premium" onclick="executeBulkAction('set_premium')" title="Mark selected items as Premium">
+      ★ Set Premium
+    </button>
+    <button type="button" class="btn btn-outlined bulk-btn bulk-btn-normal" onclick="executeBulkAction('remove_premium')" title="Remove Premium from selected items">
+      Remove Premium
+    </button>
+    <button type="button" class="btn btn-outlined bulk-btn bulk-btn-delete" id="bulkDeleteBtn" onclick="promptBulkDelete()" title="Delete selected items">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;">
+        <polyline points="3 6 5 6 21 6"/>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+      </svg>
+      Delete
+    </button>
+  </div>
+</div>

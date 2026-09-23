@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Sign In — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="min-height:80vh; display:flex; align-items:center; justify-content:center; padding:1rem;">
+  <div class="card" style="width:100%; max-width:420px;">
+    <div style="text-align:center; margin-bottom:1rem;">
+      <div style="font-size:2.5rem; margin-bottom:0.5rem;">🎨</div>
+      <h1>Operator Sign In</h1>
+      <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.95rem;">Creative Asset Platform Management</p>
+    </div>
+
+    {% if error %}
+      <div class="alert alert-error">
+        <span>⚠️</span>
+        <span>{{ error }}</span>
+      </div>
+    {% endif %}
+
+    <form method="POST" action="/admin/login">
+      <div class="form-group">
+        <label class="form-label" for="username">Username</label>
+        <input type="text" id="username" name="username" class="input" value="{{ username or '' }}" required autofocus>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="password">Password</label>
+        <input type="password" id="password" name="password" class="input" required>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width:100%; margin-top:1rem;">Sign In</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

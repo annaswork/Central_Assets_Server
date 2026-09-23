@@ -1,0 +1,24 @@
+<nav class="nav-rail" aria-label="Tablet Navigation">
+  <div style="font-size:1.5rem; margin-bottom:0.75rem;">🎨</div>
+  {% if session and session.username %}
+  <div class="nav-user-avatar" title="{{ session.username }}" style="margin-bottom:1rem; width:28px; height:28px; font-size:0.75rem;">
+    {{ (session.username[:1] if session and session.username else 'A')|upper }}
+  </div>
+  {% endif %}
+
+  <a href="/admin/dashboard" title="Dashboard" class="nav-link {% if active_tab == 'dashboard' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📊</a>
+  <a href="/admin/categories" title="Categories" class="nav-link {% if active_tab == 'categories' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📁</a>
+  <a href="/admin/subcategories" title="Subcategories" class="nav-link {% if active_tab == 'subcategories' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📂</a>
+  <a href="/admin/assets" title="Assets" class="nav-link {% if active_tab == 'assets' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">🖼️</a>
+  <a href="/admin/instances" title="App Instances" class="nav-link {% if active_tab == 'instances' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📱</a>
+  <a href="/admin/keys" title="API Keys" class="nav-link {% if active_tab == 'keys' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">🔑</a>
+  <a href="/admin/analytics" title="Analytics" class="nav-link {% if active_tab == 'analytics' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📈</a>
+
+  <div style="margin-top:auto; display:flex; flex-direction:column; gap:0.5rem; align-items:center; padding-bottom:1rem;">
+    <a href="/admin/settings" title="Settings" class="nav-link {% if active_tab == 'settings' %}active{% endif %}" style="padding:0.5rem; justify-content:center; text-decoration:none; font-size:1.1rem;">⚙️</a>
+    <button type="button" class="theme-toggle-btn" title="Toggle Theme" style="border:none; width:34px; height:34px; font-size:1.1rem;">
+      <span>🌙</span>
+    </button>
+    <a href="/admin/logout" title="Sign Out" style="font-size:1.1rem; text-decoration:none;">🚪</a>
+  </div>
+</nav>

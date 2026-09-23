@@ -1,0 +1,19 @@
+<header class="topbar">
+  <div style="display:flex; align-items:center; gap:0.75rem;">
+    <button type="button" class="sidebar-toggle-btn" id="topbarSidebarToggleBtn" aria-label="Toggle Sidebar" title="Toggle Sidebar">
+      <span>☰</span>
+    </button>
+    <h2 style="font-size:1.25rem; margin:0;">Creative Asset Library</h2>
+  </div>
+
+  <div class="topbar-actions">
+    <button type="button" class="theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle Theme" title="Toggle Light/Dark Theme">
+      <span id="themeIcon">🌙</span>
+    </button>
+
+    <div style="display:flex; align-items:center; gap:0.5rem; font-size:0.9rem;">
+      <span style="font-weight:600;">{{ session.username }}</span>
+      <a href="/admin/logout" class="btn btn-outlined" style="min-height:32px; padding:0.25rem 0.75rem; font-size:0.85rem;">Logout</a>
+    </div>
+  </div>
+</header>

@@ -1,0 +1,31 @@
+<!-- confirm_dialog.html: Accessible modal confirmation dialog -->
+<div id="confirmDialog" class="modal-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+  <div class="card" style="max-width:450px; width:90%; padding:1.5rem; margin:auto;">
+    <h3 id="confirmDialogTitle" style="margin-bottom:0.75rem;">Confirm Action</h3>
+    <p id="confirmDialogMessage" style="color:var(--md-sys-color-on-surface-variant); margin-bottom:1.5rem;">
+      Are you sure you want to proceed?
+    </p>
+    <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+      <button type="button" class="btn btn-outlined" onclick="closeConfirmDialog()">Cancel</button>
+      <button type="button" id="confirmDialogActionBtn" class="btn btn-destructive">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function showConfirmDialog(title, message, onConfirm) {
+  const dialog = document.getElementById('confirmDialog');
+  document.getElementById('confirmDialogTitle').textContent = title || 'Confirm Action';
+  document.getElementById('confirmDialogMessage').textContent = message || 'Are you sure?';
+  const actionBtn = document.getElementById('confirmDialogActionBtn');
+  actionBtn.onclick = () => {
+    closeConfirmDialog();
+    if (onConfirm) onConfirm();
+  };
+  dialog.style.display = 'flex';
+}
+
+function closeConfirmDialog() {
+  document.getElementById('confirmDialog').style.display = 'none';
+}
+</script>

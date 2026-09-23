@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}System Settings — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+  <h1>System Settings & Environment</h1>
+  <p style="color:var(--md-sys-color-on-surface-variant);">
+    Runtime configuration, active storage mounts, and platform status.
+  </p>
+</div>
+
+<div class="grid grid-2" style="max-width:1000px; gap:1.5rem;">
+  <!-- Runtime Info -->
+  <div class="card">
+    <h3 style="margin-bottom:1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.5rem;">
+      Platform Runtime
+    </h3>
+
+    <div style="display:flex; flex-direction:column; gap:0.75rem; font-size:0.9rem;">
+      <div style="display:flex; justify-content:space-between;">
+        <span style="color:var(--md-sys-color-on-surface-variant);">Application Name:</span>
+        <strong>{{ settings.app_name }}</strong>
+      </div>
+      <div style="display:flex; justify-content:space-between;">
+        <span style="color:var(--md-sys-color-on-surface-variant);">Environment:</span>
+        <span class="badge badge-primary">{{ settings.app_env }}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between;">
+        <span style="color:var(--md-sys-color-on-surface-variant);">Debug Mode:</span>
+        <span>{{ 'Enabled' if settings.debug else 'Disabled' }}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between;">
+        <span style="color:var(--md-sys-color-on-surface-variant);">Interactive Docs:</span>
+        <span><a href="/docs" target="_blank" style="color:var(--md-sys-color-primary);">Swagger UI</a> | <a href="/redoc" target="_blank" style="color:var(--md-sys-color-primary);">ReDoc</a></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Database & Storage -->
+  <div class="card">
+    <h3 style="margin-bottom:1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.5rem;">
+      Storage & Database
+    </h3>
+
+    <div style="display:flex; flex-direction:column; gap:0.75rem; font-size:0.9rem;">
+      <div style="display:flex; justify-content:space-between;">
+        <span style="color:var(--md-sys-color-on-surface-variant);">MongoDB Database:</span>
+        <code>{{ settings.mongodb_db_name }}</code>
+      </div>
+      <div style="display:flex; justify-content:space-between;">
+        <span style="color:var(--md-sys-color-on-surface-variant);">MongoDB Status:</span>
+        <span class="badge badge-success">Connected</span>
+      </div>
+      <div style="display:flex; justify-content:space-between;">
+        <span style="color:var(--md-sys-color-on-surface-variant);">Upload Directory:</span>
+        <code>{{ settings.media_upload_dir }}</code>
+      </div>
+      <div style="display:flex; justify-content:space-between;">
+        <span style="color:var(--md-sys-color-on-surface-variant);">Max Upload Size:</span>
+        <span>{{ (settings.media_max_bytes / 1024 / 1024)|int }} MB</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Operational Parameters -->
+  <div class="card" style="grid-column: 1 / -1;">
+    <h3 style="margin-bottom:1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.5rem;">
+      Architectural Rules & Guardrails
+    </h3>
+
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:1rem;">
+      <div style="padding:1rem; border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container-low);">
+        <div style="font-weight:600; color:var(--app-ocean); margin-bottom:0.25rem;">R1: Strict Central Authoring</div>
+        <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">
+          App instances can never author content. All asset generation is central; instance writes return <code>409 Conflict</code>.
+        </div>
+      </div>
+
+      <div style="padding:1rem; border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container-low);">
+        <div style="font-weight:600; color:var(--app-teal); margin-bottom:0.25rem;">R2: Physical Separation</div>
+        <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">
+          Writes within instance contexts are physically restricted to <code>instance_content</code> and <code>instance_overrides</code>.
+        </div>
+      </div>
+
+      <div style="padding:1rem; border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container-low);">
+        <div style="font-weight:600; color:var(--md-sys-color-primary); margin-bottom:0.25rem;">Zero Baseline Purple</div>
+        <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">
+          Palette is strictly restricted to Slate, Ocean Indigo, and Electric Teal M3 tonal surfaces.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

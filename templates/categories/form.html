@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+
+{% block title %}{% if category %}Edit Category{% else %}New Category{% endif %} — Asset Admin{% endblock %}
+
+{% block content %}
+<div style="max-width:640px; margin:0 auto;">
+  <div style="margin-bottom:1.5rem;">
+    <h1>{% if category %}Edit Category{% else %}New Central Category{% endif %}</h1>
+    <a href="/admin/categories" style="color:var(--md-sys-color-primary); text-decoration:none; font-size:0.9rem;">← Back to Categories</a>
+  </div>
+
+  {% if error %}
+    <div class="alert alert-error">
+      <span>⚠️</span>
+      <span>{{ error }}</span>
+    </div>
+  {% endif %}
+
+  <div class="card">
+    <form method="POST" enctype="multipart/form-data" action="{% if category %}/admin/categories/{{ category.id }}/edit{% else %}/admin/categories/new{% endif %}">
+      <div class="form-group">
+        <label class="form-label" for="name">Category Name *</label>
+        <input type="text" id="name" name="name" class="input" value="{{ category.name if category else '' }}" required maxlength="120" placeholder="e.g. Photo Frames">
+      </div>
+
+      <!-- Hero / Banner Image with Drag & Drop -->
+      <div class="form-group" style="margin-top:1.25rem;">
+        <label class="form-label">Hero / Banner Image</label>
+        
+        <div class="dropzone" id="imageDropzone" onclick="document.getElementById('image_file').click()">
+          <div class="dropzone-icon">🖼️</div>
+          <div class="dropzone-text">Drag &amp; drop banner image here, or <span>browse</span></div>
+          <div class="dropzone-hint">PNG, JPG, WEBP, GIF (Max 150MB)</div>
+          <input type="file" id="image_file" name="image_file" accept="image/*" style="display:none;" onchange="handleImageFileSelect(this)">
+        </div>
+
+        <div id="imagePreviewContainer" class="dropzone-preview" style="{% if category and category.image_url %}display:flex;{% else %}display:none;{% endif %}">
+          <img id="imagePreviewImg" class="dropzone-preview-img" src="{{ category.image_url if category and category.image_url else '' }}" alt="Banner preview">
+          <div class="dropzone-preview-info">
+            <div id="imagePreviewFilename" class="dropzone-preview-filename">
+              {% if category and category.image_url %}{{ category.image_url.split('/')[-1] }}{% else %}Selected Image{% endif %}
+            </div>
+            <div id="imagePreviewMeta" class="dropzone-preview-meta">
+              {% if category and category.image_url %}Current Banner Image{% endif %}
+            </div>
+          </div>
+          <button type="button" class="btn btn-text" style="color:var(--md-sys-color-error); font-size:0.85rem; padding:0.25rem 0.5rem;" onclick="clearImageFile()">
+            ✕ Remove
+          </button>
+        </div>
+
+        <input type="hidden" id="image_url" name="image_url" value="{{ category.image_url if category and category.image_url else '' }}">
+      </div>
+
+      <!-- Thumbnail Options -->
+      <div class="form-group" style="margin-top:1.5rem; padding-top:1.25rem; border-top:1px solid var(--md-sys-color-outline-variant);">
+        <label class="form-label" style="margin-bottom:0.5rem; font-weight:600;">Thumbnail Source Options</label>
+        
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:0.65rem; margin-bottom:1rem;">
+          <label style="display:flex; align-items:center; gap:0.5rem; padding:0.6rem 0.75rem; border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer;">
+            <input type="radio" name="thumb_option" value="custom" checked onchange="updateThumbOptionUI('custom')">
+            <div>
+              <div style="font-weight:600; font-size:0.83rem;">Custom Thumbnail</div>
+              <div style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant);">Upload custom thumbnail</div>
+            </div>
+          </label>
+          
+          <label style="display:flex; align-items:center; gap:0.5rem; padding:0.6rem 0.75rem; border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer;">
+            <input type="radio" name="thumb_option" value="auto_create" onchange="updateThumbOptionUI('auto_create')">
+            <div>
+              <div style="font-weight:600; font-size:0.83rem;">Create from Banner</div>
+              <div style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant);">Auto 1/3rd scale from image</div>
+            </div>
+          </label>
+          
+          <label style="display:flex; align-items:center; gap:0.5rem; padding:0.6rem 0.75rem; border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer;">
+            <input type="radio" name="thumb_option" value="original" onchange="updateThumbOptionUI('original')">
+            <div>
+              <div style="font-weight:600; font-size:0.83rem;">Use Original Image</div>
+              <div style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant);">Use banner image directly</div>
+            </div>
+          </label>
+        </div>
+
+        <!-- Custom Thumbnail Dropzone Container -->
+        <div id="customThumbDropzoneWrap">
+          <div class="dropzone" id="thumbDropzone" onclick="document.getElementById('thumbnail_file').click()">
+            <div class="dropzone-icon">📸</div>
+            <div class="dropzone-text">Drag &amp; drop thumbnail here, or <span>browse</span></div>
+            <div class="dropzone-hint">PNG, JPG, WEBP, GIF (Max 50MB)</div>
+            <input type="file" id="thumbnail_file" name="thumbnail_file" accept="image/*" style="display:none;" onchange="handleThumbFileSelect(this)">
+          </div>
+
+          <div id="thumbPreviewContainer" class="dropzone-preview" style="{% if category and category.thumbnail_url %}display:flex;{% else %}display:none;{% endif %}">
+            <img id="thumbPreviewImg" class="dropzone-preview-img" src="{{ category.thumbnail_url if category and category.thumbnail_url else '' }}" alt="Thumbnail preview">
+            <div class="dropzone-preview-info">
+              <div id="thumbPreviewFilename" class="dropzone-preview-filename">
+                {% if category and category.thumbnail_url %}{{ category.thumbnail_url.split('/')[-1] }}{% else %}Selected Thumbnail{% endif %}
+              </div>
+              <div id="thumbPreviewMeta" class="dropzone-preview-meta">
+                {% if category and category.thumbnail_url %}Current Thumbnail{% endif %}
+              </div>
+            </div>
+            <button type="button" class="btn btn-text" style="color:var(--md-sys-color-error); font-size:0.85rem; padding:0.25rem 0.5rem;" onclick="clearThumbFile()">
+              ✕ Remove
+            </button>
+          </div>
+        </div>
+
+        <div id="autoCreateThumbNotice" style="display:none; font-size:0.8rem; color:var(--app-teal); background:var(--md-sys-color-surface-container); padding:0.75rem; border-radius:var(--radius-sm); border:1px solid var(--md-sys-color-outline-variant);">
+          ✨ Auto-scales to 1/3rd size thumbnail from the uploaded hero/banner image on save.
+        </div>
+
+        <div id="originalThumbNotice" style="display:none; font-size:0.8rem; color:var(--md-sys-color-primary); background:var(--md-sys-color-surface-container); padding:0.75rem; border-radius:var(--radius-sm); border:1px solid var(--md-sys-color-outline-variant);">
+          🖼️ The original hero/banner image URL will be used directly as the category thumbnail.
+        </div>
+
+        <input type="hidden" id="thumbnail_url" name="thumbnail_url" value="{{ category.thumbnail_url if category and category.thumbnail_url else '' }}">
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:2rem; border-top:1px solid var(--md-sys-color-outline-variant); padding-top:1.25rem;">
+        <a href="/admin/categories" class="btn btn-outlined">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save Category</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function setupDragAndDrop(dropzoneId, inputId, handleFilesFn) {
+    const dz = document.getElementById(dropzoneId);
+    if (!dz) return;
+
+    ['dragenter', 'dragover'].forEach(name => {
+      dz.addEventListener(name, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dz.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(name => {
+      dz.addEventListener(name, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dz.classList.remove('dragover');
+      });
+    });
+
+    dz.addEventListener('drop', (e) => {
+      const dt = e.dataTransfer;
+      if (dt && dt.files && dt.files.length > 0) {
+        const file = dt.files[0];
+        const input = document.getElementById(inputId);
+        const container = new DataTransfer();
+        container.items.add(file);
+        input.files = container.files;
+        handleFilesFn(file);
+      }
+    });
+  }
+
+  function handleImageFileSelect(input) {
+    if (input.files && input.files[0]) {
+      renderImagePreview(input.files[0]);
+    }
+  }
+
+  function renderImagePreview(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      document.getElementById('imagePreviewImg').src = e.target.result;
+      document.getElementById('imagePreviewFilename').textContent = file.name;
+      document.getElementById('imagePreviewMeta').textContent = `${(file.size / 1024).toFixed(1)} KB — Upload file staged`;
+      document.getElementById('imagePreviewContainer').style.display = 'flex';
+      // Clear manual URL input so file takes precedence
+      document.getElementById('image_url').value = '';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearImageFile() {
+    const input = document.getElementById('image_file');
+    input.value = '';
+    document.getElementById('image_url').value = '';
+    document.getElementById('imagePreviewContainer').style.display = 'none';
+    document.getElementById('imagePreviewImg').src = '';
+  }
+
+  function onImageUrlInput(val) {
+    const trimmed = (val || '').trim();
+    if (trimmed) {
+      document.getElementById('imagePreviewImg').src = trimmed;
+      document.getElementById('imagePreviewFilename').textContent = trimmed.split('/').pop() || trimmed;
+      document.getElementById('imagePreviewMeta').textContent = 'Direct URL link';
+      document.getElementById('imagePreviewContainer').style.display = 'flex';
+      // Clear file input
+      document.getElementById('image_file').value = '';
+    } else {
+      clearImageFile();
+    }
+  }
+
+  function handleThumbFileSelect(input) {
+    if (input.files && input.files[0]) {
+      renderThumbPreview(input.files[0]);
+    }
+  }
+
+  function renderThumbPreview(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      document.getElementById('thumbPreviewImg').src = e.target.result;
+      document.getElementById('thumbPreviewFilename').textContent = file.name;
+      document.getElementById('thumbPreviewMeta').textContent = `${(file.size / 1024).toFixed(1)} KB — Upload file staged`;
+      document.getElementById('thumbPreviewContainer').style.display = 'flex';
+      document.getElementById('thumbnail_url').value = '';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearThumbFile() {
+    const input = document.getElementById('thumbnail_file');
+    input.value = '';
+    document.getElementById('thumbnail_url').value = '';
+    document.getElementById('thumbPreviewContainer').style.display = 'none';
+    document.getElementById('thumbPreviewImg').src = '';
+  }
+
+  function onThumbUrlInput(val) {
+    const trimmed = (val || '').trim();
+    if (trimmed) {
+      document.getElementById('thumbPreviewImg').src = trimmed;
+      document.getElementById('thumbPreviewFilename').textContent = trimmed.split('/').pop() || trimmed;
+      document.getElementById('thumbPreviewMeta').textContent = 'Direct URL link';
+      document.getElementById('thumbPreviewContainer').style.display = 'flex';
+      document.getElementById('thumbnail_file').value = '';
+    } else {
+      clearThumbFile();
+    }
+  }
+
+  function updateThumbOptionUI(mode) {
+    const wrap = document.getElementById('customThumbDropzoneWrap');
+    const autoNotice = document.getElementById('autoCreateThumbNotice');
+    const origNotice = document.getElementById('originalThumbNotice');
+    if (!wrap || !autoNotice || !origNotice) return;
+
+    if (mode === 'custom') {
+      wrap.style.display = 'block';
+      autoNotice.style.display = 'none';
+      origNotice.style.display = 'none';
+    } else if (mode === 'auto_create') {
+      wrap.style.display = 'none';
+      autoNotice.style.display = 'block';
+      origNotice.style.display = 'none';
+    } else if (mode === 'original') {
+      wrap.style.display = 'none';
+      autoNotice.style.display = 'none';
+      origNotice.style.display = 'block';
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    setupDragAndDrop('imageDropzone', 'image_file', renderImagePreview);
+    setupDragAndDrop('thumbDropzone', 'thumbnail_file', renderThumbPreview);
+  });
+</script>
+{% endblock %}
