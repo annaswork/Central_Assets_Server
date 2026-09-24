@@ -5,7 +5,12 @@ from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from authorization.encryption import hash_password, verify_password
+from authorization.encryption import (
+    decrypt_password,
+    encrypt_password,
+    hash_password,
+    verify_password,
+)
 from authorization.manager_session import authenticate_manager_user
 from authorization.totp import (
     generate_backup_codes,
@@ -18,6 +23,7 @@ from authorization.totp import (
 )
 from controller.base_controller import serialize_mongo_doc, serialize_mongo_docs
 from database.collections import (
+    ADMIN_USERS,
     API_KEYS,
     APP_INSTANCE_ACCESS,
     APP_INSTANCE_ACCESS_REQUESTS,
@@ -74,12 +80,14 @@ async def register_manager(db: AsyncIOMotorDatabase, data: ManagerUserCreate) ->
         raise ValidationError("Password must be at least 8 characters long.")
 
     pw_hash = hash_password(data.password)
+    encrypted_pw = encrypt_password(data.password)
     now = utc_now()
 
     doc: dict[str, Any] = {
         "username": clean_username,
         "email": data.email.strip().lower() if data.email else None,
         "password_hash": pw_hash,
+        "encrypted_password": encrypted_pw,
         "role": "manager",
         "status": "active",  # Default active per specification
         "is_active": True,
@@ -162,9 +170,10 @@ async def change_manager_password(
         raise ValidationError("New password must be at least 8 characters long.")
 
     pw_hash = hash_password(new_password)
+    encrypted_pw = encrypt_password(new_password)
     await db[MANAGERS].update_one(
         {"_id": oid},
-        {"$set": {"password_hash": pw_hash, "updated_at": utc_now()}},
+        {"$set": {"password_hash": pw_hash, "encrypted_password": encrypted_pw, "updated_at": utc_now()}},
     )
     return True
 

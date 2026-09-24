@@ -1,5 +1,6 @@
 """Constructs structured analytics event documents from HTTP request/response metrics."""
 
+import http
 from typing import Any
 
 from fastapi import Request, Response
@@ -13,6 +14,8 @@ def build_analytics_event(
     path_template: str,
     duration_ms: float,
     error_code: str | None = None,
+    error_reason: str | None = None,
+    error_details: Any = None,
 ) -> dict[str, Any]:
     """Assemble a complete event document to be persisted."""
     api_key_obj = getattr(request.state, "api_key", None)
@@ -56,6 +59,23 @@ def build_analytics_event(
         if content_length_res and content_length_res.isdigit():
             response_bytes = int(content_length_res)
 
+    # Error code, reason, and details fallbacks from request.state
+    if not error_code:
+        error_code = getattr(request.state, "error_code", None)
+    if not error_reason:
+        error_reason = getattr(request.state, "error_reason", None)
+    if error_details is None:
+        error_details = getattr(request.state, "error_details", None)
+
+    if status_code >= 400:
+        if not error_code:
+            error_code = f"HTTP_{status_code}"
+        if not error_reason:
+            try:
+                error_reason = http.HTTPStatus(status_code).phrase
+            except Exception:
+                error_reason = f"Error {status_code}"
+
     return {
         "path_template": path_template,
         "method": request.method.upper(),
@@ -71,5 +91,7 @@ def build_analytics_event(
         "request_bytes": request_bytes,
         "response_bytes": response_bytes,
         "error_code": error_code,
+        "error_reason": error_reason,
+        "error_details": error_details,
         "ts": utc_now(),
     }

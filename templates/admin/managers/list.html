@@ -19,10 +19,9 @@
         <tr>
           <th>Manager</th>
           <th>Status</th>
-          <th style="width:140px; text-align:center;">Owned Apps</th>
           <th>Granted App Access</th>
           <th style="width:160px;">Registered</th>
-          <th style="width:180px; text-align:right;">Actions</th>
+          <th style="width:280px; text-align:right;">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -31,8 +30,13 @@
             <tr>
               <td>
                 <div style="display:flex; align-items:center; gap:0.75rem;">
-                  <div style="width:38px; height:38px; border-radius:50%; background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container); display:flex; align-items:center; justify-content:center; font-weight:700;">
-                    {{ (m.username[:1])|upper }}
+                  <div style="width:40px; height:40px; border-radius:50%; overflow:hidden; background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container); display:flex; align-items:center; justify-content:center; font-weight:700; flex-shrink:0; border:1px solid var(--md-sys-color-outline-variant);">
+                    {% if m.profile_picture %}
+                      <img src="{{ m.profile_picture }}" alt="{{ m.username }}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;" onerror="this.onerror=null; this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='flex';">
+                      <span style="display:none; width:100%; height:100%; align-items:center; justify-content:center;">{{ (m.display_name or m.username)[:1]|upper }}</span>
+                    {% else %}
+                      {{ (m.display_name or m.username)[:1]|upper }}
+                    {% endif %}
                   </div>
                   <div>
                     <div style="font-weight:600; font-size:0.95rem;">{{ m.username }}</div>
@@ -50,11 +54,6 @@
                 {% else %}
                   <span class="badge badge-error">Disabled</span>
                 {% endif %}
-              </td>
-              <td style="text-align:center;">
-                <span class="badge" style="background:var(--md-sys-color-surface-container-high);">
-                  {{ m.owned_instances_count or 0 }} apps
-                </span>
               </td>
               <td>
                 <div style="display:flex; flex-wrap:wrap; gap:0.35rem; align-items:center;">
@@ -77,14 +76,19 @@
                 {{ m.created_at|format_datetime }}
               </td>
               <td style="text-align:right;">
-                <div style="display:inline-flex; gap:0.5rem; align-items:center;">
+                <div style="display:inline-flex; gap:0.4rem; align-items:center;">
+                  <!-- View Password (Requires 2FA) -->
+                  <button type="button" class="btn btn-outlined btn-sm" onclick="openViewPasswordModal('{{ m.id }}', '{{ m.username }}')" title="View Manager Password via Admin 2FA" style="color:var(--md-sys-color-primary); border-color:var(--md-sys-color-outline-variant);">
+                    🔑 Password
+                  </button>
+
                   <!-- Grant Access Modal Button -->
                   <button type="button" class="btn btn-outlined btn-sm" onclick="openGrantModal('{{ m.id }}', '{{ m.username }}')" title="Grant App Access">
                     + Grant App
                   </button>
 
                   <!-- Delete Manager -->
-                  <form method="POST" action="/admin/managers/{{ m.id }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete manager \'{{ m.username }}\'? This will remove their account and all owned app instances.');">
+                  <form method="POST" action="/admin/managers/{{ m.id }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete manager \'{{ m.username }}\'? This will remove their account and all access grants.');">
                     <button type="submit" class="btn btn-outlined btn-sm" style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);" title="Delete Manager">
                       🗑️
                     </button>
@@ -95,7 +99,7 @@
           {% endfor %}
         {% else %}
           <tr>
-            <td colspan="6" style="text-align:center; padding:3.5rem 1rem; color:var(--md-sys-color-on-surface-variant);">
+            <td colspan="5" style="text-align:center; padding:3.5rem 1rem; color:var(--md-sys-color-on-surface-variant);">
               <div style="font-size:2rem; margin-bottom:0.5rem;">👥</div>
               <div style="font-weight:600;">No managers registered yet</div>
               <div style="font-size:0.9rem; margin-top:0.25rem;">New accounts will appear here after registering at <code>/manager/register</code>.</div>
@@ -112,7 +116,7 @@
   <div class="card" style="width:100%; max-width:480px; box-shadow:var(--md-sys-elevation-4); padding:0; overflow:hidden;">
     <div style="padding:1.25rem 1.5rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center;">
       <h3 style="margin:0; font-size:1.15rem;">Grant App Access</h3>
-      <button type="button" onclick="closeGrantModal()" style="background:none; border:none; font-size:1.25rem; cursor:pointer;">✕</button>
+      <button type="button" onclick="closeGrantModal()" style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:var(--md-sys-color-on-surface-variant);">✕</button>
     </div>
 
     <form id="grantForm" method="POST" action="" style="padding:1.5rem;">
@@ -135,15 +139,354 @@
   </div>
 </div>
 
+<!-- Modal: View Manager Password (2FA Protected) -->
+<div id="viewPasswordModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1100; align-items:center; justify-content:center; padding:1.5rem; backdrop-filter:blur(4px);">
+  <div class="card" style="width:100%; max-width:500px; box-shadow:0 12px 32px rgba(0,0,0,0.5); padding:0; overflow:hidden; border:1px solid var(--md-sys-color-outline-variant);">
+    
+    <!-- Modal Header -->
+    <div style="padding:1.25rem 1.5rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center; background:var(--md-sys-color-surface-container);">
+      <div style="display:flex; align-items:center; gap:0.6rem;">
+        <span style="font-size:1.3rem;">🔐</span>
+        <div>
+          <h3 style="margin:0; font-size:1.1rem; font-weight:700;">Manager Password</h3>
+          <div style="font-size:0.8rem; color:var(--md-sys-color-outline);">Protected by Admin Two-Factor Authentication</div>
+        </div>
+      </div>
+      <button type="button" onclick="closeViewPasswordModal()" style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:var(--md-sys-color-on-surface-variant); padding:0.25rem 0.5rem; border-radius:4px;">✕</button>
+    </div>
+
+    <!-- Modal Body -->
+    <div style="padding:1.5rem;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; padding:0.6rem 0.85rem; background:var(--md-sys-color-surface-container-high); border-radius:8px;">
+        <span style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">Target Account:</span>
+        <span id="vpManagerUsername" style="font-weight:700; color:var(--md-sys-color-primary); font-size:0.95rem;"></span>
+      </div>
+
+      <!-- Alert / Status Banner -->
+      <div id="vpAlert" style="display:none; padding:0.75rem 1rem; border-radius:8px; font-size:0.85rem; margin-bottom:1rem; line-height:1.4;"></div>
+
+      {% if not admin_has_2fa %}
+        <!-- 2FA Disabled Warning -->
+        <div style="padding:1rem; background:rgba(239, 68, 68, 0.12); border:1px solid rgba(239, 68, 68, 0.35); border-radius:8px; margin-bottom:1rem;">
+          <div style="display:flex; align-items:flex-start; gap:0.6rem;">
+            <span style="font-size:1.25rem;">⚠️</span>
+            <div>
+              <div style="font-weight:700; color:#ef4444; font-size:0.9rem;">Admin 2FA Required</div>
+              <div style="font-size:0.82rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.25rem;">
+                Two-Factor Authentication is currently not enabled on your Admin account. Security policy requires active Admin 2FA verification to view manager credentials.
+              </div>
+              <div style="margin-top:0.75rem;">
+                <a href="/admin/security/2fa" class="btn btn-primary btn-sm" style="text-decoration:none; display:inline-block;">Configure Admin 2FA Now</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <!-- Step 1: 2FA Verification Form -->
+        <div id="vpVerifyStep">
+          <p style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); margin:0 0 1rem 0;">
+            Enter the 6-digit code from your <strong>Authenticator App</strong> (or an emergency backup code) to decrypt and inspect this manager's password.
+          </p>
+
+          <form id="vpForm" onsubmit="handleRevealPassword(event);">
+            <div class="form-group" style="margin-bottom:1.25rem;">
+              <label class="form-label" for="vpCodeInput" style="font-weight:600; display:flex; justify-content:space-between;">
+                <span>Admin 2FA Code *</span>
+                <span style="font-size:0.75rem; color:var(--md-sys-color-outline);">TOTP or Backup Code</span>
+              </label>
+              <input
+                type="text"
+                id="vpCodeInput"
+                class="input"
+                placeholder="123456"
+                maxlength="16"
+                autocomplete="one-time-code"
+                required
+                style="font-size:1.25rem; letter-spacing:0.25rem; text-align:center; font-family:monospace; font-weight:700; padding:0.6rem;"
+              />
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+              <button type="button" class="btn btn-outlined" onclick="closeViewPasswordModal()">Cancel</button>
+              <button type="submit" id="vpSubmitBtn" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:0.4rem;">
+                <span>🔓 Verify & Reveal Password</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Step 2: Password Displayed Result -->
+        <div id="vpResultStep" style="display:none;">
+          <div style="padding:1rem; background:rgba(34, 197, 94, 0.1); border:1px solid rgba(34, 197, 94, 0.3); border-radius:8px; margin-bottom:1.25rem;">
+            <div style="font-size:0.8rem; font-weight:600; color:#22c55e; margin-bottom:0.5rem; display:flex; align-items:center; gap:0.35rem;">
+              <span>✓</span> Decrypted Manager Password:
+            </div>
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+              <input
+                type="text"
+                id="vpRevealedPassword"
+                readonly
+                style="flex:1; background:var(--md-sys-color-surface); border:1px solid var(--md-sys-color-outline); padding:0.55rem 0.85rem; border-radius:6px; font-family:monospace; font-size:1.05rem; font-weight:700; color:var(--md-sys-color-on-surface);"
+              />
+              <button type="button" class="btn btn-outlined btn-sm" onclick="copyRevealedPassword()" id="vpCopyBtn" title="Copy to clipboard" style="min-width:70px;">
+                📋 Copy
+              </button>
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--md-sys-color-outline-variant); padding-top:1rem; margin-top:1rem;">
+            <button type="button" class="btn btn-text btn-sm" onclick="toggleResetForm()" style="color:var(--md-sys-color-primary);">
+              ✏️ Set New Password Instead
+            </button>
+            <button type="button" class="btn btn-outlined btn-sm" onclick="closeViewPasswordModal()">Done</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Legacy Account / Reset Password Form -->
+        <div id="vpResetStep" style="display:none;">
+          <div id="vpLegacyNotice" style="display:none; padding:0.85rem; background:rgba(234, 179, 8, 0.12); border:1px solid rgba(234, 179, 8, 0.35); border-radius:8px; font-size:0.82rem; margin-bottom:1rem; color:var(--md-sys-color-on-surface-variant);">
+            ⚠️ <strong>Legacy Account:</strong> This manager account was created before reversible encrypted storage was enabled. You can set a new password for this manager below using your verified 2FA code.
+          </div>
+
+          <form id="vpResetForm" onsubmit="handleResetPassword(event);">
+            <div class="form-group" style="margin-bottom:1rem;">
+              <label class="form-label" for="vpNewPasswordInput" style="font-weight:600;">New Password for Manager *</label>
+              <div style="display:flex; gap:0.5rem;">
+                <input
+                  type="text"
+                  id="vpNewPasswordInput"
+                  class="input"
+                  placeholder="Minimum 8 characters"
+                  minlength="8"
+                  required
+                  style="font-family:monospace;"
+                />
+                <button type="button" class="btn btn-outlined btn-sm" onclick="generateRandomManagerPassword()" title="Generate Random Secure Password">
+                  🎲 Generate
+                </button>
+              </div>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+              <button type="button" class="btn btn-outlined" onclick="closeViewPasswordModal()">Cancel</button>
+              <button type="submit" id="vpResetSubmitBtn" class="btn btn-primary">
+                💾 Save New Password
+              </button>
+            </div>
+          </form>
+        </div>
+      {% endif %}
+
+    </div>
+  </div>
+</div>
+
 <script>
+  let activeManagerId = null;
+  let activeManagerName = null;
+  let verifiedTwoFactorCode = "";
+
   function openGrantModal(managerId, managerName) {
     const form = document.getElementById('grantForm');
     form.action = `/admin/managers/${managerId}/grant-access`;
     document.getElementById('grantTargetName').innerText = `Granting access to manager: ${managerName}`;
     document.getElementById('grantModal').style.display = 'flex';
   }
+
   function closeGrantModal() {
     document.getElementById('grantModal').style.display = 'none';
+  }
+
+  function openViewPasswordModal(managerId, managerName) {
+    activeManagerId = managerId;
+    activeManagerName = managerName;
+    verifiedTwoFactorCode = "";
+
+    document.getElementById('vpManagerUsername').innerText = managerName;
+    showAlert('', 'none');
+
+    const verifyStep = document.getElementById('vpVerifyStep');
+    const resultStep = document.getElementById('vpResultStep');
+    const resetStep = document.getElementById('vpResetStep');
+    const codeInput = document.getElementById('vpCodeInput');
+
+    if (verifyStep) verifyStep.style.display = 'block';
+    if (resultStep) resultStep.style.display = 'none';
+    if (resetStep) resetStep.style.display = 'none';
+    if (codeInput) {
+      codeInput.value = '';
+      setTimeout(() => codeInput.focus(), 100);
+    }
+
+    document.getElementById('viewPasswordModal').style.display = 'flex';
+  }
+
+  function closeViewPasswordModal() {
+    document.getElementById('viewPasswordModal').style.display = 'none';
+    activeManagerId = null;
+    activeManagerName = null;
+    verifiedTwoFactorCode = "";
+  }
+
+  function showAlert(message, type) {
+    const el = document.getElementById('vpAlert');
+    if (!el) return;
+    if (type === 'none' || !message) {
+      el.style.display = 'none';
+      el.innerText = '';
+      return;
+    }
+    el.style.display = 'block';
+    el.innerText = message;
+    if (type === 'error') {
+      el.style.background = 'rgba(239, 68, 68, 0.15)';
+      el.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+      el.style.color = '#ef4444';
+    } else if (type === 'success') {
+      el.style.background = 'rgba(34, 197, 94, 0.15)';
+      el.style.border = '1px solid rgba(34, 197, 94, 0.4)';
+      el.style.color = '#22c55e';
+    } else {
+      el.style.background = 'rgba(59, 130, 246, 0.15)';
+      el.style.border = '1px solid rgba(59, 130, 246, 0.4)';
+      el.style.color = '#60a5fa';
+    }
+  }
+
+  async function handleRevealPassword(event) {
+    event.preventDefault();
+    if (!activeManagerId) return;
+
+    const code = document.getElementById('vpCodeInput').value.trim();
+    if (!code) {
+      showAlert('Please enter your 6-digit 2FA code.', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('vpSubmitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳ Verifying...</span>';
+    showAlert('', 'none');
+
+    try {
+      const response = await fetch(`/admin/managers/${activeManagerId}/view-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        if (data.has_encrypted_password === false) {
+          // Account exists but has no reversible encrypted password (created before feature)
+          verifiedTwoFactorCode = code;
+          document.getElementById('vpVerifyStep').style.display = 'none';
+          document.getElementById('vpResetStep').style.display = 'block';
+          document.getElementById('vpLegacyNotice').style.display = 'block';
+          showAlert('', 'none');
+          return;
+        }
+
+        showAlert(data.detail || data.error || '2FA verification failed. Please check your code and try again.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<span>🔓 Verify & Reveal Password</span>';
+        return;
+      }
+
+      // Password successfully decrypted!
+      verifiedTwoFactorCode = code;
+      document.getElementById('vpRevealedPassword').value = data.password;
+      document.getElementById('vpVerifyStep').style.display = 'none';
+      document.getElementById('vpResultStep').style.display = 'block';
+      showAlert('Admin 2FA successfully verified.', 'success');
+    } catch (err) {
+      showAlert('Failed to connect to server: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<span>🔓 Verify & Reveal Password</span>';
+    }
+  }
+
+  function copyRevealedPassword() {
+    const input = document.getElementById('vpRevealedPassword');
+    if (!input || !input.value) return;
+
+    navigator.clipboard.writeText(input.value).then(() => {
+      const copyBtn = document.getElementById('vpCopyBtn');
+      const originalText = copyBtn.innerText;
+      copyBtn.innerText = '✓ Copied!';
+      copyBtn.style.color = '#22c55e';
+      setTimeout(() => {
+        copyBtn.innerText = originalText;
+        copyBtn.style.color = '';
+      }, 2000);
+    }).catch(() => {
+      input.select();
+      document.execCommand('copy');
+    });
+  }
+
+  function toggleResetForm() {
+    document.getElementById('vpResultStep').style.display = 'none';
+    document.getElementById('vpResetStep').style.display = 'block';
+    document.getElementById('vpLegacyNotice').style.display = 'none';
+  }
+
+  function generateRandomManagerPassword() {
+    const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%^&*';
+    let res = '';
+    for (let i = 0; i < 14; i++) {
+      res += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    document.getElementById('vpNewPasswordInput').value = res;
+  }
+
+  async function handleResetPassword(event) {
+    event.preventDefault();
+    if (!activeManagerId) return;
+
+    const newPassword = document.getElementById('vpNewPasswordInput').value.trim();
+    if (newPassword.length < 8) {
+      showAlert('Password must be at least 8 characters long.', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('vpResetSubmitBtn');
+    btn.disabled = true;
+    btn.innerText = 'Saving...';
+    showAlert('', 'none');
+
+    try {
+      const response = await fetch(`/admin/managers/${activeManagerId}/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: verifiedTwoFactorCode,
+          new_password: newPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        showAlert(data.detail || 'Failed to update manager password.', 'error');
+        btn.disabled = false;
+        btn.innerText = '💾 Save New Password';
+        return;
+      }
+
+      // Updated successfully: show revealed password
+      document.getElementById('vpRevealedPassword').value = data.password;
+      document.getElementById('vpResetStep').style.display = 'none';
+      document.getElementById('vpResultStep').style.display = 'block';
+      showAlert('Manager password updated and encrypted successfully.', 'success');
+    } catch (err) {
+      showAlert('Network error: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerText = '💾 Save New Password';
+    }
   }
 </script>
 {% endblock %}

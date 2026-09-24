@@ -47,6 +47,7 @@ class ManagerUserInDB(MongoInDBModel, TimestampMixin):
     username: str
     email: str | None = None
     password_hash: str
+    encrypted_password: str | None = None
     role: str = "manager"
     status: str = "active"  # "active", "pending", "disabled"
     is_active: bool = True

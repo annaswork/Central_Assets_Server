@@ -24,22 +24,38 @@ async def get_badge_counts(request: Request) -> JSONResponse:
             # Count number of distinct conversations (existing managers) that have unread messages
             unread_manager_ids = await db[MESSAGES].distinct(
                 "manager_id",
-                {"sender_role": "manager", "status": "unread"},
+                {"sender_role": "manager", "status": "unread", "channel_type": {"$ne": "admin_direct"}},
             )
             if unread_manager_ids:
                 valid_ids = [to_object_id(mid) for mid in unread_manager_ids if mid]
-                unread_count = await db[MANAGERS].count_documents({
+                unread_mgr_count = await db[MANAGERS].count_documents({
                     "_id": {"$in": valid_ids}
                 })
             else:
-                unread_count = 0
+                unread_mgr_count = 0
+
+            admin_id = admin_session.get("user_id")
+            unread_team_count = 0
+            if admin_id:
+                admin_oid = to_object_id(admin_id)
+                unread_admin_sender_ids = await db[MESSAGES].distinct(
+                    "sender_id",
+                    {
+                        "channel_type": "admin_direct",
+                        "recipient_id": {"$in": [admin_oid, str(admin_oid)]},
+                        "status": "unread",
+                    },
+                )
+                unread_team_count = len(unread_admin_sender_ids)
 
             pending_count = await db[APP_INSTANCE_ACCESS_REQUESTS].count_documents({
                 "status": "pending",
             })
             return JSONResponse({
                 "role": "admin",
-                "unread_messages": unread_count,
+                "unread_messages": unread_mgr_count + unread_team_count,
+                "unread_manager_messages": unread_mgr_count,
+                "unread_team_messages": unread_team_count,
                 "pending_requests": pending_count,
             })
         except Exception:

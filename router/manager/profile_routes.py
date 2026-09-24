@@ -72,7 +72,7 @@ async def manager_profile_update_submit(
                 uploaded = await handle_upload(
                     file_bytes=content,
                     filename=avatar_file.filename,
-                    target_subdir="avatars",
+                    target_subdir="profiles",
                 )
                 profile_pic_url = uploaded.get("url")
         except Exception:

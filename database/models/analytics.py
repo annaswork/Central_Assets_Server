@@ -1,6 +1,7 @@
 """Analytics models: monitored endpoints, raw events, and hourly rollups."""
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -57,6 +58,8 @@ class AnalyticsEventInDB(MongoInDBModel):
     request_bytes: int = 0
     response_bytes: int = 0
     error_code: str | None = None
+    error_reason: str | None = None
+    error_details: Any | None = None
     ts: datetime
 
 

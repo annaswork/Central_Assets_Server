@@ -34,7 +34,11 @@
       Profile Details
     </h3>
 
-    <form method="POST" action="/admin/profile" enctype="multipart/form-data">
+    <form method="POST" action="/admin/profile" enctype="multipart/form-data" id="adminProfileDetailsForm">
+      <input type="hidden" name="action_type" value="profile_details">
+      <input type="hidden" name="avatar_data_url" id="adminAvatarDataUrl">
+      <input type="hidden" name="remove_avatar" id="adminRemoveAvatar" value="0">
+
       <div class="form-group" style="margin-bottom:1rem;">
         <label class="form-label" for="adminUsername">Username</label>
         <input
@@ -48,7 +52,7 @@
       </div>
 
       <div class="form-group" style="margin-bottom:1rem;">
-        <label class="form-label" for="adminFullName">Full Name / Display Name</label>
+        <label class="form-label" for="adminFullName">Full Name / Display Name *</label>
         <input
           type="text"
           id="adminFullName"
@@ -57,6 +61,18 @@
           value="{{ user.full_name or user.display_name or '' }}"
           placeholder="e.g. Annas Asif"
           required
+        >
+      </div>
+
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="adminEmail">Email Address</label>
+        <input
+          type="email"
+          id="adminEmail"
+          name="email"
+          class="input"
+          value="{{ user.email or '' }}"
+          placeholder="admin@example.com"
         >
       </div>
 
@@ -72,8 +88,15 @@
           </div>
           <div style="flex:1;">
             <input type="file" id="adminAvatarInput" name="avatar_file" accept="image/*" class="input" style="padding:0.4rem; font-size:0.85rem;">
-            <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.35rem;">
-              Selecting an image opens a square popup cropper with transparency preservation.
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.35rem; flex-wrap:wrap; gap:0.5rem;">
+              <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">
+                Square popup cropper with transparency preservation.
+              </div>
+              {% if user.profile_picture %}
+                <button type="button" class="btn btn-text btn-sm" onclick="removeAdminAvatar()" id="btnRemoveAvatar" style="color:var(--md-sys-color-error); font-size:0.75rem; padding:0; height:auto; line-height:1;">
+                  🗑️ Remove Current Photo
+                </button>
+              {% endif %}
             </div>
           </div>
         </div>
@@ -91,7 +114,9 @@
       Security & Password
     </h3>
 
-    <form method="POST" action="/admin/profile">
+    <form method="POST" action="/admin/profile/password">
+      <input type="hidden" name="action_type" value="password_change">
+
       <div class="form-group" style="margin-bottom:1rem;">
         <label class="form-label" for="adminCurPassword">Current Password</label>
         <input type="password" id="adminCurPassword" name="current_password" class="input" required autocomplete="current-password">
@@ -116,6 +141,21 @@
 
 <script src="/admin-assets/js/avatar_cropper.js"></script>
 <script>
+  function removeAdminAvatar() {
+    document.getElementById('adminRemoveAvatar').value = '1';
+    document.getElementById('adminAvatarInput').value = '';
+    const dataUrlInput = document.getElementById('adminAvatarDataUrl');
+    if (dataUrlInput) dataUrlInput.value = '';
+
+    const preview = document.getElementById('adminAvatarPreview');
+    const nameInput = document.getElementById('adminFullName');
+    const initial = (nameInput.value.trim() || 'A').charAt(0).toUpperCase();
+    preview.innerHTML = initial;
+
+    const btn = document.getElementById('btnRemoveAvatar');
+    if (btn) btn.style.display = 'none';
+  }
+
   document.addEventListener('DOMContentLoaded', function() {
     setupAvatarCropper('#adminAvatarInput', '#adminAvatarPreview');
   });

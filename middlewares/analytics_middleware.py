@@ -16,12 +16,14 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
         start_time = time.perf_counter()
         response: Response | None = None
         error_code: str | None = None
+        error_reason: str | None = None
 
         try:
             response = await call_next(request)
             return response
         except Exception as exc:
             error_code = type(exc).__name__
+            error_reason = str(exc)
             raise
         finally:
             duration_ms = (time.perf_counter() - start_time) * 1000.0
@@ -53,5 +55,6 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
                     path_template=path_template,
                     duration_ms=duration_ms,
                     error_code=error_code,
+                    error_reason=error_reason,
                 )
                 enqueue_analytics_event(event)

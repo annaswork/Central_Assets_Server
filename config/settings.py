@@ -39,13 +39,13 @@ class Settings(BaseSettings):
     ANALYTICS_FLUSH_INTERVAL_SECONDS: float = 2.0
     ANALYTICS_DEFAULT_RETENTION_DAYS: int = 30
 
-    # Seed Admin Operator Credentials
-    BOOTSTRAP_ADMIN_USERNAME: str = "admin"
-    BOOTSTRAP_ADMIN_PASSWORD: str = "admin12345678"
+    # Seed Admin Operator Credentials (strictly loaded from .env / environment)
+    BOOTSTRAP_ADMIN_USERNAME: str
+    BOOTSTRAP_ADMIN_PASSWORD: str
 
-    # API Documentation Auth (HTTP Basic Auth for /docs, /redoc, /openapi.json)
-    DOCS_USERNAME: str = "admin"
-    DOCS_PASSWORD: str = "admin12345678"
+    # API Documentation Auth (HTTP Basic Auth for /docs, /redoc, /openapi.json - strictly loaded from .env)
+    DOCS_USERNAME: str
+    DOCS_PASSWORD: str
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

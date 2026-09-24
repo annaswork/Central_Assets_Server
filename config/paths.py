@@ -12,6 +12,7 @@ ROOT_DIR: Path = BASE_DIR
 STATIC_DIR: Path = BASE_DIR / "static"
 CENTRAL_DATA_DIR: Path = STATIC_DIR / "central_data"
 APP_DATA_DIR: Path = STATIC_DIR / "app_data"
+PROFILES_DIR: Path = STATIC_DIR / "profiles"
 MEDIA_UPLOAD_DIR: Path = CENTRAL_DATA_DIR
 
 # Templates & admin asset directories
@@ -29,6 +30,7 @@ def ensure_directories_exist() -> None:
         STATIC_DIR,
         CENTRAL_DATA_DIR,
         APP_DATA_DIR,
+        PROFILES_DIR,
         TEMPLATES_DIR,
         TEMPLATE_CSS_DIR,
         TEMPLATE_JS_DIR,

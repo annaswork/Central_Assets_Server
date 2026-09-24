@@ -361,10 +361,16 @@
         const outName = `${this.file.name.replace(/\.[^/.]+$/, '')}_square${ext}`;
         const croppedFile = new File([blob], outName, { type: mimeType });
         const previewUrl = URL.createObjectURL(blob);
+        let base64DataUrl = '';
+        try {
+          base64DataUrl = croppedCanvas.toDataURL(mimeType, quality);
+        } catch (e) {
+          console.warn('Could not extract data URL:', e);
+        }
 
         this._cleanup();
-        this.onCrop(croppedFile, previewUrl);
-        if (this._resolve) this._resolve({ file: croppedFile, previewUrl });
+        this.onCrop(croppedFile, previewUrl, base64DataUrl);
+        if (this._resolve) this._resolve({ file: croppedFile, previewUrl, dataUrl: base64DataUrl });
       }, mimeType, quality);
     }
 
@@ -407,21 +413,45 @@
         return; // Non-image file, skip cropper
       }
 
+      // Provide immediate preview of selected file
+      if (previewContainer) {
+        try {
+          const rawPreview = URL.createObjectURL(file);
+          previewContainer.innerHTML = `<img src="${rawPreview}" alt="Avatar Preview" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
+        } catch (e) {}
+      }
+
       try {
         const cropper = new AvatarCropperModal(file);
-        const { file: croppedFile, previewUrl } = await cropper.open();
+        const { file: croppedFile, previewUrl, dataUrl } = await cropper.open();
 
         // Update the file input with the cropped File object via DataTransfer
-        const dt = new DataTransfer();
-        dt.items.add(croppedFile);
-        input.files = dt.files;
+        try {
+          const dt = new DataTransfer();
+          dt.items.add(croppedFile);
+          input.files = dt.files;
+        } catch (dtErr) {
+          console.warn('DataTransfer not available:', dtErr);
+        }
 
-        // Update the circular avatar preview container
+        // Also set hidden avatar_data_url input for guaranteed form submission
+        const dataUrlInput = document.getElementById('adminAvatarDataUrl') || document.querySelector('input[name="avatar_data_url"]');
+        if (dataUrlInput && dataUrl) {
+          dataUrlInput.value = dataUrl;
+        }
+
+        // Reset removal flag if previously clicked
+        const removeInput = document.getElementById('adminRemoveAvatar') || document.querySelector('input[name="remove_avatar"]');
+        if (removeInput) {
+          removeInput.value = '0';
+        }
+
+        // Update the circular avatar preview container with cropped result
         if (previewContainer) {
           previewContainer.innerHTML = `<img src="${previewUrl}" alt="Avatar Preview" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
         }
       } catch (err) {
-        console.log('Avatar cropping cancelled or failed:', err);
+        console.log('Avatar cropping cancelled or bypassed, using raw image upload:', err);
       }
     });
   }

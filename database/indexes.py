@@ -239,12 +239,14 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
         ]
     )
 
-    # 13. Messages (Manager ↔ Admin)
+    # 13. Messages (Manager ↔ Admin & Admin ↔ Admin Direct)
     await db[MESSAGES].create_indexes(
         [
             IndexModel([("manager_id", ASCENDING), ("created_at", ASCENDING)], name="idx_msg_manager_created"),
             IndexModel([("status", ASCENDING)], name="idx_msg_status"),
             IndexModel([("payload_type", ASCENDING)], name="idx_msg_payload_type"),
+            IndexModel([("channel_type", ASCENDING), ("recipient_id", ASCENDING), ("status", ASCENDING)], name="idx_msg_direct_status"),
+            IndexModel([("channel_type", ASCENDING), ("created_at", ASCENDING)], name="idx_msg_direct_created"),
         ]
     )
 

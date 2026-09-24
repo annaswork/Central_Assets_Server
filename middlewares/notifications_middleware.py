@@ -27,10 +27,12 @@ class NotificationsMiddleware(BaseHTTPMiddleware):
             if admin_session:
                 try:
                     db = get_database()
+                    admin_id = admin_session.get("user_id")
+
                     # Count number of distinct conversations (existing managers) that have unread messages
                     unread_manager_ids = await db[MESSAGES].distinct(
                         "manager_id",
-                        {"sender_role": "manager", "status": "unread"},
+                        {"sender_role": "manager", "status": "unread", "channel_type": {"$ne": "admin_direct"}},
                     )
                     if unread_manager_ids:
                         valid_ids = [to_object_id(mid) for mid in unread_manager_ids if mid]
@@ -40,14 +42,29 @@ class NotificationsMiddleware(BaseHTTPMiddleware):
                     else:
                         unread_conversations_count = 0
 
+                    # Count unread direct messages from other admins
+                    unread_team_count = 0
+                    if admin_id:
+                        admin_oid = to_object_id(admin_id)
+                        unread_admin_sender_ids = await db[MESSAGES].distinct(
+                            "sender_id",
+                            {
+                                "channel_type": "admin_direct",
+                                "recipient_id": {"$in": [admin_oid, str(admin_oid)]},
+                                "status": "unread",
+                            },
+                        )
+                        unread_team_count = len(unread_admin_sender_ids)
+
                     pending_count = await db[APP_INSTANCE_ACCESS_REQUESTS].count_documents({
                         "status": "pending",
                     })
-                    request.state.admin_unread_messages_count = unread_conversations_count
+                    request.state.admin_unread_messages_count = unread_conversations_count + unread_team_count
+                    request.state.admin_unread_manager_count = unread_conversations_count
+                    request.state.admin_unread_team_count = unread_team_count
                     request.state.admin_pending_requests_count = pending_count
 
                     # Load Admin user details
-                    admin_id = admin_session.get("user_id")
                     if admin_id:
                         admin_user = await db[ADMIN_USERS].find_one({"_id": to_object_id(admin_id)})
                         if admin_user:

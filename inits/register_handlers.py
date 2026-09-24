@@ -14,6 +14,9 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(AppError)
     async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
+        _request.state.error_code = exc.code
+        _request.state.error_reason = exc.message
+        _request.state.error_details = exc.details
         return JSONResponse(
             status_code=exc.status_code,
             content=error_response(exc.code, exc.message, exc.details),
@@ -23,6 +26,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def validation_error_handler(
         _request: Request, exc: RequestValidationError
     ) -> JSONResponse:
+        _request.state.error_code = "VALIDATION_ERROR"
+        _request.state.error_reason = "Request input validation failed"
+        _request.state.error_details = {"errors": exc.errors()}
         return JSONResponse(
             status_code=422,
             content=error_response(
@@ -48,6 +54,8 @@ def register_exception_handlers(app: FastAPI) -> None:
             500: "INTERNAL_SERVER_ERROR",
         }
         code = code_map.get(exc.status_code, "HTTP_ERROR")
+        _request.state.error_code = code
+        _request.state.error_reason = str(exc.detail)
         return JSONResponse(
             status_code=exc.status_code,
             content=error_response(code, str(exc.detail)),

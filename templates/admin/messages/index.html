@@ -1,161 +1,418 @@
 {% extends "base.html" %}
 
-{% block title %}Messages & Proposals — Asset Admin{% endblock %}
+{% block title %}Messages & Team Chat — Asset Admin{% endblock %}
 
 {% block content %}
-<div style="margin-bottom:1.5rem;">
-  <h1 style="margin:0;">Manager Messages & Proposals</h1>
-  <p style="color:var(--md-sys-color-on-surface-variant); margin:0.25rem 0 0 0;">
-    Incoming communications from Managers and creative data proposals.
-  </p>
+<div style="margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:1rem;">
+  <div>
+    <h1 style="margin:0;">Messages & Team Chat</h1>
+    <p style="color:var(--md-sys-color-on-surface-variant); margin:0.25rem 0 0 0;">
+      Incoming communications from Managers, proposal reviews, and direct team chat with other Admins.
+    </p>
+  </div>
+
+  <!-- Channel Switcher Tabs -->
+  <div style="display:inline-flex; background:var(--md-sys-color-surface-container-high); padding:4px; border-radius:12px; border:1px solid var(--md-sys-color-outline-variant);">
+    <a href="/admin/messages" style="display:inline-flex; align-items:center; gap:0.5rem; padding:0.45rem 1.1rem; border-radius:8px; text-decoration:none; font-weight:600; font-size:0.875rem; transition:all 0.15s ease; color:{% if chat_mode != 'admin' %}var(--md-sys-color-on-primary, #ffffff){% else %}var(--md-sys-color-on-surface-variant){% endif %}; background:{% if chat_mode != 'admin' %}var(--md-sys-color-primary){% else %}transparent{% endif %};">
+      <span>👥 Managers</span>
+      {% if unread_manager_count and unread_manager_count > 0 %}
+        <span style="font-size:0.7rem; font-weight:700; padding:0.1rem 0.45rem; border-radius:10px; background:{% if chat_mode != 'admin' %}rgba(255,255,255,0.25){% else %}var(--md-sys-color-error, #ba1a1a){% endif %}; color:{% if chat_mode != 'admin' %}#ffffff{% else %}#ffffff{% endif %};">
+          {{ unread_manager_count }}
+        </span>
+      {% endif %}
+    </a>
+    <a href="/admin/messages/team" style="display:inline-flex; align-items:center; gap:0.5rem; padding:0.45rem 1.1rem; border-radius:8px; text-decoration:none; font-weight:600; font-size:0.875rem; transition:all 0.15s ease; color:{% if chat_mode == 'admin' %}var(--md-sys-color-on-primary, #ffffff){% else %}var(--md-sys-color-on-surface-variant){% endif %}; background:{% if chat_mode == 'admin' %}var(--md-sys-color-primary){% else %}transparent{% endif %};">
+      <span>🛡️ Admin Team</span>
+      {% if unread_team_count and unread_team_count > 0 %}
+        <span style="font-size:0.7rem; font-weight:700; padding:0.1rem 0.45rem; border-radius:10px; background:{% if chat_mode == 'admin' %}rgba(255,255,255,0.25){% else %}var(--md-sys-color-error, #ba1a1a){% endif %}; color:{% if chat_mode == 'admin' %}#ffffff{% else %}#ffffff{% endif %};">
+          {{ unread_team_count }}
+        </span>
+      {% endif %}
+    </a>
+  </div>
 </div>
 
-<div class="card" style="padding:0; overflow:hidden; display:grid; grid-template-columns:300px 1fr; height:75vh; min-height:550px; box-shadow:var(--md-sys-elevation-2);">
-  <!-- Threads Sidebar -->
-  <div style="border-right:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); display:flex; flex-direction:column;">
-    <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); font-weight:700;">
-      Conversations ({{ threads|length }})
-    </div>
+{% if request.query_params.get('msg') %}
+  <div style="margin-bottom:1rem; padding:0.75rem 1rem; border-radius:8px; background:var(--md-sys-color-primary-container); color:var(--md-sys-color-on-primary-container); display:flex; align-items:center; gap:0.5rem; font-size:0.9rem;">
+    <span>✓</span>
+    <span>{{ request.query_params.get('msg') }}</span>
+  </div>
+{% endif %}
+{% if request.query_params.get('error') %}
+  <div style="margin-bottom:1rem; padding:0.75rem 1rem; border-radius:8px; background:var(--md-sys-color-error-container); color:var(--md-sys-color-on-error-container); display:flex; align-items:center; gap:0.5rem; font-size:0.9rem;">
+    <span>⚠️</span>
+    <span>{{ request.query_params.get('error') }}</span>
+  </div>
+{% endif %}
 
-    <div style="flex:1; overflow-y:auto;">
-      {% if threads and threads|length > 0 %}
-        {% for th in threads %}
-          {% set is_active = (current_thread and current_thread.id == th.manager_id) %}
-          <a href="/admin/messages/{{ th.manager_id }}" style="display:block; padding:0.85rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); text-decoration:none; color:inherit; background:{% if is_active %}var(--md-sys-color-surface){% else %}transparent{% endif %}; border-left:{% if is_active %}4px solid var(--md-sys-color-primary){% else %}4px solid transparent{% endif %};">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
-              <span style="font-weight:600; font-size:0.95rem;">{{ th.manager_name }}</span>
-              {% if th.unread_count > 0 %}
-                <span class="badge badge-primary" style="font-size:0.7rem;">{{ th.unread_count }} new</span>
-              {% endif %}
-            </div>
-            <div style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-              {{ th.last_message.content if th.last_message else 'No messages' }}
-            </div>
-          </a>
-        {% endfor %}
-      {% else %}
-        <div style="text-align:center; padding:3rem 1rem; color:var(--md-sys-color-on-surface-variant); font-size:0.9rem;">
-          No message threads yet.
-        </div>
-      {% endif %}
-    </div>
+<div class="card" style="padding:0; overflow:hidden; display:grid; grid-template-columns:320px 1fr; height:75vh; min-height:560px; box-shadow:var(--md-sys-elevation-2);">
+  <!-- Sidebar -->
+  <div style="border-right:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); display:flex; flex-direction:column;">
+    {% if chat_mode == 'admin' %}
+      <!-- Admin Team Conversations List -->
+      <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); font-weight:700; display:flex; justify-content:space-between; align-items:center;">
+        <span>Admin Team ({{ admin_conversations|length }})</span>
+        <span style="font-size:0.75rem; color:var(--md-sys-color-outline);">Direct Chat</span>
+      </div>
+
+      <div style="flex:1; overflow-y:auto;">
+        {% if admin_conversations and admin_conversations|length > 0 %}
+          {% for adm in admin_conversations %}
+            {% set is_active = (current_thread and (current_thread.id == adm.admin_id or current_thread._id == adm.admin_id)) %}
+            <a href="/admin/messages/team/{{ adm.admin_id }}" style="display:flex; align-items:center; gap:0.75rem; padding:0.85rem 1.15rem; border-bottom:1px solid var(--md-sys-color-outline-variant); text-decoration:none; color:inherit; background:{% if is_active %}var(--md-sys-color-surface){% else %}transparent{% endif %}; border-left:{% if is_active %}4px solid var(--md-sys-color-primary){% else %}4px solid transparent{% endif %};">
+              <div style="position:relative; width:40px; height:40px; border-radius:50%; flex-shrink:0;">
+                {% if adm.profile_picture %}
+                  <img src="{{ adm.profile_picture }}" alt="{{ adm.display_name }}" style="width:100%; height:100%; object-fit:cover; border-radius:50%; border:1px solid var(--md-sys-color-outline-variant);">
+                {% else %}
+                  <div style="width:100%; height:100%; border-radius:50%; background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.95rem;">
+                    {{ adm.initial }}
+                  </div>
+                {% endif %}
+                {% if adm.unread_count > 0 %}
+                  <span style="position:absolute; top:-2px; right:-2px; width:10px; height:10px; border-radius:50%; background:var(--md-sys-color-error, #ba1a1a); border:2px solid var(--md-sys-color-surface);"></span>
+                {% endif %}
+              </div>
+              <div style="flex:1; min-width:0;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.2rem;">
+                  <span style="font-weight:600; font-size:0.92rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    {{ adm.display_name }}
+                  </span>
+                  {% if adm.unread_count > 0 %}
+                    <span class="badge badge-primary" style="font-size:0.68rem; margin-left:0.5rem; flex-shrink:0;">{{ adm.unread_count }} new</span>
+                  {% endif %}
+                </div>
+                <div style="font-size:0.78rem; color:var(--md-sys-color-on-surface-variant); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                  {% if adm.last_message %}
+                    {{ 'You: ' if (adm.last_message.sender_id|string == session.user_id|string) else '' }}{{ adm.last_message.content }}
+                  {% else %}
+                    <span style="color:var(--md-sys-color-outline); font-style:italic;">No messages yet</span>
+                  {% endif %}
+                </div>
+              </div>
+            </a>
+          {% endfor %}
+        {% else %}
+          <div style="text-align:center; padding:3rem 1.25rem; color:var(--md-sys-color-on-surface-variant); font-size:0.9rem;">
+            <div style="font-size:2rem; margin-bottom:0.5rem;">👥</div>
+            <div>No other administrators registered.</div>
+          </div>
+        {% endif %}
+      </div>
+
+    {% else %}
+      <!-- Managers Conversations List -->
+      <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); font-weight:700; display:flex; justify-content:space-between; align-items:center;">
+        <span>Manager Threads ({{ threads|length }})</span>
+        <span style="font-size:0.75rem; color:var(--md-sys-color-outline);">Proposals & Support</span>
+      </div>
+
+      <div style="flex:1; overflow-y:auto;">
+        {% if threads and threads|length > 0 %}
+          {% for th in threads %}
+            {% set is_active = (current_thread and current_thread.id == th.manager_id) %}
+            <a href="/admin/messages/{{ th.manager_id }}" style="display:block; padding:0.85rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); text-decoration:none; color:inherit; background:{% if is_active %}var(--md-sys-color-surface){% else %}transparent{% endif %}; border-left:{% if is_active %}4px solid var(--md-sys-color-primary){% else %}4px solid transparent{% endif %};">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
+                <span style="font-weight:600; font-size:0.95rem;">{{ th.manager_name }}</span>
+                {% if th.unread_count > 0 %}
+                  <span class="badge badge-primary" style="font-size:0.7rem;">{{ th.unread_count }} new</span>
+                {% endif %}
+              </div>
+              <div style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                {{ th.last_message.content if th.last_message else 'No messages' }}
+              </div>
+            </a>
+          {% endfor %}
+        {% else %}
+          <div style="text-align:center; padding:3rem 1rem; color:var(--md-sys-color-on-surface-variant); font-size:0.9rem;">
+            No message threads yet.
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
   </div>
 
   <!-- Thread Active View -->
   <div style="display:flex; flex-direction:column; background:var(--md-sys-color-surface);">
     {% if current_thread %}
-      <!-- Thread Header -->
-      <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); display:flex; justify-content:space-between; align-items:center;">
-        <div style="display:flex; align-items:center; gap:0.75rem;">
-          <div style="width:36px; height:36px; border-radius:50%; background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container); display:flex; align-items:center; justify-content:center; font-weight:700;">
-            {{ (current_thread.username[:1])|upper }}
-          </div>
-          <div>
-            <div style="font-weight:600; font-size:0.95rem;">{{ current_thread.display_name or current_thread.username }}</div>
-            <div style="font-size:0.8rem; color:var(--md-sys-color-outline);">
-              Manager ID: <code>{{ current_thread.id }}</code>
-            </div>
-          </div>
-        </div>
-
-        <!-- Thread Actions: Clear Conversation & Delete Chat -->
-        <div style="display:flex; align-items:center; gap:0.5rem;">
-          <form method="POST" action="/admin/messages/{{ current_thread.id }}/clear" onsubmit="return confirm('Clear all messages in this conversation with {{ current_thread.username }}? The chat thread will remain in your list.');" style="margin:0;">
-            <button type="submit" class="btn btn-outlined btn-sm" title="Clear messages in this conversation" style="display:inline-flex; align-items:center; gap:0.35rem; font-size:0.8rem;">
-              <span>🧹</span>
-              <span>Clear Conversation</span>
-            </button>
-          </form>
-          <form method="POST" action="/admin/messages/{{ current_thread.id }}/delete" onsubmit="return confirm('Are you sure you want to delete this chat thread completely? All messages will be deleted and the thread will be removed from your inbox.');" style="margin:0;">
-            <button type="submit" class="btn btn-outlined btn-sm" title="Delete chat thread completely" style="display:inline-flex; align-items:center; gap:0.35rem; font-size:0.8rem; color:var(--md-sys-color-error, #ba1a1a); border-color:var(--md-sys-color-error, #ba1a1a);">
-              <span>🗑️</span>
-              <span>Delete Chat</span>
-            </button>
-          </form>
-        </div>
-      </div>
-
-      <!-- Messages History -->
-      <div id="adminMessagesBox" style="flex:1; overflow-y:auto; padding:1.25rem; display:flex; flex-direction:column; gap:1rem;">
-        {% for msg in messages %}
-          {% set is_admin = (msg.sender_role == 'admin') %}
-          <div style="display:flex; flex-direction:column; align-items:{% if is_admin %}flex-end{% else %}flex-start{% endif %}; max-width:80%; {% if is_admin %}margin-left:auto;{% endif %}">
-            <div style="font-size:0.75rem; color:var(--md-sys-color-outline); margin-bottom:0.25rem;">
-              {{ msg.sender_name }} • {{ msg.created_at|format_datetime }}
-            </div>
-
-            <div style="padding:0.85rem 1rem; border-radius:12px; background:{% if is_admin %}var(--md-sys-color-primary-container){% else %}var(--md-sys-color-surface-container-high){% endif %}; color:{% if is_admin %}var(--md-sys-color-on-primary-container){% else %}var(--md-sys-color-on-surface){% endif %};">
-              {% if msg.subject %}
-                <div style="font-weight:700; margin-bottom:0.25rem; font-size:0.9rem;">
-                  {{ msg.subject }}
+      {% if chat_mode == 'admin' %}
+        <!-- ================= ADMIN TEAM CHAT VIEW ================= -->
+        <!-- Admin Chat Header -->
+        <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; align-items:center; gap:0.75rem;">
+            <div style="width:40px; height:40px; border-radius:50%; flex-shrink:0;">
+              {% if current_thread.profile_picture %}
+                <img src="{{ current_thread.profile_picture }}" alt="{{ current_thread.display_name }}" style="width:100%; height:100%; object-fit:cover; border-radius:50%; border:1px solid var(--md-sys-color-outline-variant);">
+              {% else %}
+                <div style="width:100%; height:100%; border-radius:50%; background:var(--md-sys-color-primary-container); color:var(--md-sys-color-on-primary-container); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1rem;">
+                  {{ current_thread.initial }}
                 </div>
               {% endif %}
+            </div>
+            <div>
+              <div style="display:flex; align-items:center; gap:0.5rem;">
+                <span style="font-weight:700; font-size:1rem;">{{ current_thread.display_name or current_thread.username }}</span>
+                <span class="badge" style="font-size:0.7rem; background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container);">Administrator</span>
+              </div>
+              <div style="font-size:0.8rem; color:var(--md-sys-color-outline);">
+                @{{ current_thread.username }} • Admin ID: <code>{{ current_thread.id or current_thread._id }}</code>
+              </div>
+            </div>
+          </div>
 
-              <div style="white-space:pre-wrap; font-size:0.9rem; line-height:1.4;">{{ msg.content }}</div>
+          <!-- Thread Actions: Clear Conversation -->
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <form method="POST" action="/admin/messages/team/{{ current_thread.id or current_thread._id }}/clear" onsubmit="return confirm('Clear all messages in this conversation with {{ current_thread.display_name or current_thread.username }}?');" style="margin:0;">
+              <button type="submit" class="btn btn-outlined btn-sm" title="Clear conversation" style="display:inline-flex; align-items:center; gap:0.35rem; font-size:0.8rem;">
+                <span>🧹</span>
+                <span>Clear Conversation</span>
+              </button>
+            </form>
+          </div>
+        </div>
 
-              <!-- Structured Proposal Card -->
-              {% if msg.payload_type and msg.data_payload %}
-                <div style="margin-top:0.75rem; padding:0.85rem; border-radius:8px; background:var(--md-sys-color-surface); border:1px solid var(--md-sys-color-outline-variant); color:var(--md-sys-color-on-surface);">
-                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                    <span style="font-weight:700; font-size:0.8rem; text-transform:uppercase; color:var(--md-sys-color-primary);">
-                      📦 Proposed {{ msg.payload_type|capitalize }}
-                    </span>
-                    {% if msg.status == 'applied' %}
-                      <span class="badge badge-success" style="font-size:0.75rem;">✓ Applied to Central Data</span>
-                    {% else %}
-                      <span class="badge badge-warning" style="font-size:0.75rem;">Pending Review</span>
+        <!-- Admin Direct Messages History -->
+        <div id="adminMessagesBox" style="flex:1; overflow-y:auto; padding:1.25rem; display:flex; flex-direction:column; gap:1rem;">
+          {% if messages and messages|length > 0 %}
+            {% for msg in messages %}
+              {% set is_me = (msg.sender_id|string == session.user_id|string) %}
+              <div style="display:flex; flex-direction:column; align-items:{% if is_me %}flex-end{% else %}flex-start{% endif %}; max-width:80%; {% if is_me %}margin-left:auto;{% endif %}">
+                <div style="font-size:0.75rem; color:var(--md-sys-color-outline); margin-bottom:0.25rem;">
+                  {% if is_me %}You{% else %}{{ msg.sender_name }}{% endif %} • {{ msg.created_at|format_datetime }}
+                </div>
+                <div style="padding:0.85rem 1.15rem; border-radius:14px; background:{% if is_me %}var(--md-sys-color-primary-container){% else %}var(--md-sys-color-surface-container-high){% endif %}; color:{% if is_me %}var(--md-sys-color-on-primary-container){% else %}var(--md-sys-color-on-surface){% endif %}; width:100%; box-sizing:border-box; word-break:break-word; border-bottom-{% if is_me %}right{% else %}left{% endif %}-radius:2px;">
+                  <div style="white-space:pre-wrap; font-size:0.92rem; line-height:1.45;">{{ msg.content }}</div>
+                </div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div style="text-align:center; padding:4rem 1.5rem; color:var(--md-sys-color-on-surface-variant); margin:auto;">
+              <div style="font-size:3rem; margin-bottom:0.75rem;">🛡️</div>
+              <div style="font-weight:700; font-size:1.1rem; color:var(--md-sys-color-on-surface);">Direct Conversation</div>
+              <div style="font-size:0.875rem; margin-top:0.35rem; color:var(--md-sys-color-on-surface-variant);">
+                No messages yet with <strong>{{ current_thread.display_name or current_thread.username }}</strong>.<br>Send a direct message below to start collaborating.
+              </div>
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- Admin Direct Reply Composer -->
+        <div style="padding:1rem 1.25rem; border-top:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low);">
+          <form method="POST" action="/admin/messages/team/{{ current_thread.id or current_thread._id }}/send" style="display:flex; gap:0.75rem;">
+            <input
+              type="text"
+              name="content"
+              class="input"
+              placeholder="Message @{{ current_thread.username }}..."
+              required
+              autocomplete="off"
+              style="flex:1;"
+            >
+            <button type="submit" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:0.35rem;">
+              <span>Send Message</span>
+              <span>↗</span>
+            </button>
+          </form>
+        </div>
+
+      {% else %}
+        <!-- ================= MANAGERS CHAT VIEW ================= -->
+        <!-- Manager Thread Header -->
+        <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; align-items:center; gap:0.75rem;">
+            <div style="width:36px; height:36px; border-radius:50%; background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container); display:flex; align-items:center; justify-content:center; font-weight:700;">
+              {{ (current_thread.username[:1])|upper }}
+            </div>
+            <div>
+              <div style="font-weight:600; font-size:0.95rem;">{{ current_thread.display_name or current_thread.username }}</div>
+              <div style="font-size:0.8rem; color:var(--md-sys-color-outline);">
+                Manager ID: <code>{{ current_thread.id }}</code>
+              </div>
+            </div>
+          </div>
+
+          <!-- Thread Actions: Clear Conversation & Delete Chat -->
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <form method="POST" action="/admin/messages/{{ current_thread.id }}/clear" onsubmit="return confirm('Clear all messages in this conversation with {{ current_thread.username }}? The chat thread will remain in your list.');" style="margin:0;">
+              <button type="submit" class="btn btn-outlined btn-sm" title="Clear messages in this conversation" style="display:inline-flex; align-items:center; gap:0.35rem; font-size:0.8rem;">
+                <span>🧹</span>
+                <span>Clear Conversation</span>
+              </button>
+            </form>
+            <form method="POST" action="/admin/messages/{{ current_thread.id }}/delete" onsubmit="return confirm('Are you sure you want to delete this chat thread completely? All messages will be deleted and the thread will be removed from your inbox.');" style="margin:0;">
+              <button type="submit" class="btn btn-outlined btn-sm" title="Delete chat thread completely" style="display:inline-flex; align-items:center; gap:0.35rem; font-size:0.8rem; color:var(--md-sys-color-error, #ba1a1a); border-color:var(--md-sys-color-error, #ba1a1a);">
+                <span>🗑️</span>
+                <span>Delete Chat</span>
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Messages History -->
+        <div id="adminMessagesBox" style="flex:1; overflow-y:auto; padding:1.25rem; display:flex; flex-direction:column; gap:1rem;">
+          {% for msg in messages %}
+            {% set is_admin = (msg.sender_role == 'admin') %}
+            <div style="display:flex; flex-direction:column; align-items:{% if is_admin %}flex-end{% else %}flex-start{% endif %}; max-width:85%; {% if is_admin %}margin-left:auto;{% endif %}">
+              <div style="font-size:0.75rem; color:var(--md-sys-color-outline); margin-bottom:0.25rem;">
+                {{ msg.sender_name }} • {{ msg.created_at|format_datetime }}
+              </div>
+
+              <div style="padding:0.85rem 1rem; border-radius:12px; background:{% if is_admin %}var(--md-sys-color-primary-container){% else %}var(--md-sys-color-surface-container-high){% endif %}; color:{% if is_admin %}var(--md-sys-color-on-primary-container){% else %}var(--md-sys-color-on-surface){% endif %}; width:100%; box-sizing:border-box;">
+                {% if msg.subject %}
+                  <div style="font-weight:700; margin-bottom:0.25rem; font-size:0.9rem;">
+                    {{ msg.subject }}
+                  </div>
+                {% endif %}
+
+                <div style="white-space:pre-wrap; font-size:0.9rem; line-height:1.4;">{{ msg.content }}</div>
+
+                <!-- Structured Proposal Card -->
+                {% if msg.payload_type and msg.data_payload %}
+                  <div style="margin-top:0.75rem; padding:0.85rem; border-radius:8px; background:var(--md-sys-color-surface); border:1px solid var(--md-sys-color-outline-variant); color:var(--md-sys-color-on-surface);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                      <span style="font-weight:700; font-size:0.8rem; text-transform:uppercase; color:var(--md-sys-color-primary);">
+                        📦 Proposed {{ msg.payload_type|capitalize }}
+                      </span>
+                      {% if msg.status == 'applied' %}
+                        <span class="badge badge-success" style="font-size:0.75rem;">✓ Applied to Central Data</span>
+                      {% else %}
+                        <span class="badge badge-warning" style="font-size:0.75rem;">Pending Review</span>
+                      {% endif %}
+                    </div>
+
+                    <div style="font-size:0.85rem; margin-bottom:0.35rem;">
+                      <strong>Proposed Name:</strong> {{ msg.data_payload.name }}
+                    </div>
+
+                    <!-- Media Information & Preview -->
+                    {% if msg.data_payload.thumbnail_url or msg.data_payload.media_url %}
+                      <div style="margin:0.5rem 0; padding:0.5rem; border-radius:6px; background:var(--md-sys-color-surface-container-low); display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                        {% if msg.data_payload.thumbnail_url %}
+                          <img src="{{ msg.data_payload.thumbnail_url }}" alt="Preview" style="width:52px; height:52px; object-fit:cover; border-radius:6px; border:1px solid var(--md-sys-color-outline-variant);" onerror="this.style.display='none'">
+                        {% endif %}
+                        <div style="flex:1; min-width:180px;">
+                          <div style="font-size:0.82rem; font-weight:600; word-break:break-all;">
+                            {{ msg.data_payload.media_filename or 'Uploaded Media' }}
+                          </div>
+                          <div style="font-size:0.75rem; color:var(--md-sys-color-outline); margin-top:0.15rem;">
+                            <a href="{{ msg.data_payload.media_url or msg.data_payload.thumbnail_url }}" target="_blank" style="color:var(--md-sys-color-primary); text-decoration:underline;">Open / View File ↗</a>
+                            {% if msg.data_payload.size_bytes %}
+                              • {{ (msg.data_payload.size_bytes / 1024)|round(1) }} KB
+                            {% endif %}
+                          </div>
+                        </div>
+                      </div>
+                    {% endif %}
+
+                    <!-- Action: Apply to Central Data -->
+                    {% if msg.status != 'applied' %}
+                      {% if msg.payload_type == 'asset' %}
+                        <!-- Asset Proposal: Must ask for Category AND Subcategory -->
+                        <div style="margin-top:0.75rem; padding:0.75rem; border-radius:8px; background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant);">
+                          <div style="font-weight:600; font-size:0.82rem; margin-bottom:0.5rem; color:var(--md-sys-color-primary); display:flex; align-items:center; gap:0.35rem;">
+                            <span>🎯</span>
+                            <span>Select Target Placement in Central Library</span>
+                          </div>
+                          <form method="POST" action="/admin/messages/{{ msg.id }}/apply-proposal" onsubmit="return validateAssetProposalApply('{{ msg.id }}');" id="applyForm_{{ msg.id }}">
+                            <input type="hidden" name="manager_id" value="{{ current_thread.id }}">
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem; margin-bottom:0.65rem;">
+                              <div>
+                                <label style="font-size:0.75rem; font-weight:600; display:block; margin-bottom:0.2rem;">Category *</label>
+                                <select name="category_id" id="catSelect_{{ msg.id }}" class="select" required onchange="onAdminProposalCatChange('{{ msg.id }}', this.value)" style="font-size:0.82rem; padding:0.35rem 0.5rem; width:100%;" data-preselected-sub="{{ msg.data_payload.sub_category_id or '' }}">
+                                  <option value="">-- Select Category --</option>
+                                  {% for cat in categories %}
+                                    <option value="{{ cat.id }}" {% if (msg.data_payload.category_id|string) == (cat.id|string) %}selected{% endif %}>{{ cat.name }}</option>
+                                  {% endfor %}
+                                </select>
+                              </div>
+                              <div>
+                                <label style="font-size:0.75rem; font-weight:600; display:block; margin-bottom:0.2rem;">Subcategory *</label>
+                                <select name="sub_category_id" id="subSelect_{{ msg.id }}" class="select" required style="font-size:0.82rem; padding:0.35rem 0.5rem; width:100%;">
+                                  <option value="">-- Select Subcategory --</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div style="display:flex; justify-content:flex-end;">
+                              <button type="submit" class="btn btn-primary btn-sm" style="display:inline-flex; align-items:center; gap:0.35rem;">
+                                <span>✨</span>
+                                <span>Apply to Central Data</span>
+                              </button>
+                            </div>
+                          </form>
+                        </div>
+
+                      {% elif msg.payload_type == 'subcategory' %}
+                        <!-- Subcategory Proposal: Select parent Category -->
+                        <div style="margin-top:0.75rem; padding:0.75rem; border-radius:8px; background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant);">
+                          <form method="POST" action="/admin/messages/{{ msg.id }}/apply-proposal" onsubmit="return confirm('Apply this proposed subcategory into central data?');">
+                            <input type="hidden" name="manager_id" value="{{ current_thread.id }}">
+                            <div style="margin-bottom:0.65rem;">
+                              <label style="font-size:0.75rem; font-weight:600; display:block; margin-bottom:0.2rem;">Parent Category *</label>
+                              <select name="category_id" class="select" required style="font-size:0.82rem; padding:0.35rem 0.5rem; width:100%;">
+                                {% for cat in categories %}
+                                  <option value="{{ cat.id }}" {% if msg.data_payload.category_id == cat.id %}selected{% endif %}>{{ cat.name }}</option>
+                                {% endfor %}
+                              </select>
+                            </div>
+                            <div style="display:flex; justify-content:flex-end;">
+                              <button type="submit" class="btn btn-primary btn-sm" style="display:inline-flex; align-items:center; gap:0.35rem;">
+                                <span>✨</span>
+                                <span>Apply to Central Data</span>
+                              </button>
+                            </div>
+                          </form>
+                        </div>
+
+                      {% else %}
+                        <!-- Category Proposal -->
+                        <div style="margin-top:0.75rem; padding-top:0.5rem; border-top:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:flex-end;">
+                          <form method="POST" action="/admin/messages/{{ msg.id }}/apply-proposal" onsubmit="return confirm('Apply this proposal into central library data?');">
+                            <input type="hidden" name="manager_id" value="{{ current_thread.id }}">
+                            <button type="submit" class="btn btn-primary btn-sm" style="display:inline-flex; align-items:center; gap:0.35rem;">
+                              <span>✨</span>
+                              <span>Apply to Central Data</span>
+                            </button>
+                          </form>
+                        </div>
+                      {% endif %}
                     {% endif %}
                   </div>
-
-                  <div style="font-size:0.85rem; margin-bottom:0.35rem;">
-                    <strong>Proposed Name:</strong> {{ msg.data_payload.name }}
-                  </div>
-                  {% if msg.data_payload.thumbnail_url %}
-                    <div style="font-size:0.8rem; color:var(--md-sys-color-outline); margin-bottom:0.5rem; word-break:break-all;">
-                      Media: <a href="{{ msg.data_payload.thumbnail_url }}" target="_blank" style="color:var(--md-sys-color-primary);">{{ msg.data_payload.thumbnail_url }}</a>
-                    </div>
-                  {% endif %}
-
-                  <!-- Action: Apply to Central Data -->
-                  {% if msg.status != 'applied' %}
-                    <div style="margin-top:0.75rem; padding-top:0.5rem; border-top:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:flex-end;">
-                      <form method="POST" action="/admin/messages/{{ msg.id }}/apply-proposal" onsubmit="return confirm('Apply this proposal into central library data?');">
-                        <input type="hidden" name="manager_id" value="{{ current_thread.id }}">
-                        <button type="submit" class="btn btn-primary btn-sm" style="display:inline-flex; align-items:center; gap:0.35rem;">
-                          <span>✨</span>
-                          <span>Apply to Central Data</span>
-                        </button>
-                      </form>
-                    </div>
-                  {% endif %}
-                </div>
-              {% endif %}
+                {% endif %}
+              </div>
             </div>
-          </div>
-        {% endfor %}
-      </div>
+          {% endfor %}
+        </div>
 
-      <!-- Reply Composer -->
-      <div style="padding:1rem 1.25rem; border-top:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low);">
-        <form method="POST" action="/admin/messages/{{ current_thread.id }}/reply" style="display:flex; gap:0.75rem;">
-          <input
-            type="text"
-            name="content"
-            class="input"
-            placeholder="Reply to {{ current_thread.username }}..."
-            required
-            autocomplete="off"
-            style="flex:1;"
-          >
-          <button type="submit" class="btn btn-primary">Send Reply</button>
-        </form>
-      </div>
+        <!-- Manager Reply Composer -->
+        <div style="padding:1rem 1.25rem; border-top:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low);">
+          <form method="POST" action="/admin/messages/{{ current_thread.id }}/reply" style="display:flex; gap:0.75rem;">
+            <input
+              type="text"
+              name="content"
+              class="input"
+              placeholder="Reply to {{ current_thread.username }}..."
+              required
+              autocomplete="off"
+              style="flex:1;"
+            >
+            <button type="submit" class="btn btn-primary">Send Reply</button>
+          </form>
+        </div>
+      {% endif %}
+
     {% else %}
       <div style="display:flex; align-items:center; justify-content:center; flex:1; color:var(--md-sys-color-on-surface-variant);">
         <div style="text-align:center;">
           <div style="font-size:3rem; margin-bottom:0.5rem;">💬</div>
-          <div style="font-size:1.1rem; font-weight:600;">Select a conversation</div>
-          <div style="font-size:0.85rem; margin-top:0.25rem;">Choose a manager from the sidebar to view thread.</div>
+          <div style="font-size:1.1rem; font-weight:600;">
+            {% if chat_mode == 'admin' %}Select an administrator{% else %}Select a conversation{% endif %}
+          </div>
+          <div style="font-size:0.85rem; margin-top:0.25rem;">
+            {% if chat_mode == 'admin' %}
+              Choose a fellow administrator from the sidebar to chat.
+            {% else %}
+              Choose a manager from the sidebar to view thread.
+            {% endif %}
+          </div>
         </div>
       </div>
     {% endif %}
@@ -163,7 +420,100 @@
 </div>
 
 <script>
+  const ALL_SUBCATEGORIES = [
+    {% for sub in subcategories %}
+      { id: "{{ sub.id }}", name: "{{ sub.name|escape }}", categoryId: "{{ sub.category_id or sub.categoryId }}" },
+    {% endfor %}
+  ];
+
+  async function onAdminProposalCatChange(msgId, catId, preselectedSubId) {
+    const subSelect = document.getElementById('subSelect_' + msgId);
+    if (!subSelect) return;
+    if (!catId) {
+      subSelect.innerHTML = '<option value="">-- Select Category First --</option>';
+      subSelect.disabled = true;
+      return;
+    }
+    subSelect.disabled = false;
+
+    if (!preselectedSubId) {
+      const catEl = document.getElementById('catSelect_' + msgId);
+      if (catEl) preselectedSubId = catEl.getAttribute('data-preselected-sub') || '';
+    }
+
+    // 1. Immediately populate from pre-rendered ALL_SUBCATEGORIES
+    const filtered = ALL_SUBCATEGORIES.filter(s => String(s.categoryId) === String(catId));
+    if (filtered.length > 0) {
+      let opts = '<option value="">-- Select Subcategory --</option>';
+      filtered.forEach(sub => {
+        const isSel = (preselectedSubId && (String(preselectedSubId) === String(sub.id) || String(preselectedSubId) === String(sub._id))) ? ' selected' : '';
+        opts += `<option value="${sub.id}"${isSel}>${sub.name}</option>`;
+      });
+      subSelect.innerHTML = opts;
+      return;
+    }
+
+    // 2. Fallback to API if not in pre-rendered list
+    subSelect.innerHTML = '<option value="">Loading subcategories...</option>';
+    try {
+      const res = await fetch(`/admin/subcategories/api/list?categoryId=${encodeURIComponent(catId)}`, {
+        credentials: 'same-origin'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const items = data.items || [];
+        if (items.length === 0) {
+          subSelect.innerHTML = '<option value="">-- No Subcategories In Category --</option>';
+        } else {
+          let opts = '<option value="">-- Select Subcategory --</option>';
+          items.forEach(sub => {
+            const isSel = (preselectedSubId && (String(preselectedSubId) === String(sub.id) || String(preselectedSubId) === String(sub._id))) ? ' selected' : '';
+            opts += `<option value="${sub.id}"${isSel}>${sub.name}</option>`;
+          });
+          subSelect.innerHTML = opts;
+        }
+      } else {
+        subSelect.innerHTML = '<option value="">Failed to load subcategories</option>';
+      }
+    } catch (e) {
+      subSelect.innerHTML = '<option value="">Error loading subcategories</option>';
+    }
+  }
+
+  function validateAssetProposalApply(msgId) {
+    const cat = document.getElementById('catSelect_' + msgId);
+    const sub = document.getElementById('subSelect_' + msgId);
+    if (!cat || !cat.value) {
+      alert('Please select a Category first.');
+      if (cat) cat.focus();
+      return false;
+    }
+    if (!sub || !sub.value) {
+      alert('Please select the Subcategory in which this asset needs to be added.');
+      if (sub) sub.focus();
+      return false;
+    }
+    return confirm('Apply this proposed asset into the central library under the selected Category and Subcategory?');
+  }
+
+  function initProposalSubcategories() {
+    document.querySelectorAll('[id^="catSelect_"]').forEach(catSel => {
+      const msgId = catSel.id.replace('catSelect_', '');
+      const preselectedSub = catSel.getAttribute('data-preselected-sub') || '';
+      if (catSel.value) {
+        onAdminProposalCatChange(msgId, catSel.value, preselectedSub);
+      }
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initProposalSubcategories);
+  } else {
+    initProposalSubcategories();
+  }
+
   window.addEventListener('load', () => {
+    initProposalSubcategories();
     const b = document.getElementById('adminMessagesBox');
     if (b) b.scrollTop = b.scrollHeight;
   });

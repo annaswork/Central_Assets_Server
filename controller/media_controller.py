@@ -14,7 +14,9 @@ from config.constants import (
 )
 from config.paths import (
     CENTRAL_DATA_DIR,
+    PROFILES_DIR,
     ROOT_DIR,
+    STATIC_DIR,
     build_central_static_url,
     central_media_url,
     get_asset_dir,
@@ -92,6 +94,24 @@ async def handle_upload(
                 await f.write(file_bytes)
 
             public_url = build_central_static_url(base_url, clean_cat, clean_sub, safe_name)
+    elif target_subdir in ("profiles", "profiles/"):
+        dest_dir = PROFILES_DIR
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        unique_filename = f"{sha256[:16]}_{safe_name}"
+        dest_path = dest_dir / unique_filename
+
+        # Write file asynchronously if not already stored
+        if not dest_path.exists():
+            async with await anyio.open_file(dest_path, "wb") as f:
+                await f.write(file_bytes)
+
+        relative_stored_path = f"profiles/{unique_filename}"
+        path = f"/static/{relative_stored_path}"
+        if base_url and base_url.strip():
+            base = base_url.strip().rstrip("/")
+            public_url = f"{base}{path}"
+        else:
+            public_url = path
     else:
         dest_dir = CENTRAL_DATA_DIR / target_subdir
         dest_dir.mkdir(parents=True, exist_ok=True)
@@ -136,6 +156,10 @@ async def handle_upload(
                     )
                 else:
                     thumb_url = build_central_static_url(base_url, clean_cat, clean_sub, thumb_filename)
+            elif target_subdir in ("profiles", "profiles/"):
+                relative_thumb_path = f"profiles/{thumb_filename}"
+                path = f"/static/{relative_thumb_path}"
+                thumb_url = f"{base_url.strip().rstrip('/')}{path}" if base_url and base_url.strip() else path
             else:
                 relative_thumb_path = f"{target_subdir}/{thumb_filename}"
                 thumb_url = central_media_url(relative_thumb_path, base_url=base_url)

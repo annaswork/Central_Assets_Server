@@ -86,3 +86,24 @@ def read_session(token: str, max_age_seconds: int | None = None) -> dict[str, An
         return serializer.loads(token, max_age=max_age)
     except (BadSignature, SignatureExpired):
         return None
+
+
+def get_fernet_cipher():
+    """Return Fernet AES-128-CBC cipher derived deterministically from ADMIN_SESSION_SECRET."""
+    import base64
+    from cryptography.fernet import Fernet
+
+    key = base64.urlsafe_b64encode(hashlib.sha256(settings.ADMIN_SESSION_SECRET.encode("utf-8")).digest())
+    return Fernet(key)
+
+
+def encrypt_password(password: str) -> str:
+    """Symmetrically encrypt manager password for authorized admin 2FA recovery."""
+    cipher = get_fernet_cipher()
+    return cipher.encrypt(password.encode("utf-8")).decode("utf-8")
+
+
+def decrypt_password(token: str) -> str:
+    """Decrypt encrypted password with master cipher."""
+    cipher = get_fernet_cipher()
+    return cipher.decrypt(token.encode("utf-8")).decode("utf-8")

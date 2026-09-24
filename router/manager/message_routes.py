@@ -1,7 +1,7 @@
 """Manager portal messaging routes for communication with Admin and proposal submissions."""
 
 import json
-from fastapi import APIRouter, Depends, Form, Request, Response
+from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -15,6 +15,7 @@ from controller.manager_controller import (
     get_manager_messages,
     send_manager_message,
 )
+from controller.media_controller import handle_upload
 from controller.subcategory_controller import list_subcategories
 from router.deps import get_db
 from utils.datetimes import format_datetime_display
@@ -65,6 +66,7 @@ async def manager_send_message(
     subject: str | None = Form(default=None),
     payload_type: str | None = Form(default=None),
     data_payload_json: str | None = Form(default=None),
+    media_file: UploadFile | None = File(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     """Send free-text message or central data proposal to Admin."""
@@ -75,10 +77,35 @@ async def manager_send_message(
     user_id = session["user_id"]
     manager = await get_manager_by_id(db, user_id)
 
-    parsed_payload = None
+    parsed_payload: dict | None = None
     if data_payload_json and data_payload_json.strip():
         try:
             parsed_payload = json.loads(data_payload_json.strip())
+        except Exception:
+            pass
+
+    # If manager uploaded media file for Asset proposal
+    if media_file and media_file.filename:
+        try:
+            file_bytes = await media_file.read()
+            if file_bytes:
+                upload_res = await handle_upload(
+                    file_bytes=file_bytes,
+                    filename=media_file.filename,
+                    target_subdir="proposals",
+                )
+                if parsed_payload is None:
+                    parsed_payload = {}
+                parsed_payload["media_url"] = upload_res.get("url")
+                parsed_payload["thumbnail_url"] = (
+                    upload_res.get("thumbnail_url") or upload_res.get("url")
+                )
+                parsed_payload["media_filename"] = (
+                    upload_res.get("filename") or media_file.filename
+                )
+                parsed_payload["mime_type"] = upload_res.get("mime_type")
+                parsed_payload["size_bytes"] = upload_res.get("size_bytes")
+                parsed_payload["file_metadata"] = upload_res
         except Exception:
             pass
 

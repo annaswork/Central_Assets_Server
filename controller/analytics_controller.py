@@ -6,7 +6,14 @@ from typing import Any
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from analytics.allowed_paths import refresh_allowed_paths
-from analytics.reporter import export_analytics_csv, get_analytics_summary
+from analytics.reporter import (
+    delete_analytics_record,
+    delete_error_analytics,
+    export_analytics_csv,
+    get_analytics_event_details,
+    get_analytics_summary,
+    get_error_analytics,
+)
 from controller.base_controller import serialize_mongo_doc, serialize_mongo_docs
 from database.collections import ANALYTICS_EVENTS, MONITORED_ENDPOINTS
 from database.models.analytics import (
@@ -150,6 +157,10 @@ async def get_dashboard_summary(
         for doc in endpoint_docs
     ]
 
+    error_analytics = await get_error_analytics(
+        db, from_dt=from_dt, to_dt=to_dt, app_instance_id=app_instance_id
+    )
+
     return {
         "total_events": raw.get("total_requests", 0),
         "monitored_endpoints_count": monitored_count,
@@ -159,6 +170,7 @@ async def get_dashboard_summary(
         "total_bytes": raw.get("total_bytes", 0),
         "time_range": raw.get("time_range", {}),
         "endpoint_stats": endpoint_stats,
+        "error_analytics": error_analytics,
     }
 
 
@@ -172,4 +184,39 @@ async def get_dashboard_csv(
     return await export_analytics_csv(
         db, from_dt=from_dt, to_dt=to_dt, app_instance_id=app_instance_id
     )
+
+
+async def get_analytics_event_by_id(
+    db: AsyncIOMotorDatabase,
+    event_id: str,
+    allowed_instance_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Retrieve details for a single analytics event with scope enforcement."""
+    return await get_analytics_event_details(
+        db, event_id=event_id, allowed_instance_ids=allowed_instance_ids
+    )
+
+
+async def delete_analytics_event(
+    db: AsyncIOMotorDatabase,
+    event_id: str,
+    allowed_instance_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Delete a single analytics event record with optional scope check."""
+    deleted = await delete_analytics_record(
+        db, event_id=event_id, allowed_instance_ids=allowed_instance_ids
+    )
+    return {"success": deleted, "deleted_id": event_id}
+
+
+async def clear_analytics_errors(
+    db: AsyncIOMotorDatabase,
+    app_instance_ids: list[str] | None = None,
+    hours: int | None = None,
+) -> dict[str, Any]:
+    """Bulk delete error analytics records."""
+    count = await delete_error_analytics(
+        db, app_instance_ids=app_instance_ids, hours=hours
+    )
+    return {"success": True, "deleted_count": count}
 

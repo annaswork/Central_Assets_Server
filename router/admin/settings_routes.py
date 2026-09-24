@@ -282,7 +282,11 @@ async def admin_profile_page(
 async def admin_profile_update(
     request: Request,
     full_name: str | None = Form(default=None),
+    email: str | None = Form(default=None),
     avatar_file: UploadFile | None = File(default=None),
+    avatar_data_url: str | None = Form(default=None),
+    remove_avatar: str | None = Form(default=None),
+    action_type: str | None = Form(default=None),
     current_password: str | None = Form(default=None),
     new_password: str | None = Form(default=None),
     confirm_password: str | None = Form(default=None),
@@ -298,6 +302,8 @@ async def admin_profile_update(
     from database.collections import ADMIN_USERS
     from utils.datetimes import utc_now_iso
     from utils.ids import to_object_id
+    import urllib.parse
+    import base64
 
     user_id = session["user_id"]
     oid = to_object_id(user_id)
@@ -308,23 +314,54 @@ async def admin_profile_update(
     error = None
     update_fields = {"updated_at": utc_now_iso()}
 
-    if full_name and full_name.strip():
-        update_fields["full_name"] = full_name.strip()
+    # 1. Update Name & Display Name
+    if full_name is not None and full_name.strip():
+        clean_name = full_name.strip()
+        update_fields["full_name"] = clean_name
+        update_fields["display_name"] = clean_name
 
-    if avatar_file and avatar_file.filename:
+    # 2. Update Email
+    if email is not None:
+        clean_email = email.strip().lower()
+        update_fields["email"] = clean_email if clean_email else None
+
+    # 3. Handle Avatar Removal or Upload
+    if remove_avatar in ("1", "true", "yes"):
+        update_fields["profile_picture"] = None
+    elif avatar_data_url and avatar_data_url.startswith("data:image/"):
+        try:
+            header, base64_str = avatar_data_url.split(",", 1)
+            file_bytes = base64.b64decode(base64_str)
+            ext = "png"
+            if "image/jpeg" in header or "image/jpg" in header:
+                ext = "jpg"
+            elif "image/webp" in header:
+                ext = "webp"
+            filename = f"avatar_{user['username']}.{ext}"
+            uploaded = await handle_upload(
+                file_bytes=file_bytes,
+                filename=filename,
+                target_subdir="profiles",
+            )
+            if uploaded.get("url"):
+                update_fields["profile_picture"] = uploaded["url"]
+        except Exception as e:
+            error = f"Failed to save profile picture: {str(e)}"
+    elif avatar_file and avatar_file.filename:
         try:
             content = await avatar_file.read()
             if content:
                 uploaded = await handle_upload(
                     file_bytes=content,
                     filename=avatar_file.filename,
-                    target_subdir="avatars",
+                    target_subdir="profiles",
                 )
                 if uploaded.get("url"):
                     update_fields["profile_picture"] = uploaded["url"]
         except Exception as e:
             error = f"Failed to upload avatar: {str(e)}"
 
+    # 4. Handle Password if submitted in this form
     if current_password or new_password:
         if not current_password or not new_password:
             error = "Both current and new password are required to change password."
@@ -339,7 +376,10 @@ async def admin_profile_update(
 
     if not error:
         await db[ADMIN_USERS].update_one({"_id": oid}, {"$set": update_fields})
-        return RedirectResponse(url="/admin/dashboard?msg=Profile+Updated+Successfully", status_code=303)
+        return RedirectResponse(
+            url="/admin/profile?success=Profile+details+updated+successfully",
+            status_code=303,
+        )
 
     # Re-fetch user in case of error
     user = await get_admin_user_by_id(db, user_id)
@@ -354,4 +394,65 @@ async def admin_profile_update(
             "active_tab": "profile",
         },
     )
+
+
+@router.post("/profile/password")
+async def admin_profile_password_update(
+    request: Request,
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    confirm_password: str = Form(...),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Dedicated endpoint for admin password changes."""
+    session = get_current_admin_session(request)
+    if not session:
+        return RedirectResponse(url="/admin/login", status_code=303)
+
+    from authorization.encryption import hash_password, verify_password
+    from controller.authorization_controller import get_admin_user_by_id
+    from database.collections import ADMIN_USERS
+    from utils.datetimes import utc_now_iso
+    from utils.ids import to_object_id
+
+    user_id = session["user_id"]
+    oid = to_object_id(user_id)
+    user = await get_admin_user_by_id(db, user_id)
+    if not user:
+        return RedirectResponse(url="/admin/login", status_code=303)
+
+    error = None
+    if not current_password or not new_password:
+        error = "Both current and new password are required."
+    elif new_password != confirm_password:
+        error = "New passwords do not match."
+    elif len(new_password) < 8:
+        error = "New password must be at least 8 characters long."
+    elif not verify_password(current_password, user.get("password_hash", "")):
+        error = "Incorrect current password."
+
+    if error:
+        return templates.TemplateResponse(
+            request=request,
+            name="settings/profile.html",
+            context={
+                "session": session,
+                "user": user,
+                "error": error,
+                "success": None,
+                "active_tab": "profile",
+            },
+        )
+
+    new_hash = hash_password(new_password)
+    await db[ADMIN_USERS].update_one(
+        {"_id": oid},
+        {"$set": {"password_hash": new_hash, "updated_at": utc_now_iso()}},
+    )
+
+    return RedirectResponse(
+        url="/admin/profile?success=Password+updated+successfully",
+        status_code=303,
+    )
+
 

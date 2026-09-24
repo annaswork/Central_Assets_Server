@@ -75,9 +75,17 @@
                 <div style="font-size:0.85rem;">
                   <strong>Name:</strong> {{ msg.data_payload.name }}
                 </div>
-                {% if msg.data_payload.thumbnail_url %}
-                  <div style="font-size:0.8rem; color:var(--md-sys-color-outline); margin-top:0.2rem;">
-                    Media: {{ msg.data_payload.thumbnail_url }}
+                {% if msg.data_payload.thumbnail_url or msg.data_payload.media_url %}
+                  <div style="font-size:0.8rem; color:var(--md-sys-color-outline); margin-top:0.35rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                    {% if msg.data_payload.thumbnail_url %}
+                      <img src="{{ msg.data_payload.thumbnail_url }}" alt="Preview" style="width:44px; height:44px; object-fit:cover; border-radius:6px; border:1px solid var(--md-sys-color-outline-variant);" onerror="this.style.display='none'">
+                    {% endif %}
+                    <div>
+                      <div>Media: <a href="{{ msg.data_payload.media_url or msg.data_payload.thumbnail_url }}" target="_blank" style="color:var(--md-sys-color-primary); font-weight:500;">{{ msg.data_payload.media_filename or msg.data_payload.thumbnail_url or 'View File' }}</a></div>
+                      {% if msg.data_payload.size_bytes %}
+                        <div style="font-size:0.72rem; color:var(--md-sys-color-outline);">{{ (msg.data_payload.size_bytes / 1024)|round(1) }} KB</div>
+                      {% endif %}
+                    </div>
                   </div>
                 {% endif %}
               </div>
@@ -127,7 +135,7 @@
       <button type="button" onclick="closeProposalModal()" style="background:none; border:none; font-size:1.25rem; cursor:pointer;">✕</button>
     </div>
 
-    <form method="POST" action="/manager/messages" id="proposalForm" style="padding:1.5rem;">
+    <form method="POST" action="/manager/messages" id="proposalForm" enctype="multipart/form-data" style="padding:1.5rem;">
       <input type="hidden" name="data_payload_json" id="dataPayloadJson">
 
       <div class="form-group" style="margin-bottom:1rem;">
@@ -144,19 +152,53 @@
         <input type="text" id="propName" class="input" required placeholder="e.g. Vintage Neon Frames">
       </div>
 
-      <!-- Subcategory specific parent category picker -->
+      <!-- Category picker for subcategory proposal or asset proposal -->
       <div id="subcatParentGroup" class="form-group" style="display:none; margin-bottom:1rem;">
-        <label class="form-label" for="propParentCat">Parent Category *</label>
-        <select id="propParentCat" class="select">
+        <label class="form-label" id="propCatLabel" for="propParentCat">Category *</label>
+        <select id="propParentCat" class="select" onchange="onManagerProposalCatChange(this.value)">
+          <option value="">-- Select Category --</option>
           {% for c in categories %}
             <option value="{{ c.id }}">{{ c.name }}</option>
           {% endfor %}
         </select>
       </div>
 
-      <div class="form-group" style="margin-bottom:1rem;">
+      <!-- Subcategory picker: shown when 'Asset' is selected -->
+      <div id="propSubcatGroup" class="form-group" style="display:none; margin-bottom:1rem;">
+        <label class="form-label" for="propSubCat">Subcategory *</label>
+        <select id="propSubCat" class="select">
+          <option value="">-- Select Category First --</option>
+        </select>
+      </div>
+
+      <!-- URL Input: Shown for Category and Subcategory proposals -->
+      <div id="propThumbGroup" class="form-group" style="margin-bottom:1rem;">
         <label class="form-label" for="propThumb">Media / Thumbnail URL <span style="font-size:0.8rem; color:var(--md-sys-color-outline);">(optional)</span></label>
         <input type="url" id="propThumb" class="input" placeholder="https://example.com/image.png">
+      </div>
+
+      <!-- Media File Upload: Shown when 'Asset' is selected instead of URL upload -->
+      <div id="propMediaFileGroup" class="form-group" style="display:none; margin-bottom:1rem;">
+        <label class="form-label" for="propMediaFile">Upload Media Asset *</label>
+        <div style="border:2px dashed var(--md-sys-color-outline-variant); border-radius:8px; padding:1.25rem 1rem; text-align:center; background:var(--md-sys-color-surface-container-low); transition:border-color 0.2s; cursor:pointer;" onclick="document.getElementById('propMediaFile').click()">
+          <input type="file" id="propMediaFile" name="media_file" accept="image/*,video/*,audio/*,.json" style="display:none;" onchange="handleProposalFileChange(this)">
+          <div style="font-size:1.75rem; margin-bottom:0.25rem;">📁</div>
+          <div id="propFilePrompt" style="font-weight:600; font-size:0.9rem; color:var(--md-sys-color-on-surface);">
+            Click to browse or drop media file here
+          </div>
+          <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.25rem;">
+            Images (PNG, JPG, WebP, GIF), Videos (MP4, WebM, MOV), Audio (MP3, WAV), or JSON
+          </div>
+        </div>
+        <div id="propMediaPreview" style="display:none; margin-top:0.75rem; padding:0.6rem 0.75rem; background:var(--md-sys-color-surface); border:1px solid var(--md-sys-color-outline-variant); border-radius:8px; align-items:center; gap:0.75rem;">
+          <div id="propMediaThumbContainer" style="width:48px; height:48px; border-radius:6px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:var(--md-sys-color-surface-container-high); flex-shrink:0;">
+          </div>
+          <div style="flex:1; min-width:0;">
+            <div id="propMediaFileName" style="font-weight:600; font-size:0.85rem; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;"></div>
+            <div id="propMediaFileSize" style="font-size:0.75rem; color:var(--md-sys-color-outline);"></div>
+          </div>
+          <button type="button" onclick="removeProposalFile(event)" style="background:none; border:none; color:var(--md-sys-color-error, #ba1a1a); cursor:pointer; font-size:1rem; padding:0.25rem;" title="Remove file">✕</button>
+        </div>
       </div>
 
       <div class="form-group" style="margin-bottom:1.5rem;">
@@ -173,6 +215,12 @@
 </div>
 
 <script>
+  const ALL_SUBCATEGORIES = [
+    {% for sub in subcategories %}
+      { id: "{{ sub.id }}", name: "{{ sub.name|escape }}", categoryId: "{{ sub.category_id or sub.categoryId }}" },
+    {% endfor %}
+  ];
+
   function openProposalModal() {
     document.getElementById('proposalModal').style.display = 'flex';
   }
@@ -180,13 +228,97 @@
     document.getElementById('proposalModal').style.display = 'none';
   }
 
+  function onManagerProposalCatChange(catId, preselectedSubId) {
+    const subSelect = document.getElementById('propSubCat');
+    if (!subSelect) return;
+    if (!catId) {
+      subSelect.innerHTML = '<option value="">-- Select Category First --</option>';
+      return;
+    }
+    const filtered = ALL_SUBCATEGORIES.filter(s => String(s.categoryId) === String(catId));
+    if (filtered.length === 0) {
+      subSelect.innerHTML = '<option value="">-- No Subcategories In Category --</option>';
+    } else {
+      let opts = '<option value="">-- Select Subcategory --</option>';
+      filtered.forEach(sub => {
+        const isSel = (preselectedSubId && String(preselectedSubId) === String(sub.id)) ? ' selected' : '';
+        opts += `<option value="${sub.id}"${isSel}>${sub.name}</option>`;
+      });
+      subSelect.innerHTML = opts;
+    }
+  }
+
   function switchProposalType(type) {
     const subGroup = document.getElementById('subcatParentGroup');
-    if (type === 'subcategory' || type === 'asset') {
+    const catLabel = document.getElementById('propCatLabel');
+    const subcatGroup = document.getElementById('propSubcatGroup');
+    const thumbGroup = document.getElementById('propThumbGroup');
+    const mediaGroup = document.getElementById('propMediaFileGroup');
+
+    if (type === 'subcategory') {
       subGroup.style.display = 'block';
-    } else {
+      if (catLabel) catLabel.textContent = 'Parent Category *';
+      subcatGroup.style.display = 'none';
+      thumbGroup.style.display = 'block';
+      mediaGroup.style.display = 'none';
+    } else if (type === 'asset') {
+      subGroup.style.display = 'block';
+      if (catLabel) catLabel.textContent = 'Category *';
+      subcatGroup.style.display = 'block';
+      thumbGroup.style.display = 'none';
+      mediaGroup.style.display = 'block';
+      onManagerProposalCatChange(document.getElementById('propParentCat').value);
+    } else { // category
       subGroup.style.display = 'none';
+      subcatGroup.style.display = 'none';
+      thumbGroup.style.display = 'block';
+      mediaGroup.style.display = 'none';
     }
+  }
+
+  function handleProposalFileChange(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+
+    // Auto-fill item name if blank
+    const nameInput = document.getElementById('propName');
+    if (!nameInput.value.trim()) {
+      const stem = file.name.replace(/\.[^/.]+$/, "");
+      nameInput.value = stem.replace(/[-_]+/g, " ");
+    }
+
+    const preview = document.getElementById('propMediaPreview');
+    const thumbContainer = document.getElementById('propMediaThumbContainer');
+    const fileName = document.getElementById('propMediaFileName');
+    const fileSize = document.getElementById('propMediaFileSize');
+
+    fileName.textContent = file.name;
+    fileSize.textContent = (file.size / 1024).toFixed(1) + ' KB';
+
+    thumbContainer.innerHTML = '';
+    if (file.type.startsWith('image/')) {
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(file);
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = 'cover';
+      thumbContainer.appendChild(img);
+    } else if (file.type.startsWith('video/')) {
+      thumbContainer.innerHTML = '<span style="font-size:1.5rem;">🎬</span>';
+    } else if (file.type.startsWith('audio/')) {
+      thumbContainer.innerHTML = '<span style="font-size:1.5rem;">🎵</span>';
+    } else {
+      thumbContainer.innerHTML = '<span style="font-size:1.5rem;">📄</span>';
+    }
+
+    preview.style.display = 'flex';
+  }
+
+  function removeProposalFile(e) {
+    if (e) e.stopPropagation();
+    const input = document.getElementById('propMediaFile');
+    input.value = '';
+    document.getElementById('propMediaPreview').style.display = 'none';
   }
 
   function submitProposal() {
@@ -194,6 +326,7 @@
     const name = document.getElementById('propName').value.trim();
     const note = document.getElementById('propNote').value.trim();
     const thumb = document.getElementById('propThumb').value.trim();
+    const fileInput = document.getElementById('propMediaFile');
 
     if (!name || !note) {
       alert('Please fill out the item name and note.');
@@ -202,11 +335,36 @@
 
     const payload = {
       name: name,
-      thumbnail_url: thumb || null
     };
 
-    if (type === 'subcategory' || type === 'asset') {
-      payload.category_id = document.getElementById('propParentCat').value;
+    if (type === 'subcategory') {
+      const catId = document.getElementById('propParentCat').value;
+      if (!catId) {
+        alert('Please select a Parent Category.');
+        return;
+      }
+      payload.category_id = catId;
+    } else if (type === 'asset') {
+      const catId = document.getElementById('propParentCat').value;
+      const subId = document.getElementById('propSubCat').value;
+      if (!catId) {
+        alert('Please select a Category.');
+        return;
+      }
+      if (!subId) {
+        alert('Please select a Subcategory for the proposed asset.');
+        return;
+      }
+      if (!fileInput.files || fileInput.files.length === 0) {
+        alert('Please select a media file to upload for the proposed asset.');
+        return;
+      }
+      payload.category_id = catId;
+      payload.sub_category_id = subId;
+    }
+
+    if (type !== 'asset') {
+      payload.thumbnail_url = thumb || null;
     }
 
     document.getElementById('dataPayloadJson').value = JSON.stringify(payload);

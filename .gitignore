@@ -54,6 +54,8 @@ static/central_data/*
 !static/central_data/.gitkeep
 static/app_data/*
 !static/app_data/.gitkeep
+static/profiles/*
+!static/profiles/.gitkeep
 
 # Unit test & coverage reports
 .pytest_cache/
