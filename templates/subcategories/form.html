@@ -6,7 +6,7 @@
 <div style="max-width:640px; margin:0 auto;">
   <div style="margin-bottom:1.5rem;">
     <h1>{% if subcategory %}Edit Subcategory{% else %}New Central Subcategory{% endif %}</h1>
-    <a href="/admin/subcategories" style="color:var(--md-sys-color-primary); text-decoration:none; font-size:0.9rem;">← Back to Subcategories</a>
+    <a href="{{ return_url or '/admin/subcategories' }}" id="backToListLink" style="color:var(--md-sys-color-primary); text-decoration:none; font-size:0.9rem;">← Back to Subcategories</a>
   </div>
 
   {% if error %}
@@ -18,6 +18,7 @@
 
   <div class="card">
     <form method="POST" enctype="multipart/form-data" action="{% if subcategory %}/admin/subcategories/{{ subcategory.id }}/edit{% else %}/admin/subcategories/new{% endif %}">
+      <input type="hidden" name="return_url" id="returnUrlInput" value="{{ return_url or '' }}">
       {% if not subcategory %}
         <div class="form-group">
           <label class="form-label" for="category_id">Parent Category *</label>
@@ -131,7 +132,7 @@
       </div>
 
       <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:2rem; border-top:1px solid var(--md-sys-color-outline-variant); padding-top:1.25rem;">
-        <a href="/admin/subcategories" class="btn btn-outlined">Cancel</a>
+        <a href="{{ return_url or '/admin/subcategories' }}" id="cancelBtn" class="btn btn-outlined">Cancel</a>
         <button type="submit" class="btn btn-primary">Save Subcategory</button>
       </div>
     </form>
@@ -274,6 +275,21 @@
   document.addEventListener('DOMContentLoaded', () => {
     setupDragAndDrop('imageDropzone', 'image_file', renderImagePreview);
     setupDragAndDrop('thumbDropzone', 'thumbnail_file', renderThumbPreview);
+
+    // Fallback to sessionStorage if return_url was not provided
+    const returnInput = document.getElementById('returnUrlInput');
+    const backLink = document.getElementById('backToListLink');
+    const cancelBtn = document.getElementById('cancelBtn');
+    if (returnInput && !returnInput.value) {
+      try {
+        const saved = sessionStorage.getItem('admin_subcategories_filter_url');
+        if (saved && saved.startsWith('/admin/subcategories')) {
+          returnInput.value = saved;
+          if (backLink) backLink.href = saved;
+          if (cancelBtn) cancelBtn.href = saved;
+        }
+      } catch (e) {}
+    }
   });
 </script>
 {% endblock %}

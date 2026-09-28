@@ -338,6 +338,12 @@ async def manager_instance_asset_override(
     is_enabled = payload.get("is_enabled")
     sequence = payload.get("sequence")
     is_premium = payload.get("is_premium")
+    is_rewarded = payload.get("is_rewarded")
+    if is_rewarded is None:
+        is_rewarded = payload.get("isRewarded")
+    rewarded_credits = payload.get("rewarded_credits")
+    if rewarded_credits is None:
+        rewarded_credits = payload.get("rewardedCredits") if "rewardedCredits" in payload else payload.get("credit")
     name = payload.get("name")
     overrides = {}
     if name is not None:
@@ -351,6 +357,8 @@ async def manager_instance_asset_override(
         is_enabled=is_enabled,
         sequence=sequence,
         is_premium=is_premium,
+        is_rewarded=is_rewarded,
+        rewarded_credits=rewarded_credits,
         overrides=overrides if overrides else None,
     )
     return JSONResponse(status_code=200, content={"success": True, "data": serialize_mongo_doc(res)})

@@ -16,6 +16,9 @@ def _serialize_value(val: Any) -> Any:
         return [_serialize_value(x) for x in val]
     if isinstance(val, dict):
         return {k: _serialize_value(v) for k, v in val.items()}
+    if isinstance(val, str) and ("localhost" in val or "127.0.0.1" in val) and "/static/" in val:
+        import re
+        return re.sub(r"^https?://(?:localhost|127\.0\.0\.1)(?::\d+)?(?=/static/)", "", val)
     return val
 
 

@@ -30,6 +30,7 @@ from router.deps import get_db
 from utils.datetimes import format_datetime_display
 from utils.errors import ConflictError
 from utils.ids import to_object_id
+from utils.responses import append_query_params, safe_redirect_url
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 templates.env.filters["format_datetime"] = format_datetime_display
@@ -170,6 +171,7 @@ async def admin_list_assets(
     else:
         subcategory_map = {str(s["id"]): s["name"] for s in all_subs.get("items", [])}
 
+    current_return_url = f"{request.url.path}?{request.url.query}" if request.url.query else request.url.path
     return templates.TemplateResponse(
         request=request,
         name="assets/list.html",
@@ -190,6 +192,7 @@ async def admin_list_assets(
             "current_sort": current_sort,
             "active_tab": "assets",
             "toast_message": toast_message,
+            "return_url": current_return_url,
         },
     )
 
@@ -254,6 +257,7 @@ async def admin_new_asset_redirect(
     category_id: str | None = None,
     subCategoryId: str | None = None,
     sub_category_id: str | None = None,
+    return_url: str | None = None,
 ) -> Response:
     cat_id = categoryId or category_id
     sub_id = subCategoryId or sub_category_id
@@ -262,6 +266,8 @@ async def admin_new_asset_redirect(
         params.append(f"categoryId={cat_id}")
     if sub_id:
         params.append(f"subCategoryId={sub_id}")
+    if return_url:
+        params.append(f"return_url={quote_plus(return_url)}")
     query = f"?{'&'.join(params)}" if params else ""
     return RedirectResponse(url=f"/admin/assets/new-multi{query}", status_code=303)
 
@@ -273,6 +279,7 @@ async def admin_new_single_asset_page(
     category_id: str | None = None,
     subCategoryId: str | None = None,
     sub_category_id: str | None = None,
+    return_url: str | None = Query(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -296,6 +303,7 @@ async def admin_new_single_asset_page(
         if target_cat_id
         else {"items": []}
     )
+    safe_return = safe_redirect_url(return_url, "/admin/assets")
     return templates.TemplateResponse(
         request=request,
         name="assets/form_single.html",
@@ -306,6 +314,7 @@ async def admin_new_single_asset_page(
             "selected_cat": target_cat_id or "",
             "selected_sub": target_sub_id or "",
             "active_tab": "assets",
+            "return_url": safe_return,
         },
     )
 
@@ -317,6 +326,7 @@ async def admin_new_multi_asset_page(
     category_id: str | None = None,
     subCategoryId: str | None = None,
     sub_category_id: str | None = None,
+    return_url: str | None = Query(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -340,6 +350,7 @@ async def admin_new_multi_asset_page(
         if target_cat_id
         else {"items": []}
     )
+    safe_return = safe_redirect_url(return_url, "/admin/assets")
     return templates.TemplateResponse(
         request=request,
         name="assets/form_multi.html",
@@ -351,13 +362,17 @@ async def admin_new_multi_asset_page(
             "selected_cat": target_cat_id or "",
             "selected_sub": target_sub_id or "",
             "active_tab": "assets",
+            "return_url": safe_return,
         },
     )
 
 
 @router.get("/{id}/edit")
 async def admin_edit_asset_page(
-    request: Request, id: str, db: AsyncIOMotorDatabase = Depends(get_db)
+    request: Request,
+    id: str,
+    return_url: str | None = Query(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
     if not session:
@@ -381,6 +396,7 @@ async def admin_edit_asset_page(
     target_cat_id = asset.get("categoryId") or asset.get("category_id")
     all_subs = await list_subcategories(db, category_id=target_cat_id, page=1, page_size=200)
     references = await get_asset_references(db, asset_id=id)
+    safe_return = safe_redirect_url(return_url, "/admin/assets")
 
     return templates.TemplateResponse(
         request=request,
@@ -392,13 +408,17 @@ async def admin_edit_asset_page(
             "subcategories": all_subs.get("items", []),
             "references": references,
             "active_tab": "assets",
+            "return_url": safe_return,
         },
     )
 
 
 @router.get("/{id}/frames")
 async def admin_frame_editor_page(
-    request: Request, id: str, db: AsyncIOMotorDatabase = Depends(get_db)
+    request: Request,
+    id: str,
+    return_url: str | None = Query(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
     if not session:
@@ -412,10 +432,11 @@ async def admin_frame_editor_page(
     if "thumbnail_url" in asset and "thumbnailUrl" not in asset:
         asset["thumbnailUrl"] = asset["thumbnail_url"]
 
+    safe_return = safe_redirect_url(return_url, "/admin/assets")
     return templates.TemplateResponse(
         request=request,
         name="assets/frames_editor.html",
-        context={"session": session, "asset": asset, "active_tab": "assets"},
+        context={"session": session, "asset": asset, "active_tab": "assets", "return_url": safe_return},
     )
 
 
@@ -429,6 +450,7 @@ async def admin_save_asset(
     sub_category_id: str = Form(...),
     thumbnail_url: str | None = Form(default=None),
     more_fields_json: str | None = Form(default=None),
+    return_url: str | None = Form(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -474,7 +496,8 @@ async def admin_save_asset(
                     more_fields=more_fields,
                 ),
             )
-        return RedirectResponse(url="/admin/assets", status_code=303)
+        redirect_target = safe_redirect_url(return_url, "/admin/assets")
+        return RedirectResponse(url=redirect_target, status_code=303)
     except ConflictError as err:
         all_cats = await list_categories(db, page=1, page_size=100)
         all_subs = await list_subcategories(db, category_id=category_id, page=1, page_size=200)
@@ -500,6 +523,7 @@ async def admin_save_asset(
                 "subcategories": all_subs.get("items", []),
                 "error": f"{err.message} Please provide a different name to rename the asset.",
                 "active_tab": "assets",
+                "return_url": safe_redirect_url(return_url, "/admin/assets"),
             },
             status_code=409,
         )
@@ -507,7 +531,10 @@ async def admin_save_asset(
 
 @router.post("/{id}/delete")
 async def admin_delete_asset(
-    request: Request, id: str, db: AsyncIOMotorDatabase = Depends(get_db)
+    request: Request,
+    id: str,
+    return_url: str | None = Form(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
     if not session:
@@ -530,9 +557,9 @@ async def admin_delete_asset(
             }
         )
 
-    return RedirectResponse(
-        url=f"/admin/assets?deleted=1&name={quote_plus(asset_name)}", status_code=303
-    )
+    base_target = safe_redirect_url(return_url, "/admin/assets")
+    redirect_target = append_query_params(base_target, {"deleted": 1, "name": asset_name})
+    return RedirectResponse(url=redirect_target, status_code=303)
 
 
 @router.post("/bulk-actions")

@@ -5,7 +5,7 @@
 
 {% block content %}
 <div style="margin-bottom:1.5rem;">
-  <a href="/admin/assets/{{ asset.id }}/edit" style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
+  <a href="/admin/assets/{{ asset.id }}/edit{% if return_url %}?return_url={{ return_url | urlencode }}{% endif %}" style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
     ← Back to Edit Asset
   </a>
   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
@@ -238,7 +238,8 @@ async function saveFrames() {
     if (!res.ok) throw new Error(json.message || 'Failed to update asset frames');
     
     alert('Frame placeholders saved successfully!');
-    window.location.href = `/admin/assets/${assetData.id}/edit`;
+    const returnUrlParam = {% if return_url %}'?return_url=' + encodeURIComponent('{{ return_url }}'){% else %}''{% endif %};
+    window.location.href = `/admin/assets/${assetData.id}/edit${returnUrlParam}`;
   } catch (err) {
     alert('Failed to save frames: ' + err.message);
   }

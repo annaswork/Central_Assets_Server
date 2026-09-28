@@ -40,9 +40,11 @@ async def update_item_settings_and_overrides(
     is_enabled: bool | None = None,
     sequence: int | None = None,
     is_premium: bool | None = None,
+    is_rewarded: bool | None = None,
+    rewarded_credits: int | None = None,
     overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Update reference settings (is_enabled, sequence, is_premium) and sparse field overrides."""
+    """Update reference settings (is_enabled, sequence, is_premium, is_rewarded, rewarded_credits) and sparse field overrides."""
     inst_oid = to_object_id(app_instance_id)
     ref_oid = to_object_id(item_id)
 
@@ -71,11 +73,21 @@ async def update_item_settings_and_overrides(
 
     set_fields: dict[str, Any] = {"updated_at": utc_now()}
     if is_enabled is not None:
-        set_fields["is_enabled"] = is_enabled
+        set_fields["is_enabled"] = bool(is_enabled)
     if sequence is not None:
         set_fields["sequence"] = sequence
     if is_premium is not None and item_type == "asset":
-        set_fields["is_premium"] = is_premium
+        set_fields["is_premium"] = bool(is_premium)
+    if is_rewarded is not None and item_type == "asset":
+        set_fields["is_rewarded"] = bool(is_rewarded)
+        if is_rewarded and rewarded_credits is None and not doc.get("rewarded_credits"):
+            set_fields["rewarded_credits"] = 5
+    if rewarded_credits is not None and item_type == "asset":
+        try:
+            val = int(rewarded_credits)
+            set_fields["rewarded_credits"] = max(0, val)
+        except (ValueError, TypeError):
+            set_fields["rewarded_credits"] = 5
 
     if overrides is not None:
         # Validate keys

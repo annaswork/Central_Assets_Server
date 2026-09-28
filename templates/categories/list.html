@@ -29,8 +29,8 @@
       </svg>
       Upload CSV
     </button>
-    <a href="/admin/categories/bulk" class="btn btn-outlined">Bulk Add</a>
-    <a href="/admin/categories/new" class="btn btn-primary">+ New Category</a>
+    <a href="/admin/categories/bulk{% if return_url %}?return_url={{ return_url | urlencode }}{% endif %}" class="btn btn-outlined">Bulk Add</a>
+    <a href="/admin/categories/new{% if return_url %}?return_url={{ return_url | urlencode }}{% endif %}" class="btn btn-primary">+ New Category</a>
   </div>
 </div>
 
@@ -44,7 +44,7 @@
         <option value="oldest" {% if sort == 'oldest' %}selected{% endif %}>Oldest First</option>
       </select>
       {% if (sort and sort in ('newest', 'oldest')) and not search %}
-        <a href="/admin/categories" class="btn btn-outlined btn-filter">Clear</a>
+        <a href="/admin/categories" class="btn btn-outlined btn-filter" onclick="sessionStorage.removeItem('admin_categories_filter_url')">Clear</a>
       {% endif %}
     </div>
 
@@ -52,7 +52,7 @@
       <input type="text" name="search" class="input" placeholder="Search categories by name..." value="{{ search }}" style="max-width:380px;">
       <button type="submit" class="btn btn-outlined btn-filter">Search</button>
       {% if search or (sort and sort in ('newest', 'oldest')) %}
-        <a href="/admin/categories" class="btn btn-outlined btn-filter">Clear</a>
+        <a href="/admin/categories" class="btn btn-outlined btn-filter" onclick="sessionStorage.removeItem('admin_categories_filter_url')">Clear</a>
       {% endif %}
     </div>
   </form>
@@ -113,13 +113,14 @@
           </td>
           <td data-label="ACTIONS" style="text-align:right;">
             <div class="action-buttons">
-              <a href="/admin/categories/{{ item.id }}/edit" class="action-btn-circle action-btn-edit" title="Edit Category">
+              <a href="/admin/categories/{{ item.id }}/edit{% if return_url %}?return_url={{ return_url | urlencode }}{% endif %}" class="action-btn-circle action-btn-edit" title="Edit Category">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
                 </svg>
               </a>
               <form id="delCatForm_{{ item.id }}" method="POST" action="/admin/categories/{{ item.id }}/delete" style="display:none;">
                 <input type="hidden" name="cascade" value="false">
+                {% if return_url %}<input type="hidden" name="return_url" value="{{ return_url }}">{% endif %}
               </form>
               <button type="button" class="action-btn-circle action-btn-delete" title="Delete Category" onclick="promptDeleteCategory('{{ item.id }}', '{{ item.name }}', {{ item.subcategory_count | default(0) }}, {{ item.asset_count | default(0) }})">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -175,8 +176,11 @@ function promptDeleteCategory(id, name, subCount, assetCount) {
         const form = document.getElementById('delCatForm_' + id);
         if (form) form.submit();
       }
-    });
   }
+}
+
+if (window.location.search) {
+  try { sessionStorage.setItem('admin_categories_filter_url', window.location.pathname + window.location.search); } catch (e) {}
 }
 </script>
 {% include "partials/csv_update_modal.html" %}

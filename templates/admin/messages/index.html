@@ -45,17 +45,37 @@
   </div>
 {% endif %}
 
+<style>
+  .messages-history-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--md-sys-color-outline-variant) transparent;
+  }
+  .messages-history-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .messages-history-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .messages-history-scroll::-webkit-scrollbar-thumb {
+    background-color: var(--md-sys-color-outline-variant);
+    border-radius: 4px;
+  }
+  .messages-history-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: var(--md-sys-color-outline);
+  }
+</style>
+
 <div class="card" style="padding:0; overflow:hidden; display:grid; grid-template-columns:320px 1fr; height:75vh; min-height:560px; box-shadow:var(--md-sys-elevation-2);">
   <!-- Sidebar -->
-  <div style="border-right:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); display:flex; flex-direction:column;">
+  <div style="border-right:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); display:flex; flex-direction:column; height:100%; min-height:0; overflow:hidden;">
     {% if chat_mode == 'admin' %}
       <!-- Admin Team Conversations List -->
-      <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); font-weight:700; display:flex; justify-content:space-between; align-items:center;">
+      <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); font-weight:700; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
         <span>Admin Team ({{ admin_conversations|length }})</span>
         <span style="font-size:0.75rem; color:var(--md-sys-color-outline);">Direct Chat</span>
       </div>
 
-      <div style="flex:1; overflow-y:auto;">
+      <div class="messages-history-scroll" style="flex:1; min-height:0; overflow-y:auto;">
         {% if admin_conversations and admin_conversations|length > 0 %}
           {% for adm in admin_conversations %}
             {% set is_active = (current_thread and (current_thread.id == adm.admin_id or current_thread._id == adm.admin_id)) %}
@@ -101,12 +121,12 @@
 
     {% else %}
       <!-- Managers Conversations List -->
-      <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); font-weight:700; display:flex; justify-content:space-between; align-items:center;">
+      <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); font-weight:700; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
         <span>Manager Threads ({{ threads|length }})</span>
         <span style="font-size:0.75rem; color:var(--md-sys-color-outline);">Proposals & Support</span>
       </div>
 
-      <div style="flex:1; overflow-y:auto;">
+      <div class="messages-history-scroll" style="flex:1; min-height:0; overflow-y:auto;">
         {% if threads and threads|length > 0 %}
           {% for th in threads %}
             {% set is_active = (current_thread and current_thread.id == th.manager_id) %}
@@ -132,12 +152,12 @@
   </div>
 
   <!-- Thread Active View -->
-  <div style="display:flex; flex-direction:column; background:var(--md-sys-color-surface);">
+  <div style="display:flex; flex-direction:column; background:var(--md-sys-color-surface); height:100%; min-height:0; overflow:hidden;">
     {% if current_thread %}
       {% if chat_mode == 'admin' %}
         <!-- ================= ADMIN TEAM CHAT VIEW ================= -->
         <!-- Admin Chat Header -->
-        <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); display:flex; justify-content:space-between; align-items:center;">
+        <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
           <div style="display:flex; align-items:center; gap:0.75rem;">
             <div style="width:40px; height:40px; border-radius:50%; flex-shrink:0;">
               {% if current_thread.profile_picture %}
@@ -171,7 +191,7 @@
         </div>
 
         <!-- Admin Direct Messages History -->
-        <div id="adminMessagesBox" style="flex:1; overflow-y:auto; padding:1.25rem; display:flex; flex-direction:column; gap:1rem;">
+        <div id="adminMessagesBox" class="messages-history-scroll" style="flex:1; min-height:0; overflow-y:auto; padding:1.25rem; display:flex; flex-direction:column; gap:1rem; scroll-behavior:smooth;">
           {% if messages and messages|length > 0 %}
             {% for msg in messages %}
               {% set is_me = (msg.sender_id|string == session.user_id|string) %}
@@ -196,7 +216,7 @@
         </div>
 
         <!-- Admin Direct Reply Composer -->
-        <div style="padding:1rem 1.25rem; border-top:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low);">
+        <div style="padding:1rem 1.25rem; border-top:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); flex-shrink:0;">
           <form method="POST" action="/admin/messages/team/{{ current_thread.id or current_thread._id }}/send" style="display:flex; gap:0.75rem;">
             <input
               type="text"
@@ -217,7 +237,7 @@
       {% else %}
         <!-- ================= MANAGERS CHAT VIEW ================= -->
         <!-- Manager Thread Header -->
-        <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); display:flex; justify-content:space-between; align-items:center;">
+        <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
           <div style="display:flex; align-items:center; gap:0.75rem;">
             <div style="width:36px; height:36px; border-radius:50%; background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container); display:flex; align-items:center; justify-content:center; font-weight:700;">
               {{ (current_thread.username[:1])|upper }}
@@ -248,7 +268,7 @@
         </div>
 
         <!-- Messages History -->
-        <div id="adminMessagesBox" style="flex:1; overflow-y:auto; padding:1.25rem; display:flex; flex-direction:column; gap:1rem;">
+        <div id="adminMessagesBox" class="messages-history-scroll" style="flex:1; min-height:0; overflow-y:auto; padding:1.25rem; display:flex; flex-direction:column; gap:1rem; scroll-behavior:smooth;">
           {% for msg in messages %}
             {% set is_admin = (msg.sender_role == 'admin') %}
             <div style="display:flex; flex-direction:column; align-items:{% if is_admin %}flex-end{% else %}flex-start{% endif %}; max-width:85%; {% if is_admin %}margin-left:auto;{% endif %}">
@@ -383,7 +403,7 @@
         </div>
 
         <!-- Manager Reply Composer -->
-        <div style="padding:1rem 1.25rem; border-top:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low);">
+        <div style="padding:1rem 1.25rem; border-top:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); flex-shrink:0;">
           <form method="POST" action="/admin/messages/{{ current_thread.id }}/reply" style="display:flex; gap:0.75rem;">
             <input
               type="text"
@@ -400,7 +420,7 @@
       {% endif %}
 
     {% else %}
-      <div style="display:flex; align-items:center; justify-content:center; flex:1; color:var(--md-sys-color-on-surface-variant);">
+      <div style="display:flex; align-items:center; justify-content:center; flex:1; min-height:0; overflow-y:auto; color:var(--md-sys-color-on-surface-variant);">
         <div style="text-align:center;">
           <div style="font-size:3rem; margin-bottom:0.5rem;">💬</div>
           <div style="font-size:1.1rem; font-weight:600;">
@@ -506,16 +526,27 @@
     });
   }
 
+  function scrollAdminMessagesToBottom() {
+    const b = document.getElementById('adminMessagesBox');
+    if (b) {
+      b.scrollTop = b.scrollHeight;
+    }
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initProposalSubcategories);
+    document.addEventListener('DOMContentLoaded', () => {
+      initProposalSubcategories();
+      scrollAdminMessagesToBottom();
+    });
   } else {
     initProposalSubcategories();
+    scrollAdminMessagesToBottom();
   }
 
   window.addEventListener('load', () => {
     initProposalSubcategories();
-    const b = document.getElementById('adminMessagesBox');
-    if (b) b.scrollTop = b.scrollHeight;
+    scrollAdminMessagesToBottom();
+    setTimeout(scrollAdminMessagesToBottom, 120);
   });
 </script>
 {% endblock %}

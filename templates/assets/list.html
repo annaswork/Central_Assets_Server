@@ -53,8 +53,8 @@
       </svg>
       Upload CSV
     </button>
-    <a href="/admin/assets/new-single{% if selected_cat or selected_sub %}?{% if selected_cat %}categoryId={{ selected_cat }}{% endif %}{% if selected_cat and selected_sub %}&{% endif %}{% if selected_sub %}subCategoryId={{ selected_sub }}{% endif %}{% endif %}" class="btn btn-outlined">Bulk Single-File Add</a>
-    <a href="/admin/assets/new-multi{% if selected_cat or selected_sub %}?{% if selected_cat %}categoryId={{ selected_cat }}{% endif %}{% if selected_cat and selected_sub %}&{% endif %}{% if selected_sub %}subCategoryId={{ selected_sub }}{% endif %}{% endif %}" class="btn btn-primary">+ Multi-File Asset</a>
+    <a href="/admin/assets/new-single?{% if selected_cat %}categoryId={{ selected_cat }}&{% endif %}{% if selected_sub %}subCategoryId={{ selected_sub }}&{% endif %}{% if return_url %}return_url={{ return_url | urlencode }}{% endif %}" class="btn btn-outlined">Bulk Single-File Add</a>
+    <a href="/admin/assets/new-multi?{% if selected_cat %}categoryId={{ selected_cat }}&{% endif %}{% if selected_sub %}subCategoryId={{ selected_sub }}&{% endif %}{% if return_url %}return_url={{ return_url | urlencode }}{% endif %}" class="btn btn-primary">+ Multi-File Asset</a>
   </div>
 </div>
 
@@ -95,7 +95,7 @@
       </select>
 
       {% if selected_cat or selected_sub or selected_type or (current_sort and current_sort not in ('sequence', '')) %}
-        <a href="/admin/assets{% if search %}?q={{ search }}{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
+        <a href="/admin/assets{% if search %}?q={{ search }}{% endif %}" class="btn btn-outlined btn-filter" onclick="sessionStorage.removeItem('admin_assets_filter_url')">Clear</a>
       {% endif %}
     </div>
 
@@ -103,7 +103,7 @@
       <input type="text" name="q" class="input" placeholder="Search asset name..." value="{{ search }}" style="max-width:260px;">
       <button type="submit" class="btn btn-outlined btn-filter">Search</button>
       {% if search %}
-        <a href="/admin/assets?{% if selected_cat %}categoryId={{ selected_cat }}&{% endif %}{% if selected_sub %}subCategoryId={{ selected_sub }}&{% endif %}{% if selected_type %}type={{ selected_type }}&{% endif %}{% if current_sort and current_sort not in ('sequence', '') %}sort={{ current_sort }}&{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
+        <a href="/admin/assets?{% if selected_cat %}categoryId={{ selected_cat }}&{% endif %}{% if selected_sub %}subCategoryId={{ selected_sub }}&{% endif %}{% if selected_type %}type={{ selected_type }}&{% endif %}{% if current_sort and current_sort not in ('sequence', '') %}sort={{ current_sort }}&{% endif %}" class="btn btn-outlined btn-filter" onclick="sessionStorage.removeItem('admin_assets_filter_url')">Clear</a>
       {% endif %}
     </div>
   </form>
@@ -208,12 +208,14 @@
           </td>
           <td data-label="ACTIONS" style="text-align:right;">
             <div class="action-buttons">
-              <a href="/admin/assets/{{ item.id }}/edit" class="action-btn-circle action-btn-edit" title="Edit Asset">
+              <a href="/admin/assets/{{ item.id }}/edit{% if return_url %}?return_url={{ return_url | urlencode }}{% endif %}" class="action-btn-circle action-btn-edit" title="Edit Asset">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
                 </svg>
               </a>
-              <form id="delForm_{{ item.id }}" method="POST" action="/admin/assets/{{ item.id }}/delete" style="display:none;"></form>
+              <form id="delForm_{{ item.id }}" method="POST" action="/admin/assets/{{ item.id }}/delete" style="display:none;">
+                {% if return_url %}<input type="hidden" name="return_url" value="{{ return_url }}">{% endif %}
+              </form>
               <button type="button" class="action-btn-circle action-btn-delete" title="Delete Asset" onclick="promptDeleteAsset('{{ item.id }}', '{{ item.name }}')">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -288,7 +290,7 @@
         <div class="asset-card-divider"></div>
 
         <div class="asset-card-actions">
-          <a href="/admin/assets/{{ item.id }}/edit" class="asset-card-btn-edit">Edit</a>
+          <a href="/admin/assets/{{ item.id }}/edit{% if return_url %}?return_url={{ return_url | urlencode }}{% endif %}" class="asset-card-btn-edit">Edit</a>
           <button type="button" class="asset-card-btn-delete" onclick="promptDeleteAsset('{{ item.id }}', '{{ item.name }}')">Delete</button>
         </div>
       </div>
@@ -316,11 +318,20 @@ function promptDeleteAsset(id, name) {
         form = document.createElement('form');
         form.method = 'POST';
         form.action = `/admin/assets/${id}/delete`;
+        const rInp = document.createElement('input');
+        rInp.type = 'hidden';
+        rInp.name = 'return_url';
+        rInp.value = '{{ return_url or "" }}';
+        form.appendChild(rInp);
         document.body.appendChild(form);
       }
       form.submit();
     }
   });
+}
+
+if (window.location.search) {
+  try { sessionStorage.setItem('admin_assets_filter_url', window.location.pathname + window.location.search); } catch (e) {}
 }
 </script>
 {% include "partials/csv_update_modal.html" %}

@@ -80,7 +80,6 @@ Instance Category ─────► Instance Subcategory ─────► Ins
 ├── database/             # MongoDB async client, collections, and connection lifespan
 ├── inits/                # FastAPI application factory, middleware, routes, exception handlers
 ├── middlewares/          # API tracking, CORS, request IDs, rate limiting, and security headers
-├── migrations/           # Database schema initialization and seed migrations
 ├── router/               # Route definitions: /api/v1 (client API) and /admin (web UI)
 ├── scripts/              # Administrative CLI scripts (create_admin, issue_key, etc.)
 ├── static/               # Central uploaded media, app icons, and static assets

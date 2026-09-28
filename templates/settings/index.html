@@ -45,7 +45,7 @@
 
       <div>
         {% if user and user.is_2fa_enabled %}
-          <button type="button" class="btn btn-secondary" onclick="toggleDisable2FaModal()" style="border-color:var(--md-sys-color-error); color:var(--md-sys-color-error);">
+          <button type="button" class="btn btn-destructive-outlined" onclick="toggleDisable2FaModal()">
             Disable 2FA
           </button>
         {% else %}
@@ -63,10 +63,10 @@
             <label class="form-label" for="disable_password" style="font-size:0.85rem;">Confirm Password to Disable 2FA</label>
             <input type="password" id="disable_password" name="password" class="input" placeholder="Your admin password" required />
           </div>
-          <button type="submit" class="btn btn-primary" style="background:var(--md-sys-color-error); border-color:var(--md-sys-color-error);">
+          <button type="submit" class="btn btn-destructive">
             Confirm Disable
           </button>
-          <button type="button" class="btn btn-secondary" onclick="toggleDisable2FaModal()">
+          <button type="button" class="btn btn-outlined" onclick="toggleDisable2FaModal()">
             Cancel
           </button>
         </form>

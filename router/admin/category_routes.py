@@ -24,6 +24,7 @@ from utils.csv_utils import parse_lines_list
 from utils.datetimes import format_datetime_display
 from utils.errors import ConflictError
 from utils.ids import to_object_id
+from utils.responses import append_query_params, safe_redirect_url
 from utils.slugify import slugify
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -87,6 +88,7 @@ async def admin_list_categories(
         f"Category '{name}' and all child contents were deleted." if deleted and name else None
     )
 
+    current_return_url = f"{request.url.path}?{request.url.query}" if request.url.query else request.url.path
     return templates.TemplateResponse(
         request=request,
         name="categories/list.html",
@@ -98,15 +100,20 @@ async def admin_list_categories(
             "order": sort_order,
             "active_tab": "categories",
             "toast_message": toast_message,
+            "return_url": current_return_url,
         },
     )
 
 
 @router.get("/new")
-async def admin_new_category_page(request: Request) -> Response:
+async def admin_new_category_page(
+    request: Request,
+    return_url: str | None = Query(default=None),
+) -> Response:
     session = get_current_admin_session(request)
     if not session:
         return RedirectResponse(url="/admin/login", status_code=303)
+    safe_return = safe_redirect_url(return_url, "/admin/categories")
     return templates.TemplateResponse(
         request=request,
         name="categories/form.html",
@@ -115,6 +122,7 @@ async def admin_new_category_page(request: Request) -> Response:
             "category": None,
             "error": None,
             "active_tab": "categories",
+            "return_url": safe_return,
         },
     )
 
@@ -128,6 +136,7 @@ async def admin_create_category(
     thumb_option: str | None = Form(default="custom"),
     thumbnail_file: UploadFile | None = File(default=None),
     image_file: UploadFile | None = File(default=None),
+    return_url: str | None = Form(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -152,7 +161,8 @@ async def admin_create_category(
                 image_url=final_img_url or None,
             ),
         )
-        return RedirectResponse(url="/admin/categories", status_code=303)
+        redirect_target = safe_redirect_url(return_url, "/admin/categories")
+        return RedirectResponse(url=redirect_target, status_code=303)
     except ConflictError as err:
         return templates.TemplateResponse(
             request=request,
@@ -162,20 +172,25 @@ async def admin_create_category(
                 "category": {"name": name, "thumbnail_url": thumbnail_url, "image_url": image_url},
                 "error": err.message,
                 "active_tab": "categories",
+                "return_url": safe_redirect_url(return_url, "/admin/categories"),
             },
             status_code=409,
         )
 
 
 @router.get("/bulk")
-async def admin_bulk_categories_page(request: Request) -> Response:
+async def admin_bulk_categories_page(
+    request: Request,
+    return_url: str | None = Query(default=None),
+) -> Response:
     session = get_current_admin_session(request)
     if not session:
         return RedirectResponse(url="/admin/login", status_code=303)
+    safe_return = safe_redirect_url(return_url, "/admin/categories")
     return templates.TemplateResponse(
         request=request,
         name="categories/bulk.html",
-        context={"session": session, "results": None, "active_tab": "categories"},
+        context={"session": session, "results": None, "active_tab": "categories", "return_url": safe_return},
     )
 
 
@@ -186,6 +201,7 @@ async def admin_bulk_categories_submit(
     thumb_option: str | None = Form(default="custom"),
     thumbnail_file: UploadFile | None = File(default=None),
     thumbnail_url: str | None = Form(default=None),
+    return_url: str | None = Form(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -217,7 +233,8 @@ async def admin_bulk_categories_submit(
     if items:
         await bulk_create_categories(db, items=items)
 
-    return RedirectResponse(url="/admin/categories", status_code=303)
+    redirect_target = safe_redirect_url(return_url, "/admin/categories")
+    return RedirectResponse(url=redirect_target, status_code=303)
 
 
 @router.post("/upload-csv")
@@ -255,12 +272,16 @@ async def admin_upload_csv_categories(
 
 @router.get("/{id}/edit")
 async def admin_edit_category_page(
-    request: Request, id: str, db: AsyncIOMotorDatabase = Depends(get_db)
+    request: Request,
+    id: str,
+    return_url: str | None = Query(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
     if not session:
         return RedirectResponse(url="/admin/login", status_code=303)
     cat = await get_category(db, category_id=id)
+    safe_return = safe_redirect_url(return_url, "/admin/categories")
     return templates.TemplateResponse(
         request=request,
         name="categories/form.html",
@@ -269,6 +290,7 @@ async def admin_edit_category_page(
             "category": cat,
             "error": None,
             "active_tab": "categories",
+            "return_url": safe_return,
         },
     )
 
@@ -283,6 +305,7 @@ async def admin_update_category(
     thumb_option: str | None = Form(default="custom"),
     thumbnail_file: UploadFile | None = File(default=None),
     image_file: UploadFile | None = File(default=None),
+    return_url: str | None = Form(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -308,7 +331,8 @@ async def admin_update_category(
                 image_url=final_img_url or None,
             ),
         )
-        return RedirectResponse(url="/admin/categories", status_code=303)
+        redirect_target = safe_redirect_url(return_url, "/admin/categories")
+        return RedirectResponse(url=redirect_target, status_code=303)
     except ConflictError as err:
         cat = await get_category(db, category_id=id)
         return templates.TemplateResponse(
@@ -319,6 +343,7 @@ async def admin_update_category(
                 "category": cat,
                 "error": err.message,
                 "active_tab": "categories",
+                "return_url": safe_redirect_url(return_url, "/admin/categories"),
             },
             status_code=409,
         )
@@ -329,6 +354,7 @@ async def admin_delete_category(
     request: Request,
     id: str,
     cascade: bool = Form(default=False),
+    return_url: str | None = Form(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -347,9 +373,9 @@ async def admin_delete_category(
             return JSONResponse(
                 content={"success": True, "message": f"Category '{cat_name}' was deleted."}
             )
-        return RedirectResponse(
-            url=f"/admin/categories?deleted=1&name={quote_plus(cat_name)}", status_code=303
-        )
+        base_target = safe_redirect_url(return_url, "/admin/categories")
+        redirect_target = append_query_params(base_target, {"deleted": 1, "name": cat_name})
+        return RedirectResponse(url=redirect_target, status_code=303)
     except ConflictError as err:
         # Re-render with cascade confirmation blast-radius details
         return templates.TemplateResponse(

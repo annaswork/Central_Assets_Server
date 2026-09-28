@@ -7,10 +7,10 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from authorization.manager_session import get_current_manager_session
 from config.paths import TEMPLATES_DIR
-from controller.asset_controller import get_asset, list_assets
+from controller.asset_controller import list_assets
 from controller.category_controller import list_categories
 from controller.manager_controller import get_manager_by_id
-from controller.subcategory_controller import list_subcategories
+from controller.subcategory_controller import get_subcategory, list_subcategories
 from database.collections import ASSETS, SUBCATEGORIES
 from router.deps import get_db
 from utils.datetimes import format_datetime_display
@@ -27,6 +27,8 @@ async def manager_categories(
     request: Request,
     page: int = Query(default=1, ge=1),
     search: str | None = None,
+    sort: str = Query(default="sequence"),
+    order: str = Query(default="asc"),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     """Read-only view of central categories."""
@@ -35,8 +37,28 @@ async def manager_categories(
         return RedirectResponse(url="/manager/login", status_code=303)
 
     manager = await get_manager_by_id(db, session["user_id"])
+
+    s_clean = (sort or "sequence").lower()
+    o_clean = (order or "asc").lower()
+    if s_clean in ("sequence", "order", "custom"):
+        sort_by = "sequence"
+        sort_order = "asc" if o_clean != "desc" else "desc"
+        current_sort = "sequence"
+    elif s_clean == "oldest" or (s_clean in ("created_at", "created") and o_clean == "asc"):
+        sort_by = "created_at"
+        sort_order = "asc"
+        current_sort = "oldest"
+    elif s_clean in ("newest",) or (s_clean in ("created_at", "created") and o_clean == "desc"):
+        sort_by = "created_at"
+        sort_order = "desc"
+        current_sort = "newest"
+    else:
+        sort_by = "sequence"
+        sort_order = "asc"
+        current_sort = "sequence"
+
     categories_page = await list_categories(
-        db, page=page, page_size=20, search=search
+        db, page=page, page_size=20, search=search, sort_by=sort_by, sort_order=sort_order
     )
 
     items = categories_page.get("items", [])
@@ -63,8 +85,11 @@ async def manager_categories(
             "session": session,
             "manager": manager,
             "categories": items,
-            "pagination": categories_page.get("pagination", {}),
+            "data": categories_page,
+            "pagination": categories_page,
             "search": search or "",
+            "sort": current_sort,
+            "order": sort_order,
             "active_tab": "categories",
         },
     )
@@ -74,8 +99,11 @@ async def manager_categories(
 async def manager_subcategories(
     request: Request,
     page: int = Query(default=1, ge=1),
+    categoryId: str | None = None,
     category_id: str | None = None,
     search: str | None = None,
+    sort: str = Query(default="sequence"),
+    order: str = Query(default="asc"),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     """Read-only view of central subcategories."""
@@ -83,9 +111,36 @@ async def manager_subcategories(
     if not session:
         return RedirectResponse(url="/manager/login", status_code=303)
 
+    effective_cat_id = categoryId or category_id
+
+    s_clean = (sort or "sequence").lower()
+    o_clean = (order or "asc").lower()
+    if s_clean in ("sequence", "order", "custom"):
+        sort_by = "sequence"
+        sort_order = "asc" if o_clean != "desc" else "desc"
+        current_sort = "sequence"
+    elif s_clean == "oldest" or (s_clean in ("created_at", "created") and o_clean == "asc"):
+        sort_by = "created_at"
+        sort_order = "asc"
+        current_sort = "oldest"
+    elif s_clean in ("newest",) or (s_clean in ("created_at", "created") and o_clean == "desc"):
+        sort_by = "created_at"
+        sort_order = "desc"
+        current_sort = "newest"
+    else:
+        sort_by = "sequence"
+        sort_order = "asc"
+        current_sort = "sequence"
+
     manager = await get_manager_by_id(db, session["user_id"])
     subcategories_page = await list_subcategories(
-        db, category_id=category_id, page=page, page_size=20, search=search
+        db,
+        category_id=effective_cat_id,
+        page=page,
+        page_size=20,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
     )
     all_categories = await list_categories(db, page=1, page_size=500)
 
@@ -123,9 +178,14 @@ async def manager_subcategories(
             "manager": manager,
             "subcategories": sub_items,
             "categories": all_categories.get("items", []),
-            "category_id": category_id or "",
-            "pagination": subcategories_page.get("pagination", {}),
+            "categoryId": effective_cat_id or "",
+            "category_id": effective_cat_id or "",
+            "selected_category_id": effective_cat_id or "",
+            "data": subcategories_page,
+            "pagination": subcategories_page,
             "search": search or "",
+            "sort": current_sort,
+            "order": sort_order,
             "active_tab": "subcategories",
         },
     )
@@ -135,9 +195,15 @@ async def manager_subcategories(
 async def manager_assets(
     request: Request,
     page: int = Query(default=1, ge=1),
+    categoryId: str | None = None,
     category_id: str | None = None,
+    subCategoryId: str | None = None,
     sub_category_id: str | None = None,
+    type: str | None = None,
+    q: str | None = None,
     search: str | None = None,
+    sort: str = Query(default="sequence"),
+    order: str = Query(default="asc"),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     """Read-only view of central assets."""
@@ -146,20 +212,102 @@ async def manager_assets(
         return RedirectResponse(url="/manager/login", status_code=303)
 
     manager = await get_manager_by_id(db, session["user_id"])
+
+    effective_cat = categoryId or category_id
+    effective_sub = subCategoryId or sub_category_id
+    search_query = q or search
+
+    clean_type = (type or "").strip().lower()
+    if clean_type in ("image", "images"):
+        selected_type = "images"
+    elif clean_type in ("video", "videos"):
+        selected_type = "videos"
+    elif clean_type in ("audio", "audios"):
+        selected_type = "audios"
+    elif clean_type in ("json", "json_data"):
+        selected_type = "json"
+    elif clean_type in ("frame", "frames"):
+        selected_type = "frames"
+    else:
+        selected_type = ""
+
+    # If subcategory provided but category missing, resolve category from subcategory
+    if effective_sub and not effective_cat:
+        try:
+            sub_doc = await get_subcategory(db, effective_sub)
+            if sub_doc and "category_id" in sub_doc:
+                effective_cat = str(sub_doc["category_id"])
+        except Exception:
+            pass
+
+    # Normalize sort & order
+    s_clean = (sort or "sequence").lower()
+    o_clean = (order or "asc").lower()
+    if s_clean in ("sequence", "order", "custom"):
+        effective_sort_by = "sequence"
+        effective_sort_order = "asc" if o_clean != "desc" else "desc"
+        current_sort = "sequence"
+    elif s_clean in ("name", "by_name", "title"):
+        effective_sort_by = "name"
+        effective_sort_order = "asc" if o_clean != "desc" else "desc"
+        current_sort = "name"
+    elif s_clean == "oldest" or (s_clean in ("created_at", "created") and o_clean == "asc"):
+        effective_sort_by = "created_at"
+        effective_sort_order = "asc"
+        current_sort = "oldest"
+    elif s_clean == "most_viewed" or (s_clean == "views" and o_clean != "asc"):
+        effective_sort_by = "views"
+        effective_sort_order = "desc"
+        current_sort = "most_viewed"
+    elif s_clean == "views" and o_clean == "asc":
+        effective_sort_by = "views"
+        effective_sort_order = "asc"
+        current_sort = "views"
+    elif s_clean == "most_downloaded" or (s_clean == "downloads" and o_clean != "asc"):
+        effective_sort_by = "downloads"
+        effective_sort_order = "desc"
+        current_sort = "most_downloaded"
+    elif s_clean == "downloads" and o_clean == "asc":
+        effective_sort_by = "downloads"
+        effective_sort_order = "asc"
+        current_sort = "downloads"
+    elif s_clean in ("newest",) or (s_clean in ("created_at", "created") and o_clean == "desc"):
+        effective_sort_by = "created_at"
+        effective_sort_order = "desc"
+        current_sort = "newest"
+    else:
+        effective_sort_by = "sequence"
+        effective_sort_order = "asc"
+        current_sort = "sequence"
+
     assets_page = await list_assets(
         db,
+        category_id=effective_cat,
+        sub_category_id=effective_sub,
+        search=search_query,
         page=page,
-        page_size=24,
-        category_id=category_id,
-        sub_category_id=sub_category_id,
-        search=search,
+        page_size=20,
+        sort_by=effective_sort_by,
+        sort_order=effective_sort_order,
+        asset_type=selected_type,
     )
-    all_categories = await list_categories(db, page=1, page_size=500)
 
-    subcategories = []
-    if category_id:
-        subs_page = await list_subcategories(db, page=1, page_size=500, category_id=category_id)
-        subcategories = subs_page.get("items", [])
+    all_categories = await list_categories(db, page=1, page_size=200)
+    all_subs = await list_subcategories(db, category_id=effective_cat, page=1, page_size=500)
+
+    category_map = {str(c["id"]): c.get("name", "") for c in all_categories.get("items", [])}
+    if effective_cat:
+        all_subs_for_map = await list_subcategories(db, page=1, page_size=500)
+        subcategory_map = {str(s["id"]): s.get("name", "") for s in all_subs_for_map.get("items", [])}
+    else:
+        subcategory_map = {str(s["id"]): s.get("name", "") for s in all_subs.get("items", [])}
+
+    items = assets_page.get("items", [])
+    for item in items:
+        cat_id_str = str(item.get("category_id", ""))
+        sub_id_str = str(item.get("sub_category_id", ""))
+        item["category_name"] = category_map.get(cat_id_str, item.get("category_name") or "")
+        item["sub_category_name"] = subcategory_map.get(sub_id_str, item.get("sub_category_name") or "")
 
     return templates.TemplateResponse(
         request=request,
@@ -167,13 +315,24 @@ async def manager_assets(
         context={
             "session": session,
             "manager": manager,
-            "assets": assets_page.get("items", []),
+            "assets": items,
+            "data": assets_page,
+            "pagination": assets_page,
             "categories": all_categories.get("items", []),
-            "subcategories": subcategories,
-            "category_id": category_id or "",
-            "sub_category_id": sub_category_id or "",
-            "pagination": assets_page.get("pagination", {}),
-            "search": search or "",
+            "subcategories": all_subs.get("items", []),
+            "selected_cat": effective_cat or "",
+            "category_id": effective_cat or "",
+            "categoryId": effective_cat or "",
+            "selected_sub": effective_sub or "",
+            "sub_category_id": effective_sub or "",
+            "subCategoryId": effective_sub or "",
+            "selected_type": selected_type,
+            "type": selected_type,
+            "search": search_query or "",
+            "q": search_query or "",
+            "sort": effective_sort_by,
+            "order": effective_sort_order,
+            "current_sort": current_sort,
             "active_tab": "assets",
         },
     )

@@ -96,7 +96,8 @@ async def upload_file_endpoint(
     if filesize is not None:
         client_hints["filesize"] = filesize
 
-    base_url = str(request.base_url).rstrip("/")
+    # Store URLs as root-relative paths (/static/...) so they are portable across localhost, LAN IPs, and custom domains
+    base_url = ""
     metadata = await handle_upload(
         file_bytes=content,
         filename=filename,

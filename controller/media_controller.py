@@ -167,7 +167,38 @@ async def handle_upload(
             logger.warning(f"Failed to extract 1st frame webp thumbnail for {safe_name}: {err}")
             thumb_url = None if is_video else public_url
     else:
-        thumb_url = public_url
+        # Static image: generate scaled thumbnail if not already a thumbnail
+        if not safe_name.lower().startswith(("thumb_", "thumbnail_")) and mime_type.startswith("image/"):
+            try:
+                scaled_bytes, thumb_ext = await anyio.to_thread.run_sync(
+                    generate_scaled_thumbnail, file_bytes, 1 / 3, "WEBP", 85
+                )
+                stem = Path(safe_name).stem
+                thumb_filename = f"thumb_{stem}.{thumb_ext}"
+                thumb_dest_path = dest_dir / thumb_filename
+                async with await anyio.open_file(thumb_dest_path, "wb") as tf:
+                    await tf.write(scaled_bytes)
+
+                if category_folder and subcategory_folder:
+                    if asset_folder and asset_folder.strip("/\\ "):
+                        clean_asset = asset_folder.strip("/\\ ")
+                        thumb_url = build_central_static_url(
+                            base_url, clean_cat, clean_sub, thumb_filename, asset_folder=clean_asset
+                        )
+                    else:
+                        thumb_url = build_central_static_url(base_url, clean_cat, clean_sub, thumb_filename)
+                elif target_subdir in ("profiles", "profiles/"):
+                    relative_thumb_path = f"profiles/{thumb_filename}"
+                    path = f"/static/{relative_thumb_path}"
+                    thumb_url = f"{base_url.strip().rstrip('/')}{path}" if base_url and base_url.strip() else path
+                else:
+                    relative_thumb_path = f"{target_subdir}/{thumb_filename}"
+                    thumb_url = central_media_url(relative_thumb_path, base_url=base_url)
+            except Exception as err:
+                logger.warning(f"Failed to generate scaled webp thumbnail for {safe_name}: {err}")
+                thumb_url = public_url
+        else:
+            thumb_url = public_url
 
     metadata: dict[str, Any] = {
         "url": public_url,

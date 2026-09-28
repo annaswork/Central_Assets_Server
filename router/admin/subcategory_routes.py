@@ -25,6 +25,7 @@ from utils.csv_utils import parse_lines_list
 from utils.datetimes import format_datetime_display
 from utils.errors import ConflictError
 from utils.ids import to_object_id
+from utils.responses import append_query_params, safe_redirect_url
 from utils.slugify import slugify
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -105,6 +106,7 @@ async def admin_list_subcategories(
         f"Subcategory '{name}' and associated assets were deleted." if deleted and name else None
     )
 
+    current_return_url = f"{request.url.path}?{request.url.query}" if request.url.query else request.url.path
     return templates.TemplateResponse(
         request=request,
         name="subcategories/list.html",
@@ -118,6 +120,7 @@ async def admin_list_subcategories(
             "order": sort_order,
             "active_tab": "subcategories",
             "toast_message": toast_message,
+            "return_url": current_return_url,
         },
     )
 
@@ -126,6 +129,7 @@ async def admin_list_subcategories(
 async def admin_new_subcategory_page(
     request: Request,
     categoryId: str | None = None,
+    return_url: str | None = Query(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -133,6 +137,7 @@ async def admin_new_subcategory_page(
         return RedirectResponse(url="/admin/login", status_code=303)
 
     all_cats = await list_categories(db, page=1, page_size=100)
+    safe_return = safe_redirect_url(return_url, "/admin/subcategories")
     return templates.TemplateResponse(
         request=request,
         name="subcategories/form.html",
@@ -143,6 +148,7 @@ async def admin_new_subcategory_page(
             "selected_category_id": categoryId or "",
             "error": None,
             "active_tab": "subcategories",
+            "return_url": safe_return,
         },
     )
 
@@ -157,6 +163,7 @@ async def admin_create_subcategory(
     thumb_option: str | None = Form(default="custom"),
     thumbnail_file: UploadFile | None = File(default=None),
     image_file: UploadFile | None = File(default=None),
+    return_url: str | None = Form(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -185,7 +192,8 @@ async def admin_create_subcategory(
                 image_url=final_img_url or None,
             ),
         )
-        return RedirectResponse(url="/admin/subcategories", status_code=303)
+        redirect_target = safe_redirect_url(return_url, "/admin/subcategories")
+        return RedirectResponse(url=redirect_target, status_code=303)
     except ConflictError as err:
         all_cats = await list_categories(db, page=1, page_size=100)
         return templates.TemplateResponse(
@@ -202,6 +210,7 @@ async def admin_create_subcategory(
                 "selected_category_id": category_id,
                 "error": err.message,
                 "active_tab": "subcategories",
+                "return_url": safe_redirect_url(return_url, "/admin/subcategories"),
             },
             status_code=409,
         )
@@ -209,20 +218,26 @@ async def admin_create_subcategory(
 
 @router.get("/bulk")
 async def admin_bulk_subcategories_page(
-    request: Request, db: AsyncIOMotorDatabase = Depends(get_db)
+    request: Request,
+    categoryId: str | None = None,
+    return_url: str | None = Query(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
     if not session:
         return RedirectResponse(url="/admin/login", status_code=303)
     all_cats = await list_categories(db, page=1, page_size=100)
+    safe_return = safe_redirect_url(return_url, "/admin/subcategories")
     return templates.TemplateResponse(
         request=request,
         name="subcategories/bulk.html",
         context={
             "session": session,
             "categories": all_cats.get("items", []),
+            "selected_category_id": categoryId or "",
             "results": None,
             "active_tab": "subcategories",
+            "return_url": safe_return,
         },
     )
 
@@ -235,6 +250,7 @@ async def admin_bulk_subcategories_submit(
     thumb_option: str | None = Form(default="custom"),
     thumbnail_file: UploadFile | None = File(default=None),
     thumbnail_url: str | None = Form(default=None),
+    return_url: str | None = Form(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -269,7 +285,8 @@ async def admin_bulk_subcategories_submit(
     if items:
         await bulk_create_subcategories(db, items=items)
 
-    return RedirectResponse(url="/admin/subcategories", status_code=303)
+    redirect_target = safe_redirect_url(return_url, "/admin/subcategories")
+    return RedirectResponse(url=redirect_target, status_code=303)
 
 
 @router.post("/upload-csv")
@@ -317,13 +334,17 @@ async def admin_upload_csv_subcategories(
 
 @router.get("/{id}/edit")
 async def admin_edit_subcategory_page(
-    request: Request, id: str, db: AsyncIOMotorDatabase = Depends(get_db)
+    request: Request,
+    id: str,
+    return_url: str | None = Query(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
     if not session:
         return RedirectResponse(url="/admin/login", status_code=303)
     sub = await get_subcategory(db, subcategory_id=id)
     all_cats = await list_categories(db, page=1, page_size=100)
+    safe_return = safe_redirect_url(return_url, "/admin/subcategories")
     return templates.TemplateResponse(
         request=request,
         name="subcategories/form.html",
@@ -334,6 +355,7 @@ async def admin_edit_subcategory_page(
             "selected_category_id": sub.get("category_id", ""),
             "error": None,
             "active_tab": "subcategories",
+            "return_url": safe_return,
         },
     )
 
@@ -348,6 +370,7 @@ async def admin_update_subcategory(
     thumb_option: str | None = Form(default="custom"),
     thumbnail_file: UploadFile | None = File(default=None),
     image_file: UploadFile | None = File(default=None),
+    return_url: str | None = Form(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -376,7 +399,8 @@ async def admin_update_subcategory(
                 image_url=final_img_url or None,
             ),
         )
-        return RedirectResponse(url="/admin/subcategories", status_code=303)
+        redirect_target = safe_redirect_url(return_url, "/admin/subcategories")
+        return RedirectResponse(url=redirect_target, status_code=303)
     except ConflictError as err:
         sub = await get_subcategory(db, subcategory_id=id)
         all_cats = await list_categories(db, page=1, page_size=100)
@@ -390,6 +414,7 @@ async def admin_update_subcategory(
                 "selected_category_id": sub.get("category_id", ""),
                 "error": err.message,
                 "active_tab": "subcategories",
+                "return_url": safe_redirect_url(return_url, "/admin/subcategories"),
             },
             status_code=409,
         )
@@ -400,6 +425,7 @@ async def admin_delete_subcategory(
     request: Request,
     id: str,
     cascade: bool = Form(default=False),
+    return_url: str | None = Form(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -418,9 +444,9 @@ async def admin_delete_subcategory(
             return JSONResponse(
                 content={"success": True, "message": f"Subcategory '{sub_name}' was deleted."}
             )
-        return RedirectResponse(
-            url=f"/admin/subcategories?deleted=1&name={quote_plus(sub_name)}", status_code=303
-        )
+        base_target = safe_redirect_url(return_url, "/admin/subcategories")
+        redirect_target = append_query_params(base_target, {"deleted": 1, "name": sub_name})
+        return RedirectResponse(url=redirect_target, status_code=303)
     except ConflictError as err:
         return templates.TemplateResponse(
             request=request,

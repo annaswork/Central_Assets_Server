@@ -4,7 +4,7 @@
 
 {% block content %}
 <div style="margin-bottom:1.5rem;">
-  <a href="/admin/assets"
+  <a href="{{ return_url or '/admin/assets' }}" id="backToListLink"
     style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
     ← Back to Assets
   </a>
@@ -17,7 +17,7 @@
     </div>
     {% if asset and ((asset.moreFields and asset.moreFields.frames) or (asset.more_fields and asset.more_fields.frames))
     %}
-    <a href="/admin/assets/{{ asset.id }}/frames" class="btn btn-outlined"
+    <a href="/admin/assets/{{ asset.id }}/frames{% if return_url %}?return_url={{ return_url | urlencode }}{% endif %}" class="btn btn-outlined"
       style="color:var(--app-premium); border-color:var(--app-premium);">
       Launch Interactive Frame Editor 🖼️
     </a>
@@ -37,6 +37,7 @@
   {% if asset and asset.id %}
   <input type="hidden" name="id" value="{{ asset.id }}">
   {% endif %}
+  <input type="hidden" name="return_url" id="returnUrlInput" value="{{ return_url or '' }}">
   <input type="hidden" name="more_fields_json" id="moreFieldsJsonInput" value="">
 
   <!-- ===== LEFT COLUMN: Core Details ===== -->
@@ -201,7 +202,7 @@
   <!-- ===== FULL-WIDTH: Submit Buttons ===== -->
   <div class="asset-edit-full-width"
     style="display:flex; justify-content:flex-end; gap:0.75rem; border-top:1px solid var(--md-sys-color-outline-variant); padding-top:1.25rem;">
-    <a href="/admin/assets" class="btn btn-outlined">Cancel</a>
+    <a href="{{ return_url or '/admin/assets' }}" id="cancelBtn" class="btn btn-outlined">Cancel</a>
     <button type="submit" class="btn btn-primary" id="saveAssetSubmitBtn">
       {% if asset %}Save Asset Changes{% else %}Create Asset{% endif %}
     </button>
@@ -1428,7 +1429,7 @@
                 🤖 Re-detect
               </button>
               {% if asset and asset.id %}
-                <a href="/admin/assets/{{ asset.id }}/frames" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.55rem; font-size:0.75rem;">
+                <a href="/admin/assets/{{ asset.id }}/frames{% if return_url %}?return_url={{ return_url | urlencode }}{% endif %}" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.55rem; font-size:0.75rem;">
                   Interactive Editor 🖼️
                 </a>
               {% endif %}
@@ -3207,5 +3208,21 @@
   renderPayloadBlocks();
   checkAssetNameAvailability();
   initJsonModalListeners();
+
+  (function() {
+    const returnInput = document.getElementById('returnUrlInput');
+    const backLink = document.getElementById('backToListLink');
+    const cancelBtn = document.getElementById('cancelBtn');
+    if (returnInput && !returnInput.value) {
+      try {
+        const saved = sessionStorage.getItem('admin_assets_filter_url');
+        if (saved && saved.startsWith('/admin/assets')) {
+          returnInput.value = saved;
+          if (backLink) backLink.href = saved;
+          if (cancelBtn) cancelBtn.href = saved;
+        }
+      } catch (e) {}
+    }
+  })();
 </script>
 {% endblock %}

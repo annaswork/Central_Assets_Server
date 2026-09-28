@@ -6,7 +6,7 @@
 <div style="max-width:800px; margin:0 auto;">
   <div style="margin-bottom:1.5rem;">
     <h1>Bulk Add Subcategories</h1>
-    <a href="/admin/subcategories">← Back to Subcategories</a>
+    <a href="{{ return_url or '/admin/subcategories' }}" id="backToListLink">← Back to Subcategories</a>
   </div>
 
   {% if results %}
@@ -49,12 +49,13 @@
 
   <div class="card">
     <form method="POST" action="/admin/subcategories/bulk" enctype="multipart/form-data">
+      <input type="hidden" name="return_url" id="returnUrlInput" value="{{ return_url or '' }}">
       <div class="form-group">
         <label class="form-label" for="category_id">Target Parent Category *</label>
         <select id="category_id" name="category_id" class="select" required>
           <option value="">Select a Category...</option>
           {% for cat in categories %}
-            <option value="{{ cat.id }}">{{ cat.name }}</option>
+            <option value="{{ cat.id }}" {% if selected_category_id == cat.id %}selected{% endif %}>{{ cat.name }}</option>
           {% endfor %}
         </select>
       </div>
@@ -123,7 +124,7 @@
       </div>
 
       <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.5rem;">
-        <a href="/admin/subcategories" class="btn btn-outlined">Cancel</a>
+        <a href="{{ return_url or '/admin/subcategories' }}" id="cancelBtn" class="btn btn-outlined">Cancel</a>
         <button type="submit" class="btn btn-primary">Bulk Add</button>
       </div>
     </form>
@@ -217,6 +218,21 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     setupDragAndDrop('thumbDropzone', 'thumbnail_file', renderThumbPreview);
+
+    // Fallback to sessionStorage if return_url was not provided
+    const returnInput = document.getElementById('returnUrlInput');
+    const backLink = document.getElementById('backToListLink');
+    const cancelBtn = document.getElementById('cancelBtn');
+    if (returnInput && !returnInput.value) {
+      try {
+        const saved = sessionStorage.getItem('admin_subcategories_filter_url');
+        if (saved && saved.startsWith('/admin/subcategories')) {
+          returnInput.value = saved;
+          if (backLink) backLink.href = saved;
+          if (cancelBtn) cancelBtn.href = saved;
+        }
+      } catch (e) {}
+    }
   });
 </script>
 {% endblock %}

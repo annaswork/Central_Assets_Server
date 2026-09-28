@@ -370,6 +370,20 @@ async def get_resolved_assets(
                         "$is_premium",
                     ]
                 },
+                "is_rewarded": {
+                    "$cond": [
+                        {"$ne": [{"$type": "$overrides.is_rewarded"}, "missing"]},
+                        "$overrides.is_rewarded",
+                        {"$ifNull": ["$is_rewarded", False]},
+                    ]
+                },
+                "rewarded_credits": {
+                    "$cond": [
+                        {"$ne": [{"$type": "$overrides.rewarded_credits"}, "missing"]},
+                        "$overrides.rewarded_credits",
+                        {"$ifNull": ["$rewarded_credits", 5]},
+                    ]
+                },
                 "sequence": "$sequence",
                 "views": {"$ifNull": ["$views", 0]},
                 "downloads": {"$ifNull": ["$downloads", 0]},
@@ -392,6 +406,10 @@ async def get_resolved_assets(
                 "subCategoryName": "$subcategory_name",
                 "is_enabled": 1,
                 "is_premium": 1,
+                "is_rewarded": 1,
+                "isRewarded": "$is_rewarded",
+                "rewarded_credits": 1,
+                "rewardedCredits": "$rewarded_credits",
                 "sequence": 1,
                 "views": 1,
                 "downloads": 1,
@@ -537,6 +555,20 @@ async def get_resolved_single_asset(
                         "$is_premium",
                     ]
                 },
+                "is_rewarded": {
+                    "$cond": [
+                        {"$ne": [{"$type": "$overrides.is_rewarded"}, "missing"]},
+                        "$overrides.is_rewarded",
+                        {"$ifNull": ["$is_rewarded", False]},
+                    ]
+                },
+                "rewarded_credits": {
+                    "$cond": [
+                        {"$ne": [{"$type": "$overrides.rewarded_credits"}, "missing"]},
+                        "$overrides.rewarded_credits",
+                        {"$ifNull": ["$rewarded_credits", 5]},
+                    ]
+                },
                 "sequence": "$sequence",
                 "views": {"$ifNull": ["$views", 0]},
                 "downloads": {"$ifNull": ["$downloads", 0]},
@@ -559,6 +591,10 @@ async def get_resolved_single_asset(
                 "subCategoryName": "$subcategory_name",
                 "is_enabled": 1,
                 "is_premium": 1,
+                "is_rewarded": 1,
+                "isRewarded": "$is_rewarded",
+                "rewarded_credits": 1,
+                "rewardedCredits": "$rewarded_credits",
                 "sequence": 1,
                 "views": 1,
                 "downloads": 1,

@@ -271,8 +271,10 @@
           <th>Subcategory</th>
           <th style="width:75px; text-align:center;">Views</th>
           <th style="width:75px; text-align:center;">Downloads</th>
-          <th style="width:85px; text-align:center;">Enabled</th>
-          <th style="width:85px; text-align:center;">Premium</th>
+          <th style="width:80px; text-align:center;">Enabled</th>
+          <th style="width:80px; text-align:center;">Premium</th>
+          <th style="width:80px; text-align:center;">Rewarded</th>
+          <th style="width:90px; text-align:center;">Credits</th>
           <th style="text-align:right;">Actions</th>
         </tr>
       </thead>
@@ -329,6 +331,13 @@
             </td>
             <td data-label="Premium" style="text-align:center;">
               <input type="checkbox" {% if asset.isPremium %}checked{% endif %} onchange="updateAssetOverride('{{ asset.id }}', 'is_premium', this.checked)">
+            </td>
+            <td data-label="Rewarded" style="text-align:center;">
+              <input type="checkbox" id="rewarded-{{ asset.id }}" {% if asset.isRewarded or asset.is_rewarded %}checked{% endif %} onchange="handleRewardedToggle('{{ asset.id }}', this.checked)">
+            </td>
+            <td data-label="Credits" style="text-align:center;">
+              {% set is_rew = (asset.isRewarded or asset.is_rewarded) %}
+              <input type="number" id="credits-{{ asset.id }}" min="0" value="{{ asset.rewardedCredits if asset.rewardedCredits is defined else (asset.rewarded_credits if asset.rewarded_credits is defined else 5) }}" class="input" style="width:65px; min-height:30px; padding:2px 4px; text-align:center; font-weight:600; {% if not is_rew %}opacity:0.4; pointer-events:none;{% endif %}" {% if not is_rew %}disabled{% endif %} onchange="handleCreditsChange('{{ asset.id }}', this.value)">
             </td>
             <td data-label="Actions" style="text-align:right;">
               <div style="display:inline-flex; gap:0.5rem;">
@@ -525,6 +534,53 @@ async function updateAssetOverride(assetId, field, value) {
     if (!res.ok) throw new Error('Failed to update override');
   } catch (err) {
     alert('Error updating override: ' + err.message);
+  }
+}
+
+async function handleRewardedToggle(assetId, isChecked) {
+  const creditsInput = document.getElementById(`credits-${assetId}`);
+  if (creditsInput) {
+    if (isChecked) {
+      creditsInput.style.opacity = '1';
+      creditsInput.style.pointerEvents = 'auto';
+      creditsInput.disabled = false;
+      if (!creditsInput.value || parseInt(creditsInput.value) <= 0) {
+        creditsInput.value = 5;
+      }
+    } else {
+      creditsInput.style.opacity = '0.4';
+      creditsInput.style.pointerEvents = 'none';
+      creditsInput.disabled = true;
+    }
+  }
+  const creditsVal = creditsInput ? (parseInt(creditsInput.value) || 5) : 5;
+  const payload = {
+    is_rewarded: isChecked,
+    rewarded_credits: creditsVal
+  };
+  try {
+    const res = await fetch(`/admin/instances/${instanceId}/assets/${assetId}/override`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('Failed to update rewarded setting');
+  } catch (err) {
+    alert('Error updating rewarded setting: ' + err.message);
+  }
+}
+
+async function handleCreditsChange(assetId, val) {
+  const creditsVal = Math.max(0, parseInt(val) || 0);
+  try {
+    const res = await fetch(`/admin/instances/${instanceId}/assets/${assetId}/override`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rewarded_credits: creditsVal })
+    });
+    if (!res.ok) throw new Error('Failed to update credits');
+  } catch (err) {
+    alert('Error updating credits: ' + err.message);
   }
 }
 

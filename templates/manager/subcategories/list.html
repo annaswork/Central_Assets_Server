@@ -15,31 +15,40 @@
   </div>
 </div>
 
-<!-- Category Filter & Search Bar -->
-<div class="card" style="padding:0.85rem 1rem; margin-bottom:1.5rem;">
-  <form method="GET" action="/manager/subcategories" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
-    <div style="display:flex; align-items:center; gap:0.5rem;">
-      <label for="catFilter" style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">Filter by Category:</label>
-      <select name="category_id" id="catFilter" class="select" onchange="this.form.submit()" style="min-width:180px;">
+<!-- Category Filter & Search -->
+<div class="card search-filter-card" style="padding:0.85rem 1rem; margin-bottom:1.5rem; overflow-x:auto;">
+  <form method="GET" action="/manager/subcategories" class="search-filter-form" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem; width:100%;">
+    <div class="filter-group-left" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; flex-shrink:0; white-space:nowrap;">
+      <select name="categoryId" id="catFilter" class="select" style="max-width:240px;" onchange="this.form.submit()">
         <option value="">All Categories</option>
         {% for cat in categories %}
-          <option value="{{ cat.id }}" {% if category_id == cat.id %}selected{% endif %}>{{ cat.name }}</option>
+          <option value="{{ cat.id }}" {% if (selected_category_id == cat.id or category_id == cat.id or categoryId == cat.id) %}selected{% endif %}>{{ cat.name }}</option>
         {% endfor %}
       </select>
+
+      <select name="sort" id="subcategorySortSelect" class="select" style="min-width:140px; max-width:180px;" onchange="this.form.submit()">
+        <option value="sequence" {% if sort == 'sequence' or not sort %}selected{% endif %}>Sequence / Custom</option>
+        <option value="newest" {% if sort == 'newest' %}selected{% endif %}>Newest First</option>
+        <option value="oldest" {% if sort == 'oldest' %}selected{% endif %}>Oldest First</option>
+      </select>
+
+      {% if (selected_category_id or category_id or categoryId) or (sort and sort in ('newest', 'oldest')) %}
+        <a href="/manager/subcategories{% if search %}?search={{ search }}{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
+      {% endif %}
     </div>
 
-    <div style="display:flex; gap:0.5rem; margin-left:auto;">
+    <div class="search-group-right" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; margin-left:auto; white-space:nowrap; flex-shrink:0;">
       <input
         type="text"
         name="search"
         class="input"
-        placeholder="Search subcategories..."
+        placeholder="Search subcategory name..."
         value="{{ search }}"
         style="max-width:320px;"
       >
-      <button type="submit" class="btn btn-outlined">Search</button>
-      {% if search or category_id %}
-        <a href="/manager/subcategories" class="btn btn-outlined">Clear</a>
+      <button type="submit" class="btn btn-outlined btn-filter">Search</button>
+      {% if search %}
+        <a href="/manager/subcategories{% if selected_category_id or category_id or categoryId %}?categoryId={{ selected_category_id or category_id or categoryId }}{% endif %}{% if sort and sort in ('newest', 'oldest') %}{% if selected_category_id or category_id or categoryId %}&{% else %}?{% endif %}sort={{ sort }}{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
       {% endif %}
     </div>
   </form>
@@ -72,18 +81,20 @@
                 </div>
               </td>
               <td>
-                <div style="font-weight:600; font-size:0.95rem;">{{ sub.name }}</div>
+                <div style="font-weight:600; font-size:0.95rem;">
+                  <a href="/manager/assets?subCategoryId={{ sub.id }}{% if sub.category_id %}&categoryId={{ sub.category_id }}{% endif %}" style="color:inherit; text-decoration:none;" title="View assets in {{ sub.name }}">{{ sub.name }}</a>
+                </div>
                 <div style="font-size:0.8rem; color:var(--md-sys-color-outline);">ID: {{ sub.id }}</div>
               </td>
               <td>
-                <span class="badge" style="background:var(--md-sys-color-surface-container-high);">
+                <a href="/manager/subcategories?categoryId={{ sub.category_id }}" class="badge" style="background:var(--md-sys-color-surface-container-high); text-decoration:none; color:inherit;">
                   {{ sub.category_name or 'Unassigned' }}
-                </span>
+                </a>
               </td>
               <td style="text-align:center;">
-                <span class="badge" style="background:var(--md-sys-color-surface-container-high);">
+                <a href="/manager/assets?subCategoryId={{ sub.id }}{% if sub.category_id %}&categoryId={{ sub.category_id }}{% endif %}" class="badge" style="background:var(--md-sys-color-surface-container-high); text-decoration:none; color:inherit;">
                   {{ sub.assets_count or sub.asset_count or 0 }}
-                </span>
+                </a>
               </td>
               <td style="color:var(--md-sys-color-on-surface-variant); font-size:0.85rem;">
                 {{ sub.created_at|format_datetime }}
@@ -102,4 +113,6 @@
     </table>
   </div>
 </div>
+
+{% include "partials/pagination.html" %}
 {% endblock %}

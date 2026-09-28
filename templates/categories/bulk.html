@@ -6,7 +6,7 @@
 <div style="max-width:800px; margin:0 auto;">
   <div style="margin-bottom:1.5rem;">
     <h1>Bulk Add Categories</h1>
-    <a href="/admin/categories">← Back to Categories</a>
+    <a href="{{ return_url or '/admin/categories' }}" id="backToListLink">← Back to Categories</a>
   </div>
 
   {% if results %}
@@ -50,6 +50,7 @@
   <div class="card">
     <h2>Input Options</h2>
     <form method="POST" action="/admin/categories/bulk" enctype="multipart/form-data">
+      <input type="hidden" name="return_url" id="returnUrlInput" value="{{ return_url or '' }}">
       <div class="form-group" style="margin-bottom:1.25rem;">
         <label class="form-label" style="font-weight:600; margin-bottom:0.4rem; display:block;">Thumbnail Mode for Created Categories</label>
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:0.65rem; margin-bottom:1rem;">
@@ -114,7 +115,7 @@
       </div>
 
       <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.5rem;">
-        <a href="/admin/categories" class="btn btn-outlined">Cancel</a>
+        <a href="{{ return_url or '/admin/categories' }}" id="cancelBtn" class="btn btn-outlined">Cancel</a>
         <button type="submit" class="btn btn-primary">Bulk Add</button>
       </div>
     </form>
@@ -208,6 +209,21 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     setupDragAndDrop('thumbDropzone', 'thumbnail_file', renderThumbPreview);
+
+    // Fallback to sessionStorage if return_url was not provided
+    const returnInput = document.getElementById('returnUrlInput');
+    const backLink = document.getElementById('backToListLink');
+    const cancelBtn = document.getElementById('cancelBtn');
+    if (returnInput && !returnInput.value) {
+      try {
+        const saved = sessionStorage.getItem('admin_categories_filter_url');
+        if (saved && saved.startsWith('/admin/categories')) {
+          returnInput.value = saved;
+          if (backLink) backLink.href = saved;
+          if (cancelBtn) cancelBtn.href = saved;
+        }
+      } catch (e) {}
+    }
   });
 </script>
 {% endblock %}

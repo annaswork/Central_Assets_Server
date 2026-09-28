@@ -1,17 +1,53 @@
-{% if data and data.total > data.page_size %}
-<div style="display:flex; justify-content:space-between; align-items:center; margin-top:1.5rem; flex-wrap:wrap; gap:1rem;">
-  <span style="font-size:0.9rem; color:var(--md-sys-color-on-surface-variant);">
-    Showing {{ ((data.page - 1) * data.page_size) + 1 }} - {{ [data.page * data.page_size, data.total]|min }} of {{ data.total }} items
-  </span>
+{% set pdata = data if (data is defined and data and data.total is defined) else (pagination if (pagination is defined and pagination and pagination.total is defined) else none) %}
+{% if pdata and pdata.total is defined and pdata.page_size is defined and pdata.total > 0 %}
+  {% set current_page = pdata.page | default(1) | int %}
+  {% set total_pages = ((pdata.total + pdata.page_size - 1) // pdata.page_size) %}
+  
+  <div class="pagination-wrapper">
+    <div style="font-size:0.875rem; color:var(--md-sys-color-on-surface-variant);">
+      Showing <strong>{{ ((current_page - 1) * pdata.page_size) + 1 }}</strong> - <strong>{{ [current_page * pdata.page_size, pdata.total]|min }}</strong> of <strong>{{ pdata.total }}</strong> items
+      {% if total_pages > 1 %}
+        <span style="opacity:0.75; margin-left:0.35rem;">· Page {{ current_page }} of {{ total_pages }}</span>
+      {% endif %}
+    </div>
 
-  <div style="display:flex; gap:0.5rem;">
-    {% if data.page > 1 %}
-      <a href="?page={{ data.page - 1 }}{% if search %}{% if active_tab == 'assets' %}&q={{ search }}{% else %}&search={{ search }}{% endif %}{% endif %}{% if selected_cat %}&categoryId={{ selected_cat }}{% elif selected_category_id %}&categoryId={{ selected_category_id }}{% endif %}{% if selected_sub %}&subCategoryId={{ selected_sub }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% elif sort %}&sort={{ sort }}{% endif %}{% if order %}&order={{ order }}{% endif %}" class="btn btn-outlined">Previous</a>
-    {% endif %}
+    {% if total_pages > 1 %}
+      <nav aria-label="Pagination Navigation" class="pagination-nav">
+        {# Previous page button #}
+        {% if current_page > 1 %}
+          <a href="?{{ request.url.include_query_params(page=current_page - 1).query }}" class="btn btn-outlined pagination-prev-btn" title="Go to previous page">
+            ‹ Previous
+          </a>
+        {% else %}
+          <span class="btn btn-outlined pagination-prev-btn disabled" aria-disabled="true">
+            ‹ Previous
+          </span>
+        {% endif %}
 
-    {% if data.has_next %}
-      <a href="?page={{ data.page + 1 }}{% if search %}{% if active_tab == 'assets' %}&q={{ search }}{% else %}&search={{ search }}{% endif %}{% endif %}{% if selected_cat %}&categoryId={{ selected_cat }}{% elif selected_category_id %}&categoryId={{ selected_category_id }}{% endif %}{% if selected_sub %}&subCategoryId={{ selected_sub }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% elif sort %}&sort={{ sort }}{% endif %}{% if order %}&order={{ order }}{% endif %}" class="btn btn-outlined">Next</a>
+        {# Numbered page buttons #}
+        {% for p in range(1, total_pages + 1) %}
+          {% if total_pages <= 7 or p == 1 or p == total_pages or (current_page <= 4 and p <= 5) or (current_page >= total_pages - 3 and p >= total_pages - 4) or (p >= current_page - 1 and p <= current_page + 1) %}
+            {% if p == current_page %}
+              <span class="btn btn-primary pagination-page-btn active" aria-current="page">{{ p }}</span>
+            {% else %}
+              <a href="?{{ request.url.include_query_params(page=p).query }}" class="btn btn-outlined pagination-page-btn" title="Go to page {{ p }}">{{ p }}</a>
+            {% endif %}
+          {% elif (current_page > 4 and p == 2) or (current_page < total_pages - 3 and p == total_pages - 1) %}
+            <span class="pagination-ellipsis">…</span>
+          {% endif %}
+        {% endfor %}
+
+        {# Next page button #}
+        {% if current_page < total_pages %}
+          <a href="?{{ request.url.include_query_params(page=current_page + 1).query }}" class="btn btn-outlined pagination-next-btn" title="Go to next page">
+            Next ›
+          </a>
+        {% else %}
+          <span class="btn btn-outlined pagination-next-btn disabled" aria-disabled="true">
+            Next ›
+          </span>
+        {% endif %}
+      </nav>
     {% endif %}
   </div>
-</div>
 {% endif %}

@@ -81,6 +81,8 @@ class InstanceAssetInDB(MongoInDBModel, TimestampMixin, SoftDeleteMixin):
     is_enabled: bool = True
     sequence: int = 1
     is_premium: bool = False
+    is_rewarded: bool = False
+    rewarded_credits: int = 5
     views: int = 0
     downloads: int = 0
     overrides: dict[str, Any] = Field(default_factory=dict)
@@ -121,6 +123,8 @@ class ResolvedAssetOut(MongoModel):
     more_fields: dict[str, Any] = Field(default_factory=dict, serialization_alias="moreFields")
     is_enabled: bool = True
     is_premium: bool = False
+    is_rewarded: bool = Field(default=False, serialization_alias="isRewarded")
+    rewarded_credits: int = Field(default=5, serialization_alias="rewardedCredits")
     sequence: int
     views: int = 0
     downloads: int = 0

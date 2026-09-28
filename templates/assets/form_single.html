@@ -3,8 +3,25 @@
 {% block title %}Bulk Single-File Add — Asset Admin{% endblock %}
 
 {% block content %}
+<style>
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  #stagedSection .data-table {
+    table-layout: fixed;
+    width: 100%;
+  }
+  #stagedSection .data-table th,
+  #stagedSection .data-table td {
+    vertical-align: middle;
+  }
+  #stagedSection .staged-status-cell {
+    white-space: nowrap;
+  }
+</style>
 <div style="margin-bottom:1.5rem;">
-  <a href="/admin/assets" style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
+  <a href="{{ return_url or '/admin/assets' }}" id="backToListLink" style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
     ← Back to Assets
   </a>
   <h1>Bulk Single-File Asset Intake</h1>
@@ -166,17 +183,26 @@
     <button type="button" class="btn btn-outlined" onclick="clearStaged()">Clear All</button>
   </div>
 
-  <div class="table-responsive">
-    <table class="data-table">
+  <div class="table-responsive" style="overflow-x:auto;">
+    <table class="data-table" style="table-layout:fixed; width:100%; min-width:850px;">
+      <colgroup>
+        <col style="width:44px;">
+        <col style="width:26%;">
+        <col style="width:26%;">
+        <col style="width:110px;">
+        <col style="width:85px;">
+        <col style="width:160px;">
+        <col style="width:165px;">
+      </colgroup>
       <thead>
         <tr>
-          <th style="width:40px;">#</th>
+          <th style="width:44px; text-align:center;">#</th>
           <th>Generated Asset Name</th>
           <th>File Name</th>
-          <th style="width:130px;">Data Type</th>
-          <th>File Size</th>
-          <th>Status</th>
-          <th style="width:100px; text-align:right;">Actions</th>
+          <th style="width:110px;">Data Type</th>
+          <th style="width:85px;">File Size</th>
+          <th style="width:160px;">Status</th>
+          <th style="width:165px; text-align:right;">Actions</th>
         </tr>
       </thead>
       <tbody id="stagedTableBody">
@@ -576,8 +602,8 @@ async function handleFileSelect(files, forceCrop = false) {
       matchedName: matchedName,
       suggestedFilename: suggestedName
     });
-    renderStaged();
   }
+  renderStaged();
 
   // Clear file inputs so the same file selection can be re-triggered if chosen again
   const bInput = document.getElementById('bulkFileInput');
@@ -654,6 +680,34 @@ async function openRenameModalForStaged(idx) {
   }
 }
 
+function getStatusBadgeHtml(status) {
+  let badgeClass = 'badge-primary';
+  let icon = '';
+  if (status === 'Uploaded') {
+    badgeClass = 'badge-success';
+    icon = '✓ ';
+  } else if (status && status.startsWith('Uploading')) {
+    badgeClass = 'badge-warning';
+    icon = '<span style="display:inline-block; width:10px; height:10px; border:2px solid currentColor; border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite; margin-right:5px; vertical-align:middle;"></span>';
+  } else if (status && (status.includes('Clash') || status.includes('Error'))) {
+    badgeClass = 'badge-error';
+    icon = '⚠️ ';
+  }
+  return `<span class="badge ${badgeClass}" style="font-size:0.75rem; white-space:nowrap; display:inline-flex; align-items:center;">${icon}${escapeHtml(status || 'Ready')}</span>`;
+}
+
+function updateStagedRowStatus(idx, status) {
+  if (stagedFiles[idx]) {
+    stagedFiles[idx].status = status;
+  }
+  const tr = document.getElementById(`stagedRow_${idx}`);
+  if (!tr) return;
+  const statusCell = tr.querySelector('.staged-status-cell');
+  if (statusCell) {
+    statusCell.innerHTML = getStatusBadgeHtml(status);
+  }
+}
+
 function applyRenameToStaged(idx, newFilename) {
   const item = stagedFiles[idx];
   if (!item) return;
@@ -664,7 +718,22 @@ function applyRenameToStaged(idx, newFilename) {
   item.hasConflict = false;
   item.conflictType = null;
   item.status = 'Ready';
-  renderStaged();
+
+  const tr = document.getElementById(`stagedRow_${idx}`);
+  if (tr) {
+    const nameInput = tr.querySelector('.staged-name-input');
+    if (nameInput) nameInput.value = item.name;
+    const fileCell = tr.querySelector('.staged-filename-cell');
+    if (fileCell) {
+      fileCell.innerHTML = `
+        <span style="font-family:monospace; font-weight:500;" title="${escapeHtml(item.file.name)}">${escapeHtml(item.file.name)}</span>
+        ${item.customThumbFile ? `<span class="badge badge-success" style="margin-left:0.5rem; font-size:0.7rem;" title="Custom thumbnail matched by filename stem">📸 ${escapeHtml(item.customThumbFile.name)}</span>` : ''}
+      `;
+    }
+    updateStagedRowStatus(idx, 'Ready');
+  } else {
+    renderStaged();
+  }
 }
 
 function renderStaged() {
@@ -674,39 +743,43 @@ function renderStaged() {
   
   if (stagedFiles.length === 0) {
     section.style.display = 'none';
+    tbody.replaceChildren();
     return;
   }
   
   section.style.display = 'block';
   countEl.textContent = stagedFiles.length;
-  tbody.innerHTML = '';
   const activeTypes = getSelectedDataTypes();
+  const fragment = document.createDocumentFragment();
   
   stagedFiles.forEach((item, idx) => {
     const tr = document.createElement('tr');
+    tr.id = `stagedRow_${idx}`;
     const isVisual = item.detectedType === 'image' || item.detectedType === 'frames';
     tr.innerHTML = `
-      <td>${idx + 1}</td>
+      <td style="text-align:center; color:var(--md-sys-color-on-surface-variant); font-size:0.85rem;">${idx + 1}</td>
       <td>
-        <input type="text" class="input" value="${escapeHtml(item.name)}" onchange="stagedFiles[${idx}].name = this.value" style="min-height:36px; padding:0.25rem 0.5rem;">
+        <input type="text" class="input staged-name-input" value="${escapeHtml(item.name)}" onchange="stagedFiles[${idx}].name = this.value" style="min-height:34px; padding:0.25rem 0.5rem; width:100%; box-sizing:border-box;">
       </td>
-      <td style="color:var(--md-sys-color-on-surface-variant); font-size:0.85rem;">
-        <span style="font-family:monospace; font-weight:500;">${escapeHtml(item.file.name)}</span>
+      <td class="staged-filename-cell" style="color:var(--md-sys-color-on-surface-variant); font-size:0.85rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+        <span style="font-family:monospace; font-weight:500;" title="${escapeHtml(item.file.name)}">${escapeHtml(item.file.name)}</span>
         ${item.hasConflict ? `<span class="badge ${item.conflictType === 'exact' ? 'badge-error' : 'badge-warning'}" style="margin-left:0.5rem; font-size:0.7rem;">${item.conflictType === 'exact' ? 'Collision' : 'Similar Name'}</span>` : ''}
         ${item.customThumbFile ? `<span class="badge badge-success" style="margin-left:0.5rem; font-size:0.7rem;" title="Custom thumbnail matched by filename stem">📸 ${escapeHtml(item.customThumbFile.name)}</span>` : ''}
       </td>
       <td>
         ${renderDataTypeCell(item, idx, activeTypes)}
       </td>
-      <td style="font-size:0.85rem;">${item.size}</td>
-      <td><span class="badge ${item.status === 'Ready' ? 'badge-primary' : (item.status === 'Uploaded' ? 'badge-success' : 'badge-error')}">${item.status}</span></td>
+      <td style="font-size:0.85rem; white-space:nowrap;">${item.size}</td>
+      <td class="staged-status-cell">${getStatusBadgeHtml(item.status)}</td>
       <td style="text-align:right; white-space:nowrap;">
         ${isVisual ? `<button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.75rem; margin-right:0.35rem;" onclick="openCropModalForStaged(${idx})" title="Crop / Cut File">✂️ Crop data</button>` : ''}
         <button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.75rem;" onclick="openRenameModalForStaged(${idx})" title="Rename File">✏️ Rename</button>
       </td>
     `;
-    tbody.appendChild(tr);
+    fragment.appendChild(tr);
   });
+  
+  tbody.replaceChildren(fragment);
 }
 
 function renderDataTypeCell(item, idx, activeTypes) {
@@ -803,8 +876,7 @@ async function startBulkUpload() {
   
   for (let i = 0; i < stagedFiles.length; i++) {
     const item = stagedFiles[i];
-    item.status = 'Uploading...';
-    renderStaged();
+    updateStagedRowStatus(i, 'Uploading...');
     
     try {
       // Step 1: Upload media file to hierarchical storage
@@ -817,8 +889,7 @@ async function startBulkUpload() {
             subCategoryId: subId,
             assetName: item.name,
             onProgress: (p) => {
-              item.status = `Uploading (${p.percent}%)...`;
-              renderStaged();
+              updateStagedRowStatus(i, `Uploading (${p.percent}%)...`);
             }
           });
         } catch (upErr) {
@@ -1049,14 +1120,14 @@ async function startBulkUpload() {
         }
         throw new Error(msg);
       }
-      item.status = 'Uploaded';
+      updateStagedRowStatus(i, 'Uploaded');
     } catch (err) {
       console.error(err);
-      item.status = (err.message && (err.message.includes('clash') || err.message.includes('already exists') || err.message.includes('rename') || err.message.includes('Rename')))
+      const errStatus = (err.message && (err.message.includes('clash') || err.message.includes('already exists') || err.message.includes('rename') || err.message.includes('Rename')))
         ? 'Clash! Please Rename'
         : 'Error';
+      updateStagedRowStatus(i, errStatus);
     }
-    renderStaged();
   }
   
   const hasErrors = stagedFiles.some(f => f.status !== 'Uploaded');
@@ -1068,7 +1139,14 @@ async function startBulkUpload() {
     btn.textContent = 'All Uploaded! Redirecting...';
     showToast('All assets uploaded successfully!', 'success');
     setTimeout(() => {
-      window.location.href = '/admin/assets';
+      const returnUrl = "{{ return_url or '' }}" || (function() {
+        try {
+          const saved = sessionStorage.getItem('admin_assets_filter_url');
+          if (saved && saved.startsWith('/admin/assets')) return saved;
+        } catch (e) {}
+        return '/admin/assets';
+      })();
+      window.location.href = returnUrl;
     }, 1200);
   }
 }
@@ -1083,5 +1161,17 @@ if (initCatVal && initSubSelect && initSubSelect.options.length <= 1) {
   loadSubcategories(initCatVal, preselectedSubId);
 }
 onDataTypeChange();
+
+(function() {
+  const backLink = document.getElementById('backToListLink');
+  if (backLink && (!backLink.getAttribute('href') || backLink.getAttribute('href') === '/admin/assets')) {
+    try {
+      const saved = sessionStorage.getItem('admin_assets_filter_url');
+      if (saved && saved.startsWith('/admin/assets')) {
+        backLink.href = saved;
+      }
+    } catch (e) {}
+  }
+})();
 </script>
 {% endblock %}

@@ -77,3 +77,30 @@ def bulk_response(
         "failed": failed_count,
         "atomic": atomic,
     }
+
+
+def safe_redirect_url(
+    url: str | None,
+    default: str = "/admin",
+    allowed_prefix: str = "/admin/",
+) -> str:
+    """Ensures redirect target is a safe internal URL starting with allowed prefix."""
+    if not url:
+        return default
+    clean = url.strip()
+    if (clean == allowed_prefix.rstrip("/") or clean.startswith(allowed_prefix)) and not clean.startswith("//"):
+        return clean
+    return default
+
+
+def append_query_params(base_url: str, params: dict[str, Any]) -> str:
+    """Appends or updates query parameters in a given URL string safely."""
+    from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+
+    parsed = urlparse(base_url)
+    qs = parse_qs(parsed.query, keep_blank_values=True)
+    for k, v in params.items():
+        if v is not None:
+            qs[k] = [str(v)]
+    new_query = urlencode(qs, doseq=True)
+    return urlunparse(parsed._replace(query=new_query))

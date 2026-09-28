@@ -44,21 +44,52 @@ venv.bak/
 *.cert
 *.secret
 
-# Temporary Storage & Uploads
+# Temporary Storage, Scratch & Uploads
 .tmp/
 *.tmp
 *.temp
+scratch/
 
-# Runtime Dynamic Media / User Uploads (keep directory structure if needed)
-static/central_data/*
+# Runtime Dynamic Media / User Uploads & New Data
+static/central_data/**
+!static/central_data/
 !static/central_data/.gitkeep
-static/app_data/*
+static/app_data/**
+!static/app_data/
 !static/app_data/.gitkeep
-static/profiles/*
+static/profiles/**
+!static/profiles/
 !static/profiles/.gitkeep
+static/proposals/**
+!static/proposals/
+!static/proposals/.gitkeep
+static/cache/**
+!static/cache/
+!static/cache/.gitkeep
+!static/thumbnail_default.png
+
+# Reports, Documents & Exports
+*.doc
+*.docx
+*.pdf
+*.xlsx
+*.xls
+*.csv
+
+# Database Dumps & Backups
+dump/
+backups/
+*.dump
+*.tar
+*.tar.gz
+*.zip
+*.sqlite3
+*.db
 
 # Unit test & coverage reports
 .pytest_cache/
+tests/
+test/
 .tox/
 .nox/
 .coverage
@@ -96,8 +127,6 @@ ehthumbs.db
 Thumbs.db
 [Dd]esktop.ini
 
-# Logs and databases
+# Logs
 *.log
 logs/
-*.sqlite3
-*.db
