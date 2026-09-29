@@ -9,6 +9,7 @@ from pymongo.errors import DuplicateKeyError
 
 from authorization.encryption import decrypt_password, encrypt_password, hash_password
 from authorization.totp import verify_and_consume_backup_code, verify_totp_code
+from controller.app_instance_controller import create_app_instance
 from controller.asset_controller import create_asset
 from controller.base_controller import serialize_mongo_doc, serialize_mongo_docs
 from controller.category_controller import create_category
@@ -26,6 +27,7 @@ from database.collections import (
     MANAGERS,
     MESSAGES,
 )
+from database.models.app_instance import AppInstanceCreate
 from database.models.asset import AssetCreate
 from database.models.category import CategoryCreate
 from database.models.subcategory import SubcategoryCreate
@@ -39,7 +41,7 @@ from utils.ids import to_object_id
 # =========================================================================
 
 async def list_managers(db: AsyncIOMotorDatabase) -> list[dict[str, Any]]:
-    """List all manager accounts with instance counts and granted instances."""
+    """List all manager accounts with instance counts and accessible instances (owned + granted)."""
     cursor = db[MANAGERS].find({}).sort("created_at", -1)
     managers = await cursor.to_list(length=1000)
     serialized = serialize_mongo_docs(managers)
@@ -47,13 +49,16 @@ async def list_managers(db: AsyncIOMotorDatabase) -> list[dict[str, Any]]:
     for m in serialized:
         m_oid = to_object_id(m["id"])
 
-        # Count owned instances
-        owned_count = await db[APP_INSTANCES].count_documents(
+        # 1. Fetch owned instances (created for/by this manager)
+        owned_cursor = db[APP_INSTANCES].find(
             {"$or": [{"owner_id": m_oid}, {"owner_id": str(m_oid)}]}
         )
-        m["owned_instances_count"] = owned_count
+        owned_docs = await owned_cursor.to_list(length=1000)
+        owned_instances = serialize_mongo_docs(owned_docs)
+        for oi in owned_instances:
+            oi["is_owner"] = True
 
-        # Fetch granted instances
+        # 2. Fetch granted instances (granted via APP_INSTANCE_ACCESS)
         grants_cursor = db[APP_INSTANCE_ACCESS].find(
             {"$or": [{"manager_id": m_oid}, {"manager_id": str(m_oid)}]}
         )
@@ -65,9 +70,21 @@ async def list_managers(db: AsyncIOMotorDatabase) -> list[dict[str, Any]]:
             inst_cursor = db[APP_INSTANCES].find({"_id": {"$in": granted_inst_ids}})
             inst_docs = await inst_cursor.to_list(length=1000)
             granted_instances = serialize_mongo_docs(inst_docs)
+            for gi in granted_instances:
+                gi["is_owner"] = False
 
-        m["granted_instances"] = granted_instances
-        m["granted_instances_count"] = len(granted_instances)
+        # 3. Combine and deduplicate
+        accessible_map: dict[str, Any] = {}
+        for oi in owned_instances:
+            accessible_map[oi["id"]] = oi
+        for gi in granted_instances:
+            if gi["id"] not in accessible_map:
+                accessible_map[gi["id"]] = gi
+
+        combined_instances = list(accessible_map.values())
+        m["granted_instances"] = combined_instances
+        m["granted_instances_count"] = len(combined_instances)
+        m["owned_instances_count"] = len(owned_instances)
 
     return serialized
 
@@ -115,10 +132,11 @@ async def grant_instance_access(
 async def revoke_instance_access(
     db: AsyncIOMotorDatabase, manager_id: str, app_instance_id: str
 ) -> dict[str, Any]:
-    """Revoke a manager's access to an app instance."""
+    """Revoke a manager's access to an app instance (clears both grants and ownership)."""
     m_oid = to_object_id(manager_id)
     inst_oid = to_object_id(app_instance_id)
 
+    # 1. Delete from access grants
     res = await db[APP_INSTANCE_ACCESS].delete_many(
         {
             "$or": [
@@ -129,7 +147,75 @@ async def revoke_instance_access(
             ]
         }
     )
-    return {"success": True, "revoked_count": res.deleted_count}
+
+    # 2. If the manager owns this instance (e.g. newly created app), clear owner_id so access is completely revoked
+    upd = await db[APP_INSTANCES].update_many(
+        {
+            "_id": inst_oid,
+            "$or": [{"owner_id": m_oid}, {"owner_id": str(m_oid)}],
+        },
+        {"$set": {"owner_id": None, "updated_at": utc_now()}},
+    )
+
+    now = utc_now()
+
+    # 3. Update corresponding access or creation requests for this manager & app to revoked
+    await db[APP_INSTANCE_ACCESS_REQUESTS].update_many(
+        {
+            "$and": [
+                {
+                    "$or": [
+                        {"requesting_manager_id": m_oid},
+                        {"requesting_manager_id": str(m_oid)},
+                        {"manager_id": m_oid},
+                        {"manager_id": str(m_oid)},
+                    ]
+                },
+                {
+                    "$or": [
+                        {"app_instance_id": inst_oid},
+                        {"app_instance_id": str(inst_oid)},
+                        {"created_instance_id": inst_oid},
+                        {"created_instance_id": str(inst_oid)},
+                    ]
+                },
+            ],
+            "status": "approved",
+        },
+        {"$set": {"status": "revoked", "revoked_at": now, "updated_at": now}},
+    )
+
+    inst = await db[APP_INSTANCES].find_one({"_id": inst_oid})
+    inst_name = inst.get("name", "App Instance") if inst else "App Instance"
+
+    # 4. Post notification message for manager
+    try:
+        notification_msg = {
+            "manager_id": m_oid,
+            "sender_role": "admin",
+            "sender_id": None,
+            "sender_name": "System Administrator",
+            "subject": f"Access Revoked: {inst_name}",
+            "content": f"Access to App Instance '{inst_name}' has been revoked by administrators.",
+            "payload_type": None,
+            "data_payload": None,
+            "status": "unread",
+            "created_at": now,
+            "updated_at": now,
+        }
+        await db[MESSAGES].insert_one(notification_msg)
+        await db[MANAGERS].update_one(
+            {"_id": m_oid},
+            {"$set": {"has_active_thread": True, "updated_at": now}},
+        )
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "message": f"Access to '{inst_name}' has been revoked.",
+        "revoked_count": res.deleted_count + upd.modified_count,
+    }
 
 
 async def delete_manager_account(
@@ -633,7 +719,7 @@ async def apply_message_proposal_to_central(
 async def list_access_requests(
     db: AsyncIOMotorDatabase, status: str | None = None
 ) -> list[dict[str, Any]]:
-    """List all structured access requests with manager and instance metadata."""
+    """List all structured access requests and instance creation requests."""
     query: dict[str, Any] = {}
     if status and status != "all":
         query["status"] = status
@@ -643,6 +729,7 @@ async def list_access_requests(
     serialized = serialize_mongo_docs(docs)
 
     for r in serialized:
+        r["request_type"] = r.get("request_type", "access")
         # Requesting manager
         req_m_id = r.get("requesting_manager_id") or r.get("manager_id")
         m_oid = to_object_id(req_m_id) if req_m_id else None
@@ -650,11 +737,22 @@ async def list_access_requests(
         r["manager_username"] = mgr["username"] if mgr else "Unknown Manager"
         r["manager_email"] = mgr.get("email") if mgr else None
 
-        # App instance
-        inst_oid = to_object_id(r["app_instance_id"])
-        inst = await db[APP_INSTANCES].find_one({"_id": inst_oid}, {"name": 1, "package_name": 1})
-        r["app_instance_name"] = inst["name"] if inst else "Unknown App"
-        r["app_package_name"] = inst.get("package_name") if inst else None
+        if r["request_type"] == "create_instance":
+            r["app_instance_name"] = r.get("requested_app_name", "Untitled App")
+            r["app_package_name"] = r.get("requested_package_name")
+            if r.get("created_instance_id"):
+                r["target_instance_id"] = str(r["created_instance_id"])
+            elif r.get("app_instance_id"):
+                r["target_instance_id"] = str(r["app_instance_id"])
+            else:
+                r["target_instance_id"] = None
+        else:
+            # App instance
+            inst_oid = to_object_id(r.get("app_instance_id"))
+            inst = await db[APP_INSTANCES].find_one({"_id": inst_oid}, {"name": 1, "package_name": 1}) if inst_oid else None
+            r["app_instance_name"] = inst["name"] if inst else "Unknown App"
+            r["app_package_name"] = inst.get("package_name") if inst else None
+            r["target_instance_id"] = str(r.get("app_instance_id", ""))
 
     return serialized
 
@@ -662,55 +760,179 @@ async def list_access_requests(
 async def approve_access_request(
     db: AsyncIOMotorDatabase, request_id: str, admin_id: str | None = None
 ) -> dict[str, Any]:
-    """Approve access request: grant access in APP_INSTANCE_ACCESS and update request status."""
+    """Approve request: create app instance (if creation request) or grant access, and update status."""
     r_oid = to_object_id(request_id)
     req = await db[APP_INSTANCE_ACCESS_REQUESTS].find_one({"_id": r_oid})
     if not req:
         raise NotFoundError("Access request not found")
 
-    manager_id = str(req["requesting_manager_id"])
-    instance_id = str(req["app_instance_id"])
-
-    # Grant access
-    await grant_instance_access(db, manager_id=manager_id, app_instance_id=instance_id, admin_id=admin_id)
-
-    # Update request status
+    manager_id = str(req.get("requesting_manager_id") or req.get("manager_id"))
+    req_type = req.get("request_type", "access")
     now = utc_now()
-    await db[APP_INSTANCE_ACCESS_REQUESTS].update_one(
-        {"_id": r_oid},
-        {
-            "$set": {
-                "status": "approved",
-                "reviewed_by": to_object_id(admin_id) if admin_id else None,
-                "reviewed_at": now,
-                "updated_at": now,
-            }
-        },
-    )
 
-    return {"success": True, "message": "Access request approved and granted."}
+    if req_type == "create_instance":
+        app_name = req.get("requested_app_name", "Untitled App").strip()
+        pkg_name = req.get("requested_package_name")
+        if pkg_name:
+            pkg_name = pkg_name.strip()
+
+        # Check if instance already exists (e.g. created previously)
+        existing = await db[APP_INSTANCES].find_one({"name": app_name})
+        if existing:
+            instance_id = str(existing["_id"])
+        else:
+            created_inst = await create_app_instance(
+                db,
+                AppInstanceCreate(
+                    name=app_name,
+                    package_name=pkg_name,
+                    owner_id=manager_id,
+                ),
+            )
+            instance_id = str(created_inst["id"])
+
+        # Grant access to manager explicitly in APP_INSTANCE_ACCESS
+        try:
+            await grant_instance_access(db, manager_id=manager_id, app_instance_id=instance_id, admin_id=admin_id)
+        except ConflictError:
+            pass
+
+        # Update request status
+        await db[APP_INSTANCE_ACCESS_REQUESTS].update_one(
+            {"_id": r_oid},
+            {
+                "$set": {
+                    "status": "approved",
+                    "created_instance_id": to_object_id(instance_id),
+                    "app_instance_id": to_object_id(instance_id),
+                    "reviewed_by": to_object_id(admin_id) if admin_id else None,
+                    "reviewed_at": now,
+                    "updated_at": now,
+                }
+            },
+        )
+
+        # Notify manager via message in thread
+        m_oid = to_object_id(manager_id)
+        notification_msg = {
+            "manager_id": m_oid,
+            "sender_role": "admin",
+            "sender_id": to_object_id(admin_id) if admin_id else None,
+            "sender_name": "System Administrator",
+            "subject": f"App Instance Created: {app_name}",
+            "content": f"Your request to create App Instance '{app_name}' has been approved by the Admin team! The application instance was provisioned and access granted to your account.",
+            "payload_type": None,
+            "data_payload": None,
+            "status": "unread",
+            "created_at": now,
+            "updated_at": now,
+        }
+        await db[MESSAGES].insert_one(notification_msg)
+        await db[MANAGERS].update_one(
+            {"_id": m_oid},
+            {"$set": {"has_active_thread": True, "updated_at": now}},
+        )
+
+        return {"success": True, "message": f"App Instance '{app_name}' created and granted to manager."}
+
+    else:
+        instance_id = str(req["app_instance_id"])
+
+        # Grant access
+        await grant_instance_access(db, manager_id=manager_id, app_instance_id=instance_id, admin_id=admin_id)
+
+        # Update request status
+        await db[APP_INSTANCE_ACCESS_REQUESTS].update_one(
+            {"_id": r_oid},
+            {
+                "$set": {
+                    "status": "approved",
+                    "reviewed_by": to_object_id(admin_id) if admin_id else None,
+                    "reviewed_at": now,
+                    "updated_at": now,
+                }
+            },
+        )
+
+        # Notify manager
+        m_oid = to_object_id(manager_id)
+        inst = await db[APP_INSTANCES].find_one({"_id": to_object_id(instance_id)})
+        inst_name = inst.get("name", "the requested app") if inst else "the requested app"
+        notification_msg = {
+            "manager_id": m_oid,
+            "sender_role": "admin",
+            "sender_id": to_object_id(admin_id) if admin_id else None,
+            "sender_name": "System Administrator",
+            "subject": f"Access Request Approved: {inst_name}",
+            "content": f"Your access request for application '{inst_name}' has been approved by an administrator. You can now manage its content from your portal.",
+            "payload_type": None,
+            "data_payload": None,
+            "status": "unread",
+            "created_at": now,
+            "updated_at": now,
+        }
+        await db[MESSAGES].insert_one(notification_msg)
+        await db[MANAGERS].update_one(
+            {"_id": m_oid},
+            {"$set": {"has_active_thread": True, "updated_at": now}},
+        )
+
+        return {"success": True, "message": "Access request approved and granted."}
 
 
 async def deny_access_request(
-    db: AsyncIOMotorDatabase, request_id: str, admin_id: str | None = None
+    db: AsyncIOMotorDatabase, request_id: str, admin_id: str | None = None, reason: str | None = None
 ) -> dict[str, Any]:
-    """Deny an access request."""
+    """Deny an access or creation request."""
     r_oid = to_object_id(request_id)
     req = await db[APP_INSTANCE_ACCESS_REQUESTS].find_one({"_id": r_oid})
     if not req:
         raise NotFoundError("Access request not found")
 
     now = utc_now()
+    update_doc: dict[str, Any] = {
+        "status": "denied",
+        "reviewed_by": to_object_id(admin_id) if admin_id else None,
+        "reviewed_at": now,
+        "updated_at": now,
+    }
+    if reason:
+        update_doc["rejection_reason"] = reason.strip()
+
     await db[APP_INSTANCE_ACCESS_REQUESTS].update_one(
         {"_id": r_oid},
-        {
-            "$set": {
-                "status": "denied",
-                "reviewed_by": to_object_id(admin_id) if admin_id else None,
-                "reviewed_at": now,
-                "updated_at": now,
-            }
-        },
+        {"$set": update_doc},
+    )
+
+    # Notify manager
+    manager_id = str(req.get("requesting_manager_id") or req.get("manager_id"))
+    req_type = req.get("request_type", "access")
+    if req_type == "create_instance":
+        app_label = f"App Instance creation '{req.get('requested_app_name', 'Untitled')}'"
+    else:
+        inst_oid = to_object_id(req.get("app_instance_id"))
+        inst = await db[APP_INSTANCES].find_one({"_id": inst_oid}) if inst_oid else None
+        app_label = f"access request for '{inst.get('name', 'App')}'" if inst else "application access request"
+
+    reason_text = f" Reason: {reason.strip()}" if reason and reason.strip() else ""
+    m_oid = to_object_id(manager_id)
+    notification_msg = {
+        "manager_id": m_oid,
+        "sender_role": "admin",
+        "sender_id": to_object_id(admin_id) if admin_id else None,
+        "sender_name": "System Administrator",
+        "subject": f"Request Denied: {app_label}",
+        "content": f"Your {app_label} was denied by the Admin team.{reason_text}",
+        "payload_type": None,
+        "data_payload": None,
+        "status": "unread",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db[MESSAGES].insert_one(notification_msg)
+    await db[MANAGERS].update_one(
+        {"_id": m_oid},
+        {"$set": {"has_active_thread": True, "updated_at": now}},
     )
 
     return {"success": True, "message": "Access request denied."}

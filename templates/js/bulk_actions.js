@@ -205,6 +205,7 @@ function setAssetView(mode) {
   const blockView = document.getElementById('assetBlockView');
   const btnList = document.getElementById('viewBtnList');
   const btnBlock = document.getElementById('viewBtnBlock');
+  const colsPicker = document.getElementById('colsPickerAdmin');
 
   if (!listView || !blockView) return;
 
@@ -213,6 +214,7 @@ function setAssetView(mode) {
     blockView.style.display = 'grid';
     if (btnList) btnList.classList.remove('active');
     if (btnBlock) btnBlock.classList.add('active');
+    if (colsPicker) colsPicker.style.display = 'inline-flex';
     try {
       localStorage.setItem('admin_asset_view', 'block');
     } catch (e) {}
@@ -221,10 +223,30 @@ function setAssetView(mode) {
     blockView.style.display = 'none';
     if (btnList) btnList.classList.add('active');
     if (btnBlock) btnBlock.classList.remove('active');
+    if (colsPicker) colsPicker.style.display = 'none';
     try {
       localStorage.setItem('admin_asset_view', 'list');
     } catch (e) {}
   }
+}
+
+/**
+ * Configure items per row (5 to 8) for Admin Card/Block view
+ */
+function setGridColumns(cols) {
+  cols = parseInt(cols, 10);
+  if (isNaN(cols) || cols < 5 || cols > 8) cols = 6;
+  const blockView = document.getElementById('assetBlockView');
+  if (blockView) {
+    blockView.classList.remove('grid-cols-5', 'grid-cols-6', 'grid-cols-7', 'grid-cols-8');
+    blockView.classList.add(`grid-cols-${cols}`);
+  }
+  document.querySelectorAll('#colsPickerAdmin .cols-picker-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.cols, 10) === cols);
+  });
+  try {
+    localStorage.setItem('admin_asset_cols', cols);
+  } catch (e) {}
 }
 
 /**
@@ -340,6 +362,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (savedMode === 'block') {
       setAssetView('block');
     }
+
+    let savedCols = 6;
+    try {
+      savedCols = localStorage.getItem('admin_asset_cols') || 6;
+    } catch (e) {}
+    setGridColumns(savedCols);
   }
 
   // Initialize swipe selection on block cards

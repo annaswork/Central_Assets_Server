@@ -3,17 +3,28 @@
 {% block title %}My App Instances — Manager Portal{% endblock %}
 
 {% block content %}
+{% include "partials/flash.html" %}
+
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
   <div>
     <h1 style="margin:0;">App Instances</h1>
     <p style="color:var(--md-sys-color-on-surface-variant); margin:0.25rem 0 0 0;">
-      Applications accessible to your manager account, and available platform apps you can request access to.
+      Applications accessible to your manager account, and requests to administrators.
     </p>
+  </div>
+  <div>
+    <button type="button" class="btn btn-primary" onclick="openRequestAppModal()" style="display:inline-flex; align-items:center; gap:0.4rem;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+      <span>Ask Admin to Create App</span>
+    </button>
   </div>
 </div>
 
 <!-- Accessible Instances Table -->
-<div class="card" style="padding:0; overflow:hidden; margin-bottom:2.5rem;">
+<div class="card" style="padding:0; overflow:hidden; margin-bottom:2rem;">
   <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low);">
     <h3 style="margin:0; font-size:1.05rem;">My Active & Accessible Apps</h3>
   </div>
@@ -65,7 +76,9 @@
             <td colspan="5" style="text-align:center; padding:3rem 1rem; color:var(--md-sys-color-on-surface-variant);">
               <div style="font-size:2rem; margin-bottom:0.5rem;">📱</div>
               <div style="font-weight:600;">You don't have access to any apps yet</div>
-              <div style="font-size:0.9rem; margin-top:0.25rem;">Browse the available platform applications below and click <strong>Request Access</strong> to ask an Administrator for access.</div>
+              <div style="font-size:0.9rem; margin-top:0.25rem;">
+                Click <strong>"Ask Admin to Create App"</strong> to request a new app instance, or request access to available platform apps below.
+              </div>
             </td>
           </tr>
         {% endif %}
@@ -73,6 +86,104 @@
     </table>
   </div>
 </div>
+
+<!-- My App Creation Requests Table -->
+{% if creation_requests and creation_requests|length > 0 %}
+<div class="card" style="padding:0; overflow:hidden; margin-bottom:2rem;">
+  <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <h3 style="margin:0; font-size:1.05rem;">My App Creation Requests</h3>
+      <p style="margin:0.25rem 0 0 0; font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">
+        Applications you asked administrators to provision on the central platform.
+      </p>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Requested App</th>
+          <th>Package Name</th>
+          <th>Notes / Justification</th>
+          <th style="width:130px; text-align:center;">Status</th>
+          <th style="width:150px;">Requested Date</th>
+          <th style="width:150px; text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cr in creation_requests %}
+          <tr>
+            <td>
+              <div style="display:flex; align-items:center; gap:0.6rem;">
+                <span style="font-size:1.15rem;">🆕</span>
+                <div>
+                  <div style="font-weight:600; font-size:0.95rem;">{{ cr.app_instance_name }}</div>
+                  {% if cr.target_instance_id %}
+                    <div style="font-size:0.75rem; color:var(--md-sys-color-outline);">ID: {{ cr.target_instance_id }}</div>
+                  {% endif %}
+                </div>
+              </div>
+            </td>
+            <td>
+              <code>{{ cr.app_package_name or '—' }}</code>
+            </td>
+            <td style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); max-width:260px;">
+              {{ cr.notes or '—' }}
+              {% if cr.status == 'denied' and cr.rejection_reason %}
+                <div style="color:var(--md-sys-color-error); font-size:0.8rem; margin-top:0.25rem;">
+                  <strong>Admin Note:</strong> {{ cr.rejection_reason }}
+                </div>
+              {% elif cr.status == 'revoked' or (cr.status == 'approved' and not cr.has_access) %}
+                <div style="color:var(--md-sys-color-error); font-size:0.8rem; margin-top:0.25rem;">
+                  <strong>Access Revoked:</strong> Access to this application has been revoked by administrators.
+                </div>
+              {% endif %}
+            </td>
+            <td style="text-align:center;">
+              {% if cr.status == 'pending' %}
+                <span class="badge badge-warning" style="font-size:0.78rem; padding:0.25rem 0.6rem;">⏳ Pending Review</span>
+              {% elif cr.status == 'approved' and cr.has_access %}
+                <span class="badge badge-success" style="font-size:0.78rem; padding:0.25rem 0.6rem;">✅ Approved & Created</span>
+              {% elif cr.status == 'revoked' or (cr.status == 'approved' and not cr.has_access) %}
+                <span class="badge badge-error" style="font-size:0.78rem; padding:0.25rem 0.6rem;">🚫 Access Revoked</span>
+              {% elif cr.status == 'denied' %}
+                <span class="badge badge-error" style="font-size:0.78rem; padding:0.25rem 0.6rem;">❌ Denied</span>
+              {% else %}
+                <span class="badge" style="font-size:0.78rem; padding:0.25rem 0.6rem;">{{ cr.status|capitalize }}</span>
+              {% endif %}
+            </td>
+            <td style="color:var(--md-sys-color-on-surface-variant); font-size:0.85rem;">
+              {{ cr.created_at|format_datetime }}
+            </td>
+            <td style="text-align:right;">
+              {% if cr.status == 'approved' and cr.has_access and cr.target_instance_id %}
+                <a href="/manager/instances/{{ cr.target_instance_id }}/content" class="btn btn-outlined btn-sm" style="display:inline-flex; align-items:center; gap:0.35rem;">
+                  <span>⚙️</span>
+                  <span>Manage Content</span>
+                </a>
+              {% elif (cr.status == 'revoked' or (cr.status == 'approved' and not cr.has_access)) and cr.target_instance_id %}
+                {% if cr.is_pending_access_request %}
+                  <span class="badge badge-warning" style="font-size:0.78rem; padding:0.25rem 0.6rem;">⏳ Request Pending</span>
+                {% else %}
+                  <form method="POST" action="/manager/instances/request-access" style="display:inline-block; margin:0;">
+                    <input type="hidden" name="app_instance_id" value="{{ cr.target_instance_id }}">
+                    <button type="submit" class="btn btn-outlined btn-sm" style="display:inline-flex; align-items:center; gap:0.25rem; font-size:0.78rem;" title="Request access again from Admin">
+                      <span>📩</span>
+                      <span>Request Access</span>
+                    </button>
+                  </form>
+                {% endif %}
+              {% else %}
+                <span style="color:var(--md-sys-color-outline); font-size:0.85rem;">—</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 
 <!-- Other App Instances (Request Access Queue Source) -->
 {% if other_instances and other_instances|length > 0 %}
@@ -124,4 +235,112 @@
   </div>
 </div>
 {% endif %}
+
+<!-- Modal Dialog: Ask Admin to Create App Instance -->
+<div id="requestAppModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0, 0, 0, 0.6); align-items:center; justify-content:center; backdrop-filter:blur(3px);">
+  <div class="card" style="max-width:520px; width:92%; padding:1.75rem; box-shadow:0 12px 36px rgba(0,0,0,0.35); border:1px solid var(--md-sys-color-outline-variant); border-radius:14px; position:relative;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1.25rem;">
+      <div>
+        <h2 style="margin:0; font-size:1.25rem; display:flex; align-items:center; gap:0.5rem;">
+          <span>📱</span>
+          <span>Ask Admin to Create App</span>
+        </h2>
+        <p style="margin:0.35rem 0 0 0; font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); line-height:1.4;">
+          Submit details for the new application you want created. Once an administrator approves, the instance will be automatically created and assigned to your account.
+        </p>
+      </div>
+      <button type="button" onclick="closeRequestAppModal()" style="background:transparent; border:none; color:var(--md-sys-color-outline); font-size:1.4rem; cursor:pointer; padding:0 0.25rem; line-height:1;">✕</button>
+    </div>
+
+    <form method="POST" action="/manager/instances/request-creation" onsubmit="return validateRequestAppForm(this);">
+      <div style="margin-bottom:1rem;">
+        <label for="reqAppName" class="label" style="display:block; font-weight:600; font-size:0.88rem; margin-bottom:0.35rem;">
+          Application Name <span style="color:var(--md-sys-color-error);">*</span>
+        </label>
+        <input
+          type="text"
+          id="reqAppName"
+          name="name"
+          class="input"
+          style="width:100%; box-sizing:border-box;"
+          placeholder="e.g. Photo Collage Pro"
+          required
+          autofocus
+        >
+      </div>
+
+      <div style="margin-bottom:1rem;">
+        <label for="reqAppPackage" class="label" style="display:block; font-weight:600; font-size:0.88rem; margin-bottom:0.35rem;">
+          Package Name (Optional)
+        </label>
+        <input
+          type="text"
+          id="reqAppPackage"
+          name="package_name"
+          class="input"
+          style="width:100%; box-sizing:border-box;"
+          placeholder="e.g. com.company.photocollage"
+        >
+        <div style="font-size:0.75rem; color:var(--md-sys-color-outline); margin-top:0.25rem;">
+          Android application identifier (e.g., applicationId in build.gradle).
+        </div>
+      </div>
+
+      <div style="margin-bottom:1.5rem;">
+        <label for="reqAppNotes" class="label" style="display:block; font-weight:600; font-size:0.88rem; margin-bottom:0.35rem;">
+          Notes / Purpose for Admin (Optional)
+        </label>
+        <textarea
+          id="reqAppNotes"
+          name="notes"
+          class="textarea"
+          rows="3"
+          style="width:100%; box-sizing:border-box; resize:vertical;"
+          placeholder="e.g. Dedicated instance needed for upcoming seasonal campaign launch..."
+        ></textarea>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:0.75rem; padding-top:0.75rem; border-top:1px solid var(--md-sys-color-outline-variant);">
+        <button type="button" class="btn btn-outlined" onclick="closeRequestAppModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:0.35rem;">
+          <span>📩</span>
+          <span>Submit Request to Admin</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openRequestAppModal() {
+  const modal = document.getElementById('requestAppModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    const inp = document.getElementById('reqAppName');
+    if (inp) setTimeout(() => inp.focus(), 50);
+  }
+}
+
+function closeRequestAppModal() {
+  const modal = document.getElementById('requestAppModal');
+  if (modal) modal.style.display = 'none';
+}
+
+function validateRequestAppForm(form) {
+  const name = form.name.value.trim();
+  if (!name) {
+    alert('Please enter an application name.');
+    return false;
+  }
+  return true;
+}
+
+// Close modal on Escape key or backdrop click
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeRequestAppModal();
+});
+document.getElementById('requestAppModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'requestAppModal') closeRequestAppModal();
+});
+</script>
 {% endblock %}

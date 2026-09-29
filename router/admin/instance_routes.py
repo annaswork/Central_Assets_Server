@@ -14,8 +14,7 @@ from controller.app_instance_controller import (
     list_app_instances,
     update_app_instance,
 )
-from database.models.app_instance import AppInstanceCreate, AppInstanceUpdate
-from controller.asset_controller import list_assets
+from controller.asset_controller import asset_has_type, list_assets
 from controller.base_controller import serialize_mongo_doc
 from controller.catalog_controller import (
     get_resolved_assets,
@@ -204,6 +203,12 @@ async def admin_instance_content_view(
     subCategoryId: str | None = None,
     tab: str | None = None,
     sort: str | None = None,
+    type: str | None = None,
+    q: str | None = None,
+    search: str | None = None,
+    folder_cat: str | None = None,
+    folder_sort: str | None = None,
+    folder_search: str | None = None,
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -231,6 +236,22 @@ async def admin_instance_content_view(
             {"app_instance_id": inst_oid, "sub_category_id": s_src_oid, "deleted_at": None}
         )
 
+    # Build category ID alias map: maps both cat["id"] and cat["sourceId"] to cat["id"]
+    cat_alias_map = {}
+    for c in categories:
+        cid = str(c.get("id") or "")
+        csrc = str(c.get("sourceId") or "")
+        if cid:
+            cat_alias_map[cid] = cid
+        if csrc:
+            cat_alias_map[csrc] = cid
+
+    for s in all_subcategories:
+        raw_cat_id = str(s.get("categoryId") or "")
+        s["canonicalCategoryId"] = cat_alias_map.get(raw_cat_id, raw_cat_id)
+        s["categoryId"] = s["canonicalCategoryId"]
+        s["category_id"] = s["canonicalCategoryId"]
+
     # Identify all valid identifier forms for the selected category (id and sourceId)
     valid_cat_ids: set[str] = set()
     selected_cat_val = ""
@@ -249,7 +270,7 @@ async def admin_instance_content_view(
 
     # Filter relevant subcategories belonging to the chosen category
     filtered_subcategories = (
-        [s for s in all_subcategories if str(s.get("categoryId")) in valid_cat_ids]
+        [s for s in all_subcategories if str(s.get("canonicalCategoryId")) in valid_cat_ids or str(s.get("categoryId")) in valid_cat_ids]
         if categoryId
         else all_subcategories
     )
@@ -263,6 +284,9 @@ async def admin_instance_content_view(
         if not selected_subcat_val:
             selected_subcat_val = str(subCategoryId)
 
+    search_query = (q or search or "").strip()
+    clean_type = (type or "").strip().lower()
+
     assets = await get_resolved_assets(
         db,
         app_instance_id=id,
@@ -270,6 +294,13 @@ async def admin_instance_content_view(
         sub_category_id=subCategoryId,
         sort=sort,
     )
+
+    # Filter assets by media type if requested
+    if clean_type:
+        assets = [
+            a for a in assets
+            if asset_has_type(a.get("more_fields") or a.get("moreFields"), clean_type, a.get("thumbnail_url"))
+        ]
 
     # In-memory mapping fallback for instant display
     cat_map = {}
@@ -297,7 +328,58 @@ async def admin_instance_content_view(
             a["subcategory_name"] = sub_map.get(s_id) or a.get("subcategory_name") or "—"
         a["subCategoryName"] = a["subcategory_name"]
 
+    # Filter assets by search query if requested
+    if search_query:
+        sq_lower = search_query.lower()
+        assets = [
+            a for a in assets
+            if sq_lower in (a.get("name") or "").lower()
+            or sq_lower in (a.get("category_name") or "").lower()
+            or sq_lower in (a.get("subcategory_name") or "").lower()
+        ]
+
+    # Handle Category & Subcategory folder filtering (Section 1)
+    displayed_categories = list(categories)
+    if folder_cat:
+        displayed_categories = [
+            c for c in displayed_categories
+            if str(c.get("id")) == folder_cat or str(c.get("sourceId")) == folder_cat
+        ]
+
+    if folder_search and folder_search.strip():
+        fs_lower = folder_search.strip().lower()
+        displayed_categories = [
+            c for c in displayed_categories
+            if fs_lower in (c.get("name") or "").lower()
+            or any(
+                fs_lower in (s.get("name") or "").lower()
+                for s in all_subcategories
+                if str(s.get("categoryId")) in (str(c.get("id")), str(c.get("sourceId")))
+            )
+        ]
+
+    if folder_sort:
+        fs_clean = folder_sort.strip().lower()
+        if fs_clean == "name":
+            displayed_categories.sort(key=lambda c: (c.get("name") or "").lower())
+        elif fs_clean == "newest":
+            displayed_categories.sort(key=lambda c: str(c.get("created_at") or ""), reverse=True)
+        elif fs_clean == "oldest":
+            displayed_categories.sort(key=lambda c: str(c.get("created_at") or ""))
+        elif fs_clean == "sequence":
+            displayed_categories.sort(key=lambda c: c.get("sequence", 0))
+
     unresolved = await get_unresolved_references(db, app_instance_id=id)
+
+    # Determine default active tab
+    active_tab_selection = tab
+    if not active_tab_selection:
+        if categoryId or subCategoryId or clean_type or search_query:
+            active_tab_selection = "assets"
+        elif folder_cat or folder_search or (folder_sort and folder_sort not in ("sequence", "")):
+            active_tab_selection = "folders"
+        else:
+            active_tab_selection = "folders"
 
     return templates.TemplateResponse(
         request=request,
@@ -305,14 +387,23 @@ async def admin_instance_content_view(
         context={
             "session": session,
             "instance": instance,
-            "categories": categories,
+            "categories": displayed_categories,
+            "all_categories": categories,
             "subcategories": filtered_subcategories,
             "all_subcategories": all_subcategories,
             "assets": assets,
             "selected_cat": selected_cat_val,
             "selected_subcat": selected_subcat_val,
-            "selected_tab": tab or ("assets" if (categoryId or subCategoryId) else "folders"),
+            "selected_type": clean_type,
+            "type": clean_type,
+            "selected_tab": active_tab_selection,
             "current_sort": sort or "sequence",
+            "sort": sort or "sequence",
+            "search": search_query,
+            "q": search_query,
+            "folder_cat": folder_cat or "",
+            "folder_sort": folder_sort or "sequence",
+            "folder_search": folder_search or "",
             "unresolved_count": unresolved["total_unresolved"],
             "active_tab": "instances",
         },

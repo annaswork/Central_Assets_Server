@@ -3,6 +3,7 @@
 {% block title %}Manager Accounts — Asset Admin{% endblock %}
 
 {% block content %}
+{% include "partials/flash.html" %}
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
   <div>
     <h1 style="margin:0;">Manager Accounts</h1>
@@ -59,11 +60,14 @@
                 <div style="display:flex; flex-wrap:wrap; gap:0.35rem; align-items:center;">
                   {% if m.granted_instances and m.granted_instances|length > 0 %}
                     {% for gi in m.granted_instances %}
-                      <span class="badge" style="background:var(--md-sys-color-surface-container-high); display:inline-flex; align-items:center; gap:0.35rem; padding:0.25rem 0.5rem;">
+                      <span class="badge" style="background:var(--md-sys-color-surface-container-high); display:inline-flex; align-items:center; gap:0.35rem; padding:0.25rem 0.5rem; {% if gi.is_owner %}border:1px solid rgba(99, 102, 241, 0.4);{% endif %}">
                         <span>📱 {{ gi.name }}</span>
-                        <form method="POST" action="/admin/managers/{{ m.id }}/revoke-access" style="display:inline; margin:0;" onsubmit="return confirm('Revoke access to {{ gi.name }}?');">
+                        {% if gi.is_owner %}
+                          <span style="font-size:0.68rem; font-weight:700; color:var(--md-sys-color-primary); background:rgba(99, 102, 241, 0.12); padding:1px 5px; border-radius:4px;" title="Manager requested & owns this created app">Owner</span>
+                        {% endif %}
+                        <form method="POST" action="/admin/managers/{{ m.id }}/revoke-access" style="display:inline; margin:0;" onsubmit="return confirm('Revoke access to {{ gi.name }}? {% if gi.is_owner %}This manager requested and owns this app; revoking will completely remove their access.{% endif %}');">
                           <input type="hidden" name="app_instance_id" value="{{ gi.id }}">
-                          <button type="submit" style="background:none; border:none; cursor:pointer; color:var(--md-sys-color-error); font-size:0.85rem; padding:0; line-height:1;" title="Revoke access">×</button>
+                          <button type="submit" style="background:none; border:none; cursor:pointer; color:var(--md-sys-color-error); font-size:0.95rem; font-weight:700; padding:0 2px; line-height:1;" title="Revoke access">×</button>
                         </form>
                       </span>
                     {% endfor %}

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, Form, Request, Response
+from urllib.parse import quote_plus
+
+from fastapi import APIRouter, Depends, Form, Query, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -29,6 +31,8 @@ router = APIRouter(prefix="/managers", tags=["Admin Manager Management"])
 @router.get("")
 async def admin_managers_list(
     request: Request,
+    msg: str | None = Query(default=None),
+    msg_type: str | None = Query(default="info"),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     """List all Manager accounts with instance assignments."""
@@ -52,6 +56,8 @@ async def admin_managers_list(
             "all_instances": all_instances,
             "admin_has_2fa": admin_has_2fa,
             "active_tab": "managers",
+            "flash_message": msg,
+            "flash_type": msg_type,
         },
     )
 
@@ -69,13 +75,14 @@ async def admin_grant_access(
         return RedirectResponse(url="/admin/login", status_code=303)
 
     try:
-        await grant_instance_access(
+        res = await grant_instance_access(
             db, manager_id=manager_id, app_instance_id=app_instance_id, admin_id=session.get("user_id")
         )
-    except (NotFoundError, ConflictError):
-        pass
-
-    return RedirectResponse(url="/admin/managers", status_code=303)
+        msg = quote_plus(res.get("message", "Access granted successfully."))
+        return RedirectResponse(url=f"/admin/managers?msg={msg}&msg_type=success", status_code=303)
+    except (NotFoundError, ConflictError) as e:
+        msg = quote_plus(e.message)
+        return RedirectResponse(url=f"/admin/managers?msg={msg}&msg_type=error", status_code=303)
 
 
 @router.post("/{manager_id}/revoke-access")
@@ -90,8 +97,9 @@ async def admin_revoke_access(
     if not session:
         return RedirectResponse(url="/admin/login", status_code=303)
 
-    await revoke_instance_access(db, manager_id=manager_id, app_instance_id=app_instance_id)
-    return RedirectResponse(url="/admin/managers", status_code=303)
+    res = await revoke_instance_access(db, manager_id=manager_id, app_instance_id=app_instance_id)
+    msg = quote_plus(res.get("message", "Access revoked successfully."))
+    return RedirectResponse(url=f"/admin/managers?msg={msg}&msg_type=success", status_code=303)
 
 
 @router.post("/{manager_id}/delete")
@@ -106,11 +114,12 @@ async def admin_delete_manager(
         return RedirectResponse(url="/admin/login", status_code=303)
 
     try:
-        await delete_manager_account(db, manager_id=manager_id)
-    except NotFoundError:
-        pass
-
-    return RedirectResponse(url="/admin/managers", status_code=303)
+        res = await delete_manager_account(db, manager_id=manager_id)
+        msg = quote_plus(res.get("message", "Manager deleted successfully."))
+        return RedirectResponse(url=f"/admin/managers?msg={msg}&msg_type=success", status_code=303)
+    except NotFoundError as e:
+        msg = quote_plus(e.message)
+        return RedirectResponse(url=f"/admin/managers?msg={msg}&msg_type=error", status_code=303)
 
 
 @router.post("/{manager_id}/view-password")

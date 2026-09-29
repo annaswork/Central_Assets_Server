@@ -13,6 +13,15 @@
       Browse shippable creative assets authored in the central library.
     </p>
   </div>
+
+  <!-- Grid Column Selector (5 to 8 items in a row) -->
+  <div class="cols-picker-group" id="colsPickerManager" title="Choose items per row (5 to 8)">
+    <span class="cols-picker-label">Cols:</span>
+    <button type="button" class="cols-picker-btn active" data-cols="5" onclick="setManagerGridColumns(5)">5</button>
+    <button type="button" class="cols-picker-btn" data-cols="6" onclick="setManagerGridColumns(6)">6</button>
+    <button type="button" class="cols-picker-btn" data-cols="7" onclick="setManagerGridColumns(7)">7</button>
+    <button type="button" class="cols-picker-btn" data-cols="8" onclick="setManagerGridColumns(8)">8</button>
+  </div>
 </div>
 
 <!-- Filters & Search -->
@@ -75,7 +84,7 @@
 
 <!-- Assets Grid (Read-Only) -->
 {% if assets and assets|length > 0 %}
-  <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:1.25rem; margin-bottom:2rem;">
+  <div id="managerAssetGrid" class="manager-asset-grid asset-grid" style="margin-bottom:2rem;">
     {% for asset in assets %}
       <div class="card" style="padding:0; overflow:hidden; display:flex; flex-direction:column; border:1px solid var(--md-sys-color-outline-variant); transition:transform 0.15s ease, box-shadow 0.15s ease;">
         <div style="aspect-ratio:1/1; width:100%; background:var(--md-sys-color-surface-container); display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative;">
@@ -118,4 +127,30 @@
 {% endif %}
 
 {% include "partials/pagination.html" %}
+
+<script>
+function setManagerGridColumns(cols) {
+  cols = parseInt(cols, 10);
+  if (isNaN(cols) || cols < 5 || cols > 8) cols = 5;
+  const grid = document.getElementById('managerAssetGrid');
+  if (grid) {
+    grid.classList.remove('grid-cols-5', 'grid-cols-6', 'grid-cols-7', 'grid-cols-8');
+    grid.classList.add(`grid-cols-${cols}`);
+  }
+  document.querySelectorAll('#colsPickerManager .cols-picker-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.cols, 10) === cols);
+  });
+  try {
+    localStorage.setItem('manager_asset_cols', cols);
+  } catch (e) {}
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  let savedCols = 5;
+  try {
+    savedCols = localStorage.getItem('manager_asset_cols') || 5;
+  } catch (e) {}
+  setManagerGridColumns(savedCols);
+});
+</script>
 {% endblock %}

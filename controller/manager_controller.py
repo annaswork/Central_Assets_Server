@@ -656,22 +656,117 @@ async def create_access_request(
     return serialize_mongo_doc(doc)  # type: ignore
 
 
+async def create_instance_creation_request(
+    db: AsyncIOMotorDatabase,
+    manager_id: str,
+    requested_app_name: str,
+    requested_package_name: str | None = None,
+    notes: str | None = None,
+) -> dict[str, Any]:
+    """Submit a request to Admin asking to provision a new App Instance."""
+    clean_name = requested_app_name.strip()
+    if not clean_name:
+        raise ValidationError("Application name is required.")
+
+    manager_oid = to_object_id(manager_id)
+
+    # Check if app with this name already exists in APP_INSTANCES
+    existing_app = await db[APP_INSTANCES].find_one({"name": clean_name})
+    if existing_app:
+        raise ConflictError(f"An application named '{clean_name}' already exists.")
+
+    clean_pkg = (
+        requested_package_name.strip()
+        if (requested_package_name and requested_package_name.strip() and requested_package_name.strip().lower() != "none")
+        else None
+    )
+    if clean_pkg:
+        existing_pkg = await db[APP_INSTANCES].find_one({"package_name": clean_pkg})
+        if existing_pkg:
+            raise ConflictError(f"An application with package '{clean_pkg}' already exists.")
+
+    # Check if pending creation request with same name exists
+    existing_req = await db[APP_INSTANCE_ACCESS_REQUESTS].find_one(
+        {
+            "request_type": "create_instance",
+            "requested_app_name": clean_name,
+            "status": "pending",
+        }
+    )
+    if existing_req:
+        raise ConflictError(f"A request to create '{clean_name}' is already pending review.")
+
+    now = utc_now()
+    doc: dict[str, Any] = {
+        "request_type": "create_instance",
+        "requesting_manager_id": manager_oid,
+        "requested_app_name": clean_name,
+        "requested_package_name": clean_pkg,
+        "app_instance_id": None,
+        "created_instance_id": None,
+        "status": "pending",
+        "notes": notes.strip() if notes else None,
+        "reviewed_by": None,
+        "reviewed_at": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+    res = await db[APP_INSTANCE_ACCESS_REQUESTS].insert_one(doc)
+    doc["_id"] = res.inserted_id
+    return serialize_mongo_doc(doc)  # type: ignore
+
+
 async def list_manager_access_requests(
     db: AsyncIOMotorDatabase, manager_id: str
 ) -> list[dict[str, Any]]:
-    """List access requests created by this manager."""
+    """List access and creation requests created by this manager with live permission synchronization."""
     m_oid = to_object_id(manager_id)
+    accessible_ids = set(await get_manager_accessible_instance_ids(db, manager_id))
+
     cursor = db[APP_INSTANCE_ACCESS_REQUESTS].find(
-        {"requesting_manager_id": m_oid}
+        {"$or": [{"requesting_manager_id": m_oid}, {"requesting_manager_id": str(m_oid)}]}
     ).sort("created_at", -1)
 
     docs = await cursor.to_list(length=200)
     serialized = serialize_mongo_docs(docs)
 
-    # Attach instance name
+    # Attach instance name and request details
+    now = utc_now()
     for r in serialized:
-        inst_oid = to_object_id(r["app_instance_id"])
-        inst = await db[APP_INSTANCES].find_one({"_id": inst_oid}, {"name": 1})
-        r["app_instance_name"] = inst["name"] if inst else "Unknown"
+        r["request_type"] = r.get("request_type", "access")
+        if r["request_type"] == "create_instance":
+            r["app_instance_name"] = r.get("requested_app_name", "Untitled App")
+            r["app_package_name"] = r.get("requested_package_name")
+            if r.get("created_instance_id"):
+                r["target_instance_id"] = str(r["created_instance_id"])
+            elif r.get("app_instance_id"):
+                r["target_instance_id"] = str(r["app_instance_id"])
+            else:
+                r["target_instance_id"] = None
+        else:
+            inst_oid = to_object_id(r.get("app_instance_id"))
+            inst = await db[APP_INSTANCES].find_one({"_id": inst_oid}, {"name": 1, "package_name": 1}) if inst_oid else None
+            r["app_instance_name"] = inst["name"] if inst else "Unknown"
+            r["app_package_name"] = inst.get("package_name") if inst else None
+            r["target_instance_id"] = str(r.get("app_instance_id", ""))
+
+        target_id = r.get("target_instance_id")
+        has_access = bool(target_id and target_id in accessible_ids)
+        r["has_access"] = has_access
+
+        # Status synchronization: if previously approved but admin revoked access, reflect 'revoked'
+        if r.get("status") == "approved" and target_id and not has_access:
+            r["status"] = "revoked"
+            await db[APP_INSTANCE_ACCESS_REQUESTS].update_one(
+                {"_id": to_object_id(r["id"])},
+                {"$set": {"status": "revoked", "revoked_at": now, "updated_at": now}},
+            )
+        elif r.get("status") == "revoked" and target_id and has_access:
+            r["status"] = "approved"
+            await db[APP_INSTANCE_ACCESS_REQUESTS].update_one(
+                {"_id": to_object_id(r["id"])},
+                {"$set": {"status": "approved", "updated_at": now}},
+            )
 
     return serialized

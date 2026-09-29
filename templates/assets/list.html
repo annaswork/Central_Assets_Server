@@ -34,6 +34,15 @@
       </button>
     </div>
 
+    <!-- Grid Column Selector (5 to 8 items in a row) -->
+    <div class="cols-picker-group" id="colsPickerAdmin" style="display:none;" title="Choose items per row (5 to 8)">
+      <span class="cols-picker-label">Cols:</span>
+      <button type="button" class="cols-picker-btn" data-cols="5" onclick="setGridColumns(5)">5</button>
+      <button type="button" class="cols-picker-btn active" data-cols="6" onclick="setGridColumns(6)">6</button>
+      <button type="button" class="cols-picker-btn" data-cols="7" onclick="setGridColumns(7)">7</button>
+      <button type="button" class="cols-picker-btn" data-cols="8" onclick="setGridColumns(8)">8</button>
+    </div>
+
     <button type="button" class="btn btn-outlined" onclick="openCentralReorderModal('asset', { categoryId: '{{ selected_cat or '' }}', subCategoryId: '{{ selected_sub or '' }}' })">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;">
         <line x1="8" y1="6" x2="21" y2="6"></line>

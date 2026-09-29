@@ -34,7 +34,7 @@
 <!-- Tabs: Categories & Subcategories vs Assets -->
 <div style="display:flex; gap:0.5rem; margin-bottom:1.5rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.75rem;">
   <button type="button" id="tabBtnFolders" class="btn {% if active_section != 'assets' %}btn-primary{% else %}btn-outlined{% endif %}" onclick="switchTab('folders')">
-    📁 Categories & Subcategories ({{ categories|length }})
+    📁 Categories & Subcategories ({{ categories|length }}{% if (all_categories|length) != (categories|length) %} of {{ all_categories|length }}{% endif %})
   </button>
   <button type="button" id="tabBtnAssets" class="btn {% if active_section == 'assets' %}btn-primary{% else %}btn-outlined{% endif %}" onclick="switchTab('assets')">
     🖼️ Referenced Assets ({{ assets|length }})
@@ -43,6 +43,40 @@
 
 <!-- SECTION 1: FOLDERS & HIERARCHY -->
 <div id="sectionFolders" style="display:{% if active_section == 'assets' %}none{% else %}block{% endif %};">
+  <!-- Filters & Search (Categories & Subcategories) -->
+  <div class="card search-filter-card" style="padding:0.85rem 1rem; margin-bottom:1.5rem; overflow-x:auto;">
+    <form method="GET" action="/manager/instances/{{ instance.id }}/content" class="search-filter-form" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem; width:100%;">
+      <input type="hidden" name="active_section" value="folders">
+      <input type="hidden" name="tab" value="folders">
+      <div class="filter-group-left" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; flex-shrink:0; white-space:nowrap;">
+        <select name="folder_cat" id="managerFolderCategoryFilter" class="select" style="max-width:220px;" onchange="this.form.submit()">
+          <option value="">All Categories</option>
+          {% for cat in all_categories %}
+            <option value="{{ cat.id }}" {% if folder_cat == (cat.id|string) or folder_cat == (cat.sourceId|string) %}selected{% endif %}>{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+
+        <select name="folder_sort" id="managerFolderSortSelect" class="select" style="min-width:160px; max-width:190px;" onchange="this.form.submit()">
+          <option value="sequence" {% if folder_sort == 'sequence' or not folder_sort %}selected{% endif %}>Sequence / Custom</option>
+          <option value="name" {% if folder_sort == 'name' %}selected{% endif %}>By Name</option>
+          <option value="newest" {% if folder_sort == 'newest' %}selected{% endif %}>Newest First</option>
+          <option value="oldest" {% if folder_sort == 'oldest' %}selected{% endif %}>Oldest First</option>
+        </select>
+
+        {% if folder_cat or (folder_sort and folder_sort not in ('sequence', '')) %}
+          <a href="/manager/instances/{{ instance.id }}/content?active_section=folders{% if folder_search %}&folder_search={{ folder_search | urlencode }}{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
+        {% endif %}
+      </div>
+
+      <div class="search-group-right" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; margin-left:auto; white-space:nowrap; flex-shrink:0;">
+        <input type="text" name="folder_search" class="input" placeholder="Search categories & subcategories..." value="{{ folder_search }}" style="max-width:320px;">
+        <button type="submit" class="btn btn-outlined btn-filter">Search</button>
+        {% if folder_search %}
+          <a href="/manager/instances/{{ instance.id }}/content?active_section=folders{% if folder_cat %}&folder_cat={{ folder_cat }}{% endif %}{% if folder_sort and folder_sort not in ('sequence', '') %}&folder_sort={{ folder_sort }}{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
   {% if categories and categories|length > 0 %}
     <div id="managerCategoriesContainer" style="display:flex; flex-direction:column; gap:1.25rem;">
       {% for cat in categories %}
@@ -141,6 +175,17 @@
         </div>
       {% endfor %}
     </div>
+  {% elif folder_cat or folder_search %}
+    <div class="card" style="text-align:center; padding:3.5rem 1rem; color:var(--md-sys-color-on-surface-variant);">
+      <div style="font-size:2.5rem; margin-bottom:0.5rem;">🔍</div>
+      <div style="font-size:1.1rem; font-weight:600;">No matching categories or subcategories found</div>
+      <div style="font-size:0.9rem; margin-top:0.25rem; margin-bottom:1rem;">
+        Try adjusting your search query or category filter.
+      </div>
+      <a href="/manager/instances/{{ instance.id }}/content?active_section=folders" class="btn btn-outlined">
+        Clear Filters
+      </a>
+    </div>
   {% else %}
     <div class="card" style="text-align:center; padding:3.5rem 1rem; color:var(--md-sys-color-on-surface-variant);">
       <div style="font-size:2.5rem; margin-bottom:0.5rem;">📁</div>
@@ -157,6 +202,57 @@
 
 <!-- SECTION 2: REFERENCED ASSETS -->
 <div id="sectionAssets" style="display:{% if active_section == 'assets' %}block{% else %}none{% endif %};">
+  <!-- Referenced Assets Filter & Search -->
+  <div class="card search-filter-card" style="padding:0.85rem 1rem; margin-bottom:1.5rem; overflow-x:auto;">
+    <form id="managerAssetFilterForm" method="GET" action="/manager/instances/{{ instance.id }}/content" onsubmit="handleManagerAssetSearchSubmit(event)" class="search-filter-form" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem; width:100%;">
+      <input type="hidden" name="active_section" value="assets">
+      <input type="hidden" name="tab" value="assets">
+
+      <div class="filter-group-left" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; flex-shrink:0; white-space:nowrap;">
+        <select name="categoryId" id="managerCategoryFilter" class="select" style="max-width:200px;" onchange="handleManagerCategoryFilterChange(this.value)">
+          <option value="">All Categories</option>
+          {% for cat in all_categories %}
+            <option value="{{ cat.id }}" data-source-id="{{ cat.sourceId or cat.id }}" {% if selected_cat == (cat.id|string) or selected_cat == (cat.sourceId|string) %}selected{% endif %}>{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+
+        <select name="subCategoryId" id="managerSubCategoryFilter" class="select" style="max-width:200px;" onchange="handleManagerSubCategoryFilterChange(this)">
+          <option value="">All Subcategories</option>
+          {% for sub in all_subcategories %}
+            <option value="{{ sub.id }}" data-category-id="{{ sub.canonicalCategoryId or sub.categoryId }}" {% if selected_subcat == (sub.id|string) or selected_subcat == (sub.sourceId|string) %}selected{% endif %}>{{ sub.name }}</option>
+          {% endfor %}
+        </select>
+
+        <select name="type" id="managerTypeFilter" class="select" style="min-width:130px; max-width:160px;" onchange="applyManagerAssetFilters()">
+          <option value="">All Types</option>
+          <option value="images" {% if selected_type == 'images' %}selected{% endif %}>Images</option>
+          <option value="videos" {% if selected_type == 'videos' %}selected{% endif %}>Videos</option>
+          <option value="audios" {% if selected_type == 'audios' %}selected{% endif %}>Audios</option>
+          <option value="json" {% if selected_type == 'json' %}selected{% endif %}>JSON</option>
+          <option value="frames" {% if selected_type == 'frames' %}selected{% endif %}>Frames</option>
+        </select>
+
+        <select name="sort" id="managerAssetSortSelect" class="select" style="min-width:160px; max-width:190px;" onchange="applyManagerAssetFilters()">
+          <option value="sequence" {% if current_sort == 'sequence' or not current_sort %}selected{% endif %}>Sequence / Custom</option>
+          <option value="name" {% if current_sort == 'name' %}selected{% endif %}>By Name</option>
+          <option value="newest" {% if current_sort == 'newest' %}selected{% endif %}>Newest First</option>
+          <option value="most_viewed" {% if current_sort == 'most_viewed' %}selected{% endif %}>Most Viewed</option>
+          <option value="most_downloaded" {% if current_sort == 'most_downloaded' %}selected{% endif %}>Most Downloaded</option>
+          <option value="oldest" {% if current_sort == 'oldest' %}selected{% endif %}>Oldest First</option>
+        </select>
+
+        <a href="javascript:void(0)" id="managerAssetFilterClearBtn" onclick="handleManagerClearAssetFilters(event, 'filters')" class="btn btn-outlined btn-filter" style="display:{% if selected_cat or selected_subcat or selected_type or (current_sort and current_sort not in ('sequence', '')) %}inline-flex{% else %}none{% endif %};">Clear</a>
+      </div>
+
+      <div class="search-group-right" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; margin-left:auto; white-space:nowrap; flex-shrink:0;">
+        <input type="text" name="q" id="managerAssetSearchInput" class="input" placeholder="Search asset name..." value="{{ search }}" style="max-width:260px;">
+        <button type="submit" class="btn btn-outlined btn-filter">Search</button>
+        <a href="javascript:void(0)" id="managerAssetSearchClearBtn" onclick="handleManagerClearAssetFilters(event, 'search')" class="btn btn-outlined btn-filter" style="display:{% if search %}inline-flex{% else %}none{% endif %};">Clear</a>
+      </div>
+    </form>
+  </div>
+
+  <div id="managerAssetTableContainer">
   {% if assets and assets|length > 0 %}
     <div class="table-responsive card" style="padding:0; margin-bottom:2rem; border:1px solid var(--md-sys-color-outline-variant);">
       <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
@@ -241,6 +337,17 @@
         </tbody>
       </table>
     </div>
+  {% elif selected_cat or selected_subcat or selected_type or search %}
+    <div class="card" style="text-align:center; padding:3.5rem 1rem; color:var(--md-sys-color-on-surface-variant); margin-bottom:2rem;">
+      <div style="font-size:2.5rem; margin-bottom:0.5rem;">🔍</div>
+      <div style="font-size:1.1rem; font-weight:600;">No assets match your search/filter criteria</div>
+      <div style="font-size:0.9rem; margin-top:0.25rem; margin-bottom:1rem;">
+        Try adjusting or clearing your filters.
+      </div>
+      <a href="javascript:void(0)" onclick="handleManagerClearAssetFilters(event, 'all')" class="btn btn-outlined">
+        Clear Asset Filters
+      </a>
+    </div>
   {% else %}
     <div class="card" style="text-align:center; padding:3.5rem 1rem; color:var(--md-sys-color-on-surface-variant);">
       <div style="font-size:2.5rem; margin-bottom:0.5rem;">🖼️</div>
@@ -253,6 +360,7 @@
       </button>
     </div>
   {% endif %}
+  </div>
 </div>
 
 <!-- Central Library Import Modal (Scoped Selection) -->
@@ -305,6 +413,183 @@
     document.getElementById('sectionAssets').style.display = tab === 'assets' ? 'block' : 'none';
     document.getElementById('tabBtnFolders').className = tab === 'folders' ? 'btn btn-primary' : 'btn btn-outlined';
     document.getElementById('tabBtnAssets').className = tab === 'assets' ? 'btn btn-primary' : 'btn btn-outlined';
+
+    try {
+      sessionStorage.setItem('manager_instance_tab_' + instanceId, tab);
+      const url = new URL(window.location.href);
+      url.searchParams.set('active_section', tab);
+      url.searchParams.set('tab', tab);
+      window.history.replaceState({}, '', url.toString());
+    } catch (e) {}
+  }
+
+  // --- Referenced Assets AJAX Filtering & Subcategory Dynamic Scoping (Manager) ---
+  function filterManagerSubcategoryOptions(selectedCatId) {
+    const subSelect = document.getElementById('managerSubCategoryFilter');
+    if (!subSelect) return;
+    const currentSubVal = subSelect.value;
+    let currentSubValid = false;
+
+    const catSelect = document.getElementById('managerCategoryFilter');
+    let validCatIds = [];
+    if (selectedCatId) {
+      validCatIds.push(selectedCatId);
+      if (catSelect) {
+        const selectedOpt = catSelect.options[catSelect.selectedIndex];
+        if (selectedOpt && selectedOpt.dataset.sourceId) {
+          validCatIds.push(selectedOpt.dataset.sourceId);
+        }
+      }
+    }
+
+    Array.from(subSelect.options).forEach((opt, idx) => {
+      if (idx === 0) return; // Keep "All Subcategories"
+      const catId = opt.dataset.categoryId || opt.dataset.catId || '';
+      if (!selectedCatId || validCatIds.includes(catId)) {
+        opt.hidden = false;
+        opt.style.display = '';
+        if (opt.value === currentSubVal) currentSubValid = true;
+      } else {
+        opt.hidden = true;
+        opt.style.display = 'none';
+      }
+    });
+
+    if (selectedCatId && !currentSubValid) {
+      subSelect.value = '';
+    }
+  }
+
+  function handleManagerCategoryFilterChange(catId) {
+    filterManagerSubcategoryOptions(catId);
+    applyManagerAssetFilters();
+  }
+
+  function handleManagerSubCategoryFilterChange(subSelect) {
+    const opt = subSelect.options[subSelect.selectedIndex];
+    const catSelect = document.getElementById('managerCategoryFilter');
+    if (opt && opt.dataset.categoryId && catSelect && !catSelect.value) {
+      catSelect.value = opt.dataset.categoryId;
+      filterManagerSubcategoryOptions(opt.dataset.categoryId);
+    }
+    applyManagerAssetFilters();
+  }
+
+  function handleManagerAssetSearchSubmit(e) {
+    if (e) e.preventDefault();
+    applyManagerAssetFilters();
+  }
+
+  function handleManagerClearAssetFilters(e, clearType) {
+    if (e) e.preventDefault();
+    if (clearType === 'search') {
+      const qInp = document.getElementById('managerAssetSearchInput');
+      if (qInp) qInp.value = '';
+    } else if (clearType === 'filters') {
+      const catSelect = document.getElementById('managerCategoryFilter');
+      const subSelect = document.getElementById('managerSubCategoryFilter');
+      const typeSelect = document.getElementById('managerTypeFilter');
+      const sortSelect = document.getElementById('managerAssetSortSelect');
+      if (catSelect) catSelect.value = '';
+      if (subSelect) subSelect.value = '';
+      if (typeSelect) typeSelect.value = '';
+      if (sortSelect) sortSelect.value = 'sequence';
+      filterManagerSubcategoryOptions('');
+    } else {
+      // all
+      const catSelect = document.getElementById('managerCategoryFilter');
+      const subSelect = document.getElementById('managerSubCategoryFilter');
+      const typeSelect = document.getElementById('managerTypeFilter');
+      const sortSelect = document.getElementById('managerAssetSortSelect');
+      const qInp = document.getElementById('managerAssetSearchInput');
+      if (catSelect) catSelect.value = '';
+      if (subSelect) subSelect.value = '';
+      if (typeSelect) typeSelect.value = '';
+      if (sortSelect) sortSelect.value = 'sequence';
+      if (qInp) qInp.value = '';
+      filterManagerSubcategoryOptions('');
+    }
+    applyManagerAssetFilters();
+  }
+
+  async function applyManagerAssetFilters() {
+    const catSelect = document.getElementById('managerCategoryFilter');
+    const subSelect = document.getElementById('managerSubCategoryFilter');
+    const typeSelect = document.getElementById('managerTypeFilter');
+    const sortSelect = document.getElementById('managerAssetSortSelect');
+    const qInput = document.getElementById('managerAssetSearchInput');
+
+    const selectedCat = catSelect ? catSelect.value : '';
+    const selectedSub = subSelect ? subSelect.value : '';
+    const selectedType = typeSelect ? typeSelect.value : '';
+    const selectedSort = sortSelect ? sortSelect.value : 'sequence';
+    const selectedQ = qInput ? qInput.value.trim() : '';
+
+    const params = new URLSearchParams();
+    params.set('active_section', 'assets');
+    params.set('tab', 'assets');
+    if (selectedCat) params.set('categoryId', selectedCat);
+    if (selectedSub) params.set('subCategoryId', selectedSub);
+    if (selectedType) params.set('type', selectedType);
+    if (selectedSort && selectedSort !== 'sequence') params.set('sort', selectedSort);
+    if (selectedQ) params.set('q', selectedQ);
+
+    const fetchUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, '', fetchUrl);
+
+    const filterClearBtn = document.getElementById('managerAssetFilterClearBtn');
+    const hasFilterActive = Boolean(selectedCat || selectedSub || selectedType || (selectedSort && selectedSort !== 'sequence'));
+    if (filterClearBtn) {
+      filterClearBtn.style.display = hasFilterActive ? 'inline-flex' : 'none';
+    }
+
+    const searchClearBtn = document.getElementById('managerAssetSearchClearBtn');
+    if (searchClearBtn) {
+      searchClearBtn.style.display = selectedQ ? 'inline-flex' : 'none';
+    }
+
+    const container = document.getElementById('managerAssetTableContainer');
+    if (container) container.style.opacity = '0.35';
+
+    try {
+      const res = await fetch(fetchUrl);
+      if (!res.ok) throw new Error('Failed to fetch filtered manager assets');
+      const htmlText = await res.text();
+      const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+
+      const newContainer = doc.getElementById('managerAssetTableContainer');
+      if (newContainer && container) {
+        container.innerHTML = newContainer.innerHTML;
+      }
+
+      const newTabBtn = doc.getElementById('tabBtnAssets');
+      const curTabBtn = document.getElementById('tabBtnAssets');
+      if (newTabBtn && curTabBtn) {
+        curTabBtn.innerHTML = newTabBtn.innerHTML;
+      }
+
+      if (typeof initAssetDragDrop === 'function') {
+        initAssetDragDrop();
+      }
+    } catch (err) {
+      console.error('Error applying manager asset filters:', err);
+    } finally {
+      if (container) container.style.opacity = '1';
+    }
+  }
+
+  const curMgrCatInit = document.getElementById('managerCategoryFilter');
+  if (curMgrCatInit && curMgrCatInit.value) {
+    filterManagerSubcategoryOptions(curMgrCatInit.value);
+  }
+
+  // Restore saved tab if no query params present
+  const contentParams = new URLSearchParams(window.location.search);
+  const savedTab = sessionStorage.getItem('manager_instance_tab_' + instanceId);
+  if (!contentParams.has('tab') && !contentParams.has('active_section') && !contentParams.has('categoryId') && !contentParams.has('subCategoryId') && !contentParams.has('sort') && !contentParams.has('type') && !contentParams.has('q') && !contentParams.has('folder_cat') && !contentParams.has('folder_search') && !contentParams.has('folder_sort')) {
+    if (savedTab === 'assets') {
+      switchTab('assets');
+    }
   }
 
   function openImportModal() {

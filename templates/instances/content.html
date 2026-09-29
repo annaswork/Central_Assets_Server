@@ -39,28 +39,68 @@
   </div>
 </div>
 
-{% set is_assets_tab = (selected_tab == 'assets' or selected_cat or selected_subcat or (request.query_params and request.query_params.get('tab') == 'assets')) %}
+{% set is_assets_tab = (selected_tab == 'assets') %}
 
 <!-- Instance Content Tabs -->
 <div style="display:flex; gap:0.5rem; margin-bottom:1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.75rem;">
   <button type="button" id="tabBtnFolders" class="btn {% if is_assets_tab %}btn-outlined{% else %}btn-primary{% endif %}" onclick="switchInstanceTab('folders')" style="min-height:36px; padding:0.35rem 1rem;">
-    📁 Folders & Hierarchy ({{ categories|length }})
+    📁 Categories & Subcategories ({{ categories|length }}{% if (all_categories|length) != (categories|length) %} of {{ all_categories|length }}{% endif %})
   </button>
   <button type="button" id="tabBtnAssets" class="btn {% if is_assets_tab %}btn-primary{% else %}btn-outlined{% endif %}" onclick="switchInstanceTab('assets')" style="min-height:36px; padding:0.35rem 1rem;">
     🖼️ Referenced Assets ({{ assets|length }})
   </button>
 </div>
 
-<!-- SECTION 1: FOLDERS & HIERARCHY -->
+<!-- SECTION 1: CATEGORIES & SUBCATEGORIES -->
 <div id="sectionFolders" style="display:{% if is_assets_tab %}none{% else %}block{% endif %};">
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-    <h3 style="margin:0;">App Instance Folder Structure</h3>
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+    <div>
+      <h3 style="margin:0;">Categories & Subcategories</h3>
+      <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.85rem; margin:0.2rem 0 0 0;">
+        Manage folder structure, categories, and subcategories for this app instance
+      </p>
+    </div>
     <button type="button" class="btn btn-outlined" style="font-size:0.85rem;" onclick="openCreateFolderModal()">
       + New Folder / Sub-folder
     </button>
   </div>
 
+  <!-- Filters & Search (Categories & Subcategories) -->
+  <div class="card search-filter-card" style="padding:0.85rem 1rem; margin-bottom:1.5rem; overflow-x:auto;">
+    <form method="GET" action="/admin/instances/{{ instance.id }}/content" class="search-filter-form" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem; width:100%;">
+      <input type="hidden" name="tab" value="folders">
+      <div class="filter-group-left" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; flex-shrink:0; white-space:nowrap;">
+        <select name="folder_cat" id="folderCategoryFilter" class="select" style="max-width:220px;" onchange="this.form.submit()">
+          <option value="">All Categories</option>
+          {% for cat in all_categories %}
+            <option value="{{ cat.id }}" {% if folder_cat == (cat.id|string) or folder_cat == (cat.sourceId|string) %}selected{% endif %}>{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+
+        <select name="folder_sort" id="folderSortSelect" class="select" style="min-width:160px; max-width:190px;" onchange="this.form.submit()">
+          <option value="sequence" {% if folder_sort == 'sequence' or not folder_sort %}selected{% endif %}>Sequence / Custom</option>
+          <option value="name" {% if folder_sort == 'name' %}selected{% endif %}>By Name</option>
+          <option value="newest" {% if folder_sort == 'newest' %}selected{% endif %}>Newest First</option>
+          <option value="oldest" {% if folder_sort == 'oldest' %}selected{% endif %}>Oldest First</option>
+        </select>
+
+        {% if folder_cat or (folder_sort and folder_sort not in ('sequence', '')) %}
+          <a href="/admin/instances/{{ instance.id }}/content?tab=folders{% if folder_search %}&folder_search={{ folder_search | urlencode }}{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
+        {% endif %}
+      </div>
+
+      <div class="search-group-right" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; margin-left:auto; white-space:nowrap; flex-shrink:0;">
+        <input type="text" name="folder_search" class="input" placeholder="Search categories & subcategories..." value="{{ folder_search }}" style="max-width:320px;">
+        <button type="submit" class="btn btn-outlined btn-filter">Search</button>
+        {% if folder_search %}
+          <a href="/admin/instances/{{ instance.id }}/content?tab=folders{% if folder_cat %}&folder_cat={{ folder_cat }}{% endif %}{% if folder_sort and folder_sort not in ('sequence', '') %}&folder_sort={{ folder_sort }}{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
   <div id="folderCardsContainer" style="display:flex; flex-direction:column; gap:1.25rem;">
+    {% if categories and categories|length > 0 %}
     {% for cat in categories %}
       <div class="card folder-card" data-cat-id="{{ cat.id }}" style="padding:1.25rem; border:1px solid var(--md-sys-color-outline-variant);">
         <!-- Category Folder Header -->
@@ -168,6 +208,18 @@
           {% endif %}
         </div>
       </div>
+    {% endfor %}
+    {% elif folder_cat or folder_search %}
+      <div class="card" style="padding:3rem; text-align:center; color:var(--md-sys-color-on-surface-variant);">
+        <div style="font-size:2.5rem; margin-bottom:0.75rem;">🔍</div>
+        <h3 style="margin:0 0 0.5rem 0;">No matching categories or subcategories found</h3>
+        <p style="margin:0 0 1.25rem 0; font-size:0.9rem;">
+          Try adjusting your search query or category filter.
+        </p>
+        <a href="/admin/instances/{{ instance.id }}/content?tab=folders" class="btn btn-outlined">
+          Clear Filters
+        </a>
+      </div>
     {% else %}
       <div class="card" style="padding:3rem; text-align:center; color:var(--md-sys-color-on-surface-variant);">
         <div style="font-size:2.5rem; margin-bottom:0.75rem;">📁</div>
@@ -184,75 +236,64 @@
           </a>
         </div>
       </div>
-    {% endfor %}
+    {% endif %}
   </div>
 </div>
 
 <!-- SECTION 2: REFERENCED ASSETS -->
 <div id="sectionAssets" style="display:{% if is_assets_tab %}block{% else %}none{% endif %};">
-  <!-- Instance Content Filters -->
-  <div class="card search-filter-card" style="padding:0.6rem 1rem; margin-bottom:1.25rem; border:1px solid var(--md-sys-color-outline-variant); overflow-x:auto;">
-    <form id="instanceFilterForm" method="GET" action="/admin/instances/{{ instance.id }}/content" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem; width:100%; min-width:max-content;">
+  <!-- Filters & Search (Referenced Assets) -->
+  <div class="card search-filter-card" style="padding:0.85rem 1rem; margin-bottom:1.5rem; overflow-x:auto;">
+    <form id="instanceFilterForm" method="GET" action="/admin/instances/{{ instance.id }}/content" onsubmit="handleAssetSearchSubmit(event)" class="search-filter-form" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem; width:100%;">
       <input type="hidden" name="tab" value="assets">
-      
-      <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:nowrap; flex-shrink:0;">
-        <label style="font-weight:600; font-size:0.82rem; color:var(--md-sys-color-on-surface-variant); display:inline-flex; align-items:center; gap:0.35rem; margin:0; white-space:nowrap;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-          </svg>
-          Filter:
-        </label>
 
-        <!-- Category Dropdown -->
-        <select name="categoryId" id="instanceCategoryFilter" class="select" style="min-width:140px; max-width:200px; height:30px; min-height:30px; padding:0.15rem 0.6rem; font-size:0.8rem; border-radius:6px;" onchange="handleInstanceCategoryChange(this.value)">
+      <div class="filter-group-left" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; flex-shrink:0; white-space:nowrap;">
+        <select name="categoryId" id="categoryFilter" class="select" style="max-width:200px;" onchange="handleCategoryFilterChange(this.value)">
           <option value="">All Categories</option>
-          {% for cat in categories %}
-            <option value="{{ cat.id }}" data-source-id="{{ cat.sourceId or cat.id }}" {% if selected_cat == cat.id or selected_cat == (cat.sourceId or cat.id) %}selected{% endif %}>
-              {{ cat.name }} ({{ cat.assets_count | default(0) }})
-            </option>
+          {% for cat in all_categories %}
+            <option value="{{ cat.id }}" data-source-id="{{ cat.sourceId or cat.id }}" {% if selected_cat == (cat.id|string) or selected_cat == (cat.sourceId|string) %}selected{% endif %}>{{ cat.name }}</option>
           {% endfor %}
         </select>
 
-        <!-- Subcategory Dropdown (Relevant to selected category) -->
-        <select name="subCategoryId" id="instanceSubCategoryFilter" class="select" style="min-width:140px; max-width:200px; height:30px; min-height:30px; padding:0.15rem 0.6rem; font-size:0.8rem; border-radius:6px;" onchange="handleInstanceSubCategoryChange(this)">
+        <select name="subCategoryId" id="subCategoryFilter" class="select" style="max-width:200px;" onchange="handleSubCategoryFilterChange(this)">
           <option value="">All Subcategories</option>
-          {% for sub in subcategories %}
-            <option value="{{ sub.id }}" data-cat-id="{{ sub.categoryId }}" data-source-id="{{ sub.sourceId or sub.id }}" {% if selected_subcat == sub.id or selected_subcat == (sub.sourceId or sub.id) %}selected{% endif %}>
-              {{ sub.name }} ({{ sub.assets_count | default(0) }})
-            </option>
+          {% for sub in all_subcategories %}
+            <option value="{{ sub.id }}" data-category-id="{{ sub.canonicalCategoryId or sub.categoryId }}" {% if selected_subcat == (sub.id|string) or selected_subcat == (sub.sourceId|string) %}selected{% endif %}>{{ sub.name }}</option>
           {% endfor %}
         </select>
 
-        <!-- Sort Dropdown -->
-        <select name="sort" id="instanceSortFilter" class="select" style="min-width:140px; max-width:180px; height:30px; min-height:30px; padding:0.15rem 0.6rem; font-size:0.8rem; border-radius:6px;" onchange="handleInstanceSortChange(this.value)">
+        <select name="type" id="typeFilter" class="select" style="min-width:130px; max-width:160px;" onchange="applyAssetFilters()">
+          <option value="">All Types</option>
+          <option value="images" {% if selected_type == 'images' %}selected{% endif %}>Images</option>
+          <option value="videos" {% if selected_type == 'videos' %}selected{% endif %}>Videos</option>
+          <option value="audios" {% if selected_type == 'audios' %}selected{% endif %}>Audios</option>
+          <option value="json" {% if selected_type == 'json' %}selected{% endif %}>JSON</option>
+          <option value="frames" {% if selected_type == 'frames' %}selected{% endif %}>Frames</option>
+        </select>
+
+        <select name="sort" id="assetSortSelect" class="select" style="min-width:160px; max-width:190px;" onchange="applyAssetFilters()">
           <option value="sequence" {% if current_sort == 'sequence' or not current_sort %}selected{% endif %}>Sequence / Custom</option>
           <option value="name" {% if current_sort == 'name' %}selected{% endif %}>By Name</option>
           <option value="newest" {% if current_sort == 'newest' %}selected{% endif %}>Newest First</option>
-          <option value="oldest" {% if current_sort == 'oldest' %}selected{% endif %}>Oldest First</option>
           <option value="most_viewed" {% if current_sort == 'most_viewed' %}selected{% endif %}>Most Viewed</option>
           <option value="most_downloaded" {% if current_sort == 'most_downloaded' %}selected{% endif %}>Most Downloaded</option>
+          <option value="oldest" {% if current_sort == 'oldest' %}selected{% endif %}>Oldest First</option>
         </select>
 
-        <!-- Reset Filters Button -->
-        {% if selected_cat or selected_subcat or (current_sort and current_sort not in ('sequence', '')) %}
-          <a href="/admin/instances/{{ instance.id }}/content?tab=assets" onclick="clearInstanceFilters(event)" class="btn btn-outlined btn-filter" style="height:30px; min-height:30px; padding:0.15rem 0.65rem; font-size:0.78rem; border-radius:6px; display:inline-flex; align-items:center; gap:0.3rem; white-space:nowrap;" title="Clear all active filters">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-            Clear Filters
-          </a>
-        {% endif %}
+        <a href="javascript:void(0)" id="assetFilterClearBtn" onclick="handleClearAssetFilters(event, 'filters')" class="btn btn-outlined btn-filter" style="display:{% if selected_cat or selected_subcat or selected_type or (current_sort and current_sort not in ('sequence', '')) %}inline-flex{% else %}none{% endif %};">Clear</a>
       </div>
 
-      <div style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant); margin-left:auto; white-space:nowrap; flex-shrink:0;">
-        Showing <strong>{{ assets|length }}</strong> referenced asset{% if assets|length != 1 %}s{% endif %}
+      <div class="search-group-right" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; margin-left:auto; white-space:nowrap; flex-shrink:0;">
+        <input type="text" name="q" id="assetSearchInput" class="input" placeholder="Search asset name..." value="{{ search }}" style="max-width:260px;">
+        <button type="submit" class="btn btn-outlined btn-filter">Search</button>
+        <a href="javascript:void(0)" id="assetSearchClearBtn" onclick="handleClearAssetFilters(event, 'search')" class="btn btn-outlined btn-filter" style="display:{% if search %}inline-flex{% else %}none{% endif %};">Clear</a>
       </div>
     </form>
   </div>
 
-  <!-- Referenced Assets Table -->
-  <div class="table-responsive card" style="padding:0; margin-bottom:2rem;">
+  <div id="assetTableContainer">
+    <!-- Referenced Assets Table -->
+    <div class="table-responsive card" style="padding:0; margin-bottom:2rem;">
     <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center;">
       <h3 style="margin:0;">Referenced Creative Assets ({{ assets|length }})</h3>
       <span style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">
@@ -352,13 +393,22 @@
           </tr>
         {% else %}
           <tr>
-            <td colspan="11" style="text-align:center; padding:2.5rem; color:var(--md-sys-color-on-surface-variant);">
-              No assets referenced in this instance yet. Click "+ Add from Central Library" to link assets.
+            <td colspan="13" style="text-align:center; padding:2.5rem; color:var(--md-sys-color-on-surface-variant);">
+              {% if selected_cat or selected_subcat or selected_type or search %}
+                <div style="font-size:1.5rem; margin-bottom:0.5rem;">🔍</div>
+                <div style="font-weight:600; margin-bottom:0.25rem;">No assets match your search/filter criteria</div>
+                <p style="font-size:0.85rem; margin:0 0 0.75rem 0;">Try adjusting or clearing your filters.</p>
+                <a href="javascript:void(0)" onclick="handleClearAssetFilters(event, 'all')" class="btn btn-outlined btn-filter">Clear Filters</a>
+              {% else %}
+                <div style="font-size:1.5rem; margin-bottom:0.5rem;">🖼️</div>
+                No assets referenced in this instance yet. Click "+ Add from Central Library" to link assets.
+              {% endif %}
             </td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
+  </div>
   </div>
 </div>
 
@@ -608,108 +658,169 @@ async function removeReference(assetId) {
   }
 }
 
-async function applyInstanceFilters() {
-  const catSelect = document.getElementById('instanceCategoryFilter');
-  const subSelect = document.getElementById('instanceSubCategoryFilter');
-  const sortSelect = document.getElementById('instanceSortFilter');
-  const catVal = catSelect ? catSelect.value : '';
-  const subVal = subSelect ? subSelect.value : '';
-  const sortVal = sortSelect ? sortSelect.value : '';
+// --- Referenced Assets AJAX Filtering & Subcategory Dynamic Scoping ---
+function filterSubcategoryOptions(selectedCatId) {
+  const subSelect = document.getElementById('subCategoryFilter');
+  if (!subSelect) return;
+  const currentSubVal = subSelect.value;
+  let currentSubValid = false;
+
+  const catSelect = document.getElementById('categoryFilter');
+  let validCatIds = [];
+  if (selectedCatId) {
+    validCatIds.push(selectedCatId);
+    if (catSelect) {
+      const selectedOpt = catSelect.options[catSelect.selectedIndex];
+      if (selectedOpt && selectedOpt.dataset.sourceId) {
+        validCatIds.push(selectedOpt.dataset.sourceId);
+      }
+    }
+  }
+
+  Array.from(subSelect.options).forEach((opt, idx) => {
+    if (idx === 0) return; // Keep "All Subcategories"
+    const catId = opt.dataset.categoryId || opt.dataset.catId || '';
+    if (!selectedCatId || validCatIds.includes(catId)) {
+      opt.hidden = false;
+      opt.style.display = '';
+      if (opt.value === currentSubVal) currentSubValid = true;
+    } else {
+      opt.hidden = true;
+      opt.style.display = 'none';
+    }
+  });
+
+  if (selectedCatId && !currentSubValid) {
+    subSelect.value = '';
+  }
+}
+
+function handleCategoryFilterChange(catId) {
+  filterSubcategoryOptions(catId);
+  applyAssetFilters();
+}
+
+function handleSubCategoryFilterChange(subSelect) {
+  const opt = subSelect.options[subSelect.selectedIndex];
+  const catSelect = document.getElementById('categoryFilter');
+  if (opt && opt.dataset.categoryId && catSelect && !catSelect.value) {
+    catSelect.value = opt.dataset.categoryId;
+    filterSubcategoryOptions(opt.dataset.categoryId);
+  }
+  applyAssetFilters();
+}
+
+function handleAssetSearchSubmit(e) {
+  if (e) e.preventDefault();
+  applyAssetFilters();
+}
+
+function handleClearAssetFilters(e, clearType) {
+  if (e) e.preventDefault();
+  if (clearType === 'search') {
+    const qInp = document.getElementById('assetSearchInput');
+    if (qInp) qInp.value = '';
+  } else if (clearType === 'filters') {
+    const catSelect = document.getElementById('categoryFilter');
+    const subSelect = document.getElementById('subCategoryFilter');
+    const typeSelect = document.getElementById('typeFilter');
+    const sortSelect = document.getElementById('assetSortSelect');
+    if (catSelect) catSelect.value = '';
+    if (subSelect) subSelect.value = '';
+    if (typeSelect) typeSelect.value = '';
+    if (sortSelect) sortSelect.value = 'sequence';
+    filterSubcategoryOptions('');
+  } else {
+    // all
+    const catSelect = document.getElementById('categoryFilter');
+    const subSelect = document.getElementById('subCategoryFilter');
+    const typeSelect = document.getElementById('typeFilter');
+    const sortSelect = document.getElementById('assetSortSelect');
+    const qInp = document.getElementById('assetSearchInput');
+    if (catSelect) catSelect.value = '';
+    if (subSelect) subSelect.value = '';
+    if (typeSelect) typeSelect.value = '';
+    if (sortSelect) sortSelect.value = 'sequence';
+    if (qInp) qInp.value = '';
+    filterSubcategoryOptions('');
+  }
+  applyAssetFilters();
+}
+
+async function applyAssetFilters() {
+  const catSelect = document.getElementById('categoryFilter');
+  const subSelect = document.getElementById('subCategoryFilter');
+  const typeSelect = document.getElementById('typeFilter');
+  const sortSelect = document.getElementById('assetSortSelect');
+  const qInput = document.getElementById('assetSearchInput');
+
+  const selectedCat = catSelect ? catSelect.value : '';
+  const selectedSub = subSelect ? subSelect.value : '';
+  const selectedType = typeSelect ? typeSelect.value : '';
+  const selectedSort = sortSelect ? sortSelect.value : 'sequence';
+  const selectedQ = qInput ? qInput.value.trim() : '';
 
   const params = new URLSearchParams();
   params.set('tab', 'assets');
-  if (catVal) params.set('categoryId', catVal);
-  if (subVal) params.set('subCategoryId', subVal);
-  if (sortVal && sortVal !== 'sequence') params.set('sort', sortVal);
+  if (selectedCat) params.set('categoryId', selectedCat);
+  if (selectedSub) params.set('subCategoryId', selectedSub);
+  if (selectedType) params.set('type', selectedType);
+  if (selectedSort && selectedSort !== 'sequence') params.set('sort', selectedSort);
+  if (selectedQ) params.set('q', selectedQ);
 
-  const fetchUrl = `/admin/instances/${instanceId}/content?${params.toString()}`;
+  const fetchUrl = `${window.location.pathname}?${params.toString()}`;
   window.history.replaceState({}, '', fetchUrl);
 
-  const tableWrap = document.querySelector('.table-responsive');
-  if (tableWrap) tableWrap.style.opacity = '0.5';
+  const filterClearBtn = document.getElementById('assetFilterClearBtn');
+  const hasFilterActive = Boolean(selectedCat || selectedSub || selectedType || (selectedSort && selectedSort !== 'sequence'));
+  if (filterClearBtn) {
+    filterClearBtn.style.display = hasFilterActive ? 'inline-flex' : 'none';
+  }
+
+  const searchClearBtn = document.getElementById('assetSearchClearBtn');
+  if (searchClearBtn) {
+    searchClearBtn.style.display = selectedQ ? 'inline-flex' : 'none';
+  }
+
+  const container = document.getElementById('assetTableContainer');
+  if (container) container.style.opacity = '0.35';
 
   try {
     const res = await fetch(fetchUrl);
-    if (!res.ok) throw new Error('Failed to fetch filtered content');
+    if (!res.ok) throw new Error('Failed to fetch filtered assets');
     const htmlText = await res.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(htmlText, 'text/html');
+    const doc = new DOMParser().parseFromString(htmlText, 'text/html');
 
-    // Replace the filter toolbar card
-    const newFilterCard = doc.querySelector('.search-filter-card');
-    const curFilterCard = document.querySelector('.search-filter-card');
-    if (newFilterCard && curFilterCard) {
-      curFilterCard.innerHTML = newFilterCard.innerHTML;
+    const newContainer = doc.getElementById('assetTableContainer');
+    if (newContainer && container) {
+      container.innerHTML = newContainer.innerHTML;
     }
 
-    // Replace table
-    const newTable = doc.getElementById('reorderableTable');
-    const curTable = document.getElementById('reorderableTable');
-    if (newTable && curTable) {
-      curTable.innerHTML = newTable.innerHTML;
+    const newTabBtn = doc.getElementById('tabBtnAssets');
+    const curTabBtn = document.getElementById('tabBtnAssets');
+    if (newTabBtn && curTabBtn) {
+      curTabBtn.innerHTML = newTabBtn.innerHTML;
     }
 
-    // Replace asset count in header
-    const newH3 = doc.querySelector('#sectionAssets h3');
-    const curH3 = document.querySelector('#sectionAssets h3');
-    if (newH3 && curH3) {
-      curH3.textContent = newH3.textContent;
-    }
-
-    // Re-initialize drag & drop for newly loaded rows (only when in sequence sort)
     if (typeof initAssetTableDragDrop === 'function') {
       initAssetTableDragDrop();
     }
   } catch (err) {
-    console.error('Filter fetch error, falling back to form submit:', err);
-    document.getElementById('instanceFilterForm').submit();
+    console.error('Error applying asset filters:', err);
   } finally {
-    if (tableWrap) tableWrap.style.opacity = '1';
+    if (container) container.style.opacity = '1';
   }
 }
 
-function handleInstanceCategoryChange(catId) {
-  const subSelect = document.getElementById('instanceSubCategoryFilter');
-  if (subSelect) {
-    subSelect.value = '';
-  }
-  applyInstanceFilters();
-}
-
-function handleInstanceSubCategoryChange(subSelect) {
-  const catSelect = document.getElementById('instanceCategoryFilter');
-  const opt = subSelect.options[subSelect.selectedIndex];
-  if (opt && opt.dataset.catId && (!catSelect.value || catSelect.value === '')) {
-    for (let i = 0; i < catSelect.options.length; i++) {
-      const cOpt = catSelect.options[i];
-      if (cOpt.value === opt.dataset.catId || cOpt.dataset.sourceId === opt.dataset.catId) {
-        catSelect.selectedIndex = i;
-        break;
-      }
-    }
-  }
-  applyInstanceFilters();
-}
-
-function handleInstanceSortChange(sortVal) {
-  applyInstanceFilters();
-}
-
-function clearInstanceFilters(e) {
-  if (e) e.preventDefault();
-  const catSelect = document.getElementById('instanceCategoryFilter');
-  const subSelect = document.getElementById('instanceSubCategoryFilter');
-  const sortSelect = document.getElementById('instanceSortFilter');
-  if (catSelect) catSelect.value = '';
-  if (subSelect) subSelect.value = '';
-  if (sortSelect) sortSelect.value = 'sequence';
-  applyInstanceFilters();
+const curCatInit = document.getElementById('categoryFilter');
+if (curCatInit && curCatInit.value) {
+  filterSubcategoryOptions(curCatInit.value);
 }
 
 // On fresh load without query params, check saved tab in sessionStorage
 const contentParams = new URLSearchParams(window.location.search);
 const savedTab = sessionStorage.getItem('instance_active_tab_' + instanceId);
-if (!contentParams.has('tab') && !contentParams.has('categoryId') && !contentParams.has('subCategoryId') && !contentParams.has('sort')) {
+if (!contentParams.has('tab') && !contentParams.has('categoryId') && !contentParams.has('subCategoryId') && !contentParams.has('sort') && !contentParams.has('type') && !contentParams.has('q') && !contentParams.has('folder_cat') && !contentParams.has('folder_search') && !contentParams.has('folder_sort')) {
   if (savedTab === 'assets') {
     switchInstanceTab('assets');
   }

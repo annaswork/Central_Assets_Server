@@ -1,5 +1,7 @@
 """Manager portal App Instance routes and central library importing."""
 
+from urllib.parse import quote_plus
+
 from fastapi import APIRouter, Depends, Form, Query, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -13,6 +15,7 @@ from controller.app_instance_controller import (
     list_app_instances,
     update_app_instance,
 )
+from controller.asset_controller import asset_has_type
 from controller.base_controller import serialize_mongo_doc
 from controller.catalog_controller import (
     get_resolved_assets,
@@ -22,6 +25,7 @@ from controller.catalog_controller import (
 from controller.category_controller import list_categories
 from controller.manager_controller import (
     create_access_request,
+    create_instance_creation_request,
     get_manager_accessible_instance_ids,
     get_manager_by_id,
     list_manager_access_requests,
@@ -57,9 +61,11 @@ async def manager_list_instances(
     request: Request,
     page: int = Query(default=1, ge=1),
     search: str | None = None,
+    msg: str | None = Query(default=None),
+    msg_type: str | None = Query(default="info"),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
-    """List app instances accessible to this manager, and list available apps to request access."""
+    """List app instances accessible to this manager, creation requests, and available apps to request access."""
     session = get_current_manager_session(request)
     if not session:
         return RedirectResponse(url="/manager/login", status_code=303)
@@ -86,9 +92,20 @@ async def manager_list_instances(
     other_cursor = db[APP_INSTANCES].find(other_query).sort("name", 1).limit(50)
     other_instances_raw = await other_cursor.to_list(length=50)
 
-    # Fetch user's existing pending requests to show pending badges
+    # Fetch user's existing requests
     requests = await list_manager_access_requests(db, user_id)
-    pending_app_ids = {r["app_instance_id"] for r in requests if r.get("status") == "pending"}
+    pending_app_ids = {
+        str(r.get("app_instance_id"))
+        for r in requests
+        if r.get("status") == "pending" and r.get("request_type") != "create_instance" and r.get("app_instance_id")
+    }
+
+    creation_requests = [
+        r for r in requests if r.get("request_type") == "create_instance"
+    ]
+    for cr in creation_requests:
+        target_id_str = str(cr.get("target_instance_id") or "")
+        cr["is_pending_access_request"] = bool(target_id_str and target_id_str in pending_app_ids)
 
     other_instances = []
     for o in other_instances_raw:
@@ -109,16 +126,53 @@ async def manager_list_instances(
             "instances": instances_page.get("items", []),
             "pagination": instances_page.get("pagination", {}),
             "other_instances": other_instances,
+            "creation_requests": creation_requests,
+            "flash_message": msg,
+            "flash_type": msg_type,
             "search": search or "",
             "active_tab": "instances",
         },
     )
 
 
+@router.post("/request-creation")
+async def manager_request_creation(
+    request: Request,
+    name: str = Form(...),
+    package_name: str | None = Form(default=None),
+    notes: str | None = Form(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Manager asks Admin to provision a new App Instance."""
+    session = get_current_manager_session(request)
+    if not session:
+        return RedirectResponse(url="/manager/login", status_code=303)
+
+    user_id = session["user_id"]
+    try:
+        await create_instance_creation_request(
+            db,
+            manager_id=user_id,
+            requested_app_name=name,
+            requested_package_name=package_name,
+            notes=notes,
+        )
+        success_msg = f"Request to create app '{name.strip()}' submitted to administrators for review."
+        return RedirectResponse(
+            url=f"/manager/instances?msg={quote_plus(success_msg)}&msg_type=success",
+            status_code=303,
+        )
+    except Exception as err:
+        return RedirectResponse(
+            url=f"/manager/instances?msg={quote_plus(str(err))}&msg_type=error",
+            status_code=303,
+        )
+
+
 @router.get("/new")
 @router.post("/new")
 async def manager_create_instance_forbidden() -> Response:
-    """Managers cannot create app instances; they can only request access to available apps."""
+    """Redirect manual /new to manager instances list."""
     return RedirectResponse(url="/manager/instances", status_code=303)
 
 
@@ -129,6 +183,16 @@ async def manager_instance_content(
     request: Request,
     active_section: str = Query(default="folders"),
     category_id: str | None = None,
+    sub_category_id: str | None = None,
+    categoryId: str | None = None,
+    subCategoryId: str | None = None,
+    type: str | None = None,
+    sort: str | None = None,
+    q: str | None = None,
+    search: str | None = None,
+    folder_cat: str | None = None,
+    folder_sort: str | None = None,
+    folder_search: str | None = None,
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     """View and manage content imported into this app instance with full folder hierarchy."""
@@ -140,7 +204,11 @@ async def manager_instance_content(
     manager = await get_manager_by_id(db, user_id)
 
     # Scoping check: verify manager has access to this instance
-    await verify_manager_instance_access(db, user_id, instance_id)
+    try:
+        await verify_manager_instance_access(db, user_id, instance_id)
+    except (ForbiddenError, NotFoundError):
+        msg = quote_plus("Access to this app instance has been revoked or is not available.")
+        return RedirectResponse(url=f"/manager/instances?msg={msg}&msg_type=error", status_code=303)
 
     inst_oid = to_object_id(instance_id)
     instance = await get_app_instance(db, instance_id)
@@ -166,7 +234,73 @@ async def manager_instance_content(
             {"app_instance_id": inst_oid, "sub_category_id": s_src_oid, "deleted_at": None}
         )
 
-    resolved_assets = await get_resolved_assets(db, app_instance_id=instance_id, category_id=category_id)
+    # Build category ID alias map: maps both cat["id"] and cat["sourceId"] to cat["id"]
+    cat_alias_map = {}
+    for c in all_categories:
+        cid = str(c.get("id") or "")
+        csrc = str(c.get("sourceId") or "")
+        if cid:
+            cat_alias_map[cid] = cid
+        if csrc:
+            cat_alias_map[csrc] = cid
+
+    for s in all_subcategories:
+        raw_cat_id = str(s.get("categoryId") or "")
+        s["canonicalCategoryId"] = cat_alias_map.get(raw_cat_id, raw_cat_id)
+        s["categoryId"] = s["canonicalCategoryId"]
+        s["category_id"] = s["canonicalCategoryId"]
+
+    cat_id = category_id or categoryId
+    sub_id = sub_category_id or subCategoryId
+    search_query = (q or search or "").strip()
+    clean_type = (type or "").strip().lower()
+    s_order = sort or "sequence"
+
+    # Identify all valid identifier forms for the selected category (id and sourceId)
+    valid_cat_ids: set[str] = set()
+    selected_cat_val = ""
+    if cat_id:
+        for c in all_categories:
+            if str(c.get("id")) == cat_id or str(c.get("sourceId")) == cat_id:
+                selected_cat_val = str(c.get("id") or cat_id)
+                if c.get("id"):
+                    valid_cat_ids.add(str(c["id"]))
+                if c.get("sourceId"):
+                    valid_cat_ids.add(str(c["sourceId"]))
+                break
+        if not valid_cat_ids:
+            valid_cat_ids.add(str(cat_id))
+            selected_cat_val = str(cat_id)
+
+    filtered_subcategories = (
+        [s for s in all_subcategories if str(s.get("canonicalCategoryId")) in valid_cat_ids or str(s.get("categoryId")) in valid_cat_ids]
+        if cat_id
+        else all_subcategories
+    )
+
+    selected_subcat_val = ""
+    if sub_id:
+        for s in all_subcategories:
+            if str(s.get("id")) == sub_id or str(s.get("sourceId")) == sub_id:
+                selected_subcat_val = str(s.get("id") or sub_id)
+                break
+        if not selected_subcat_val:
+            selected_subcat_val = str(sub_id)
+
+    resolved_assets = await get_resolved_assets(
+        db,
+        app_instance_id=instance_id,
+        category_id=cat_id,
+        sub_category_id=sub_id,
+        sort=s_order,
+    )
+
+    # Filter assets by media type if requested
+    if clean_type:
+        resolved_assets = [
+            a for a in resolved_assets
+            if asset_has_type(a.get("more_fields") or a.get("moreFields"), clean_type, a.get("thumbnail_url"))
+        ]
 
     # Also load central library categories & subcategories for the import picker modal
     central_cats = await list_categories(db, page=1, page_size=200)
@@ -212,6 +346,53 @@ async def manager_instance_content(
             a["subcategory_name"] = sub_map.get(s_id) or a.get("subcategory_name") or "—"
         a["subCategoryName"] = a["subcategory_name"]
 
+    # Filter assets by search query if requested
+    if search_query:
+        sq_lower = search_query.lower()
+        resolved_assets = [
+            a for a in resolved_assets
+            if sq_lower in (a.get("name") or "").lower()
+            or sq_lower in (a.get("category_name") or "").lower()
+            or sq_lower in (a.get("subcategory_name") or "").lower()
+        ]
+
+    # Handle Category & Subcategory folder filtering (Section 1)
+    displayed_categories = list(all_categories)
+    if folder_cat:
+        displayed_categories = [
+            c for c in displayed_categories
+            if str(c.get("id")) == folder_cat or str(c.get("sourceId")) == folder_cat
+        ]
+
+    if folder_search and folder_search.strip():
+        fs_lower = folder_search.strip().lower()
+        displayed_categories = [
+            c for c in displayed_categories
+            if fs_lower in (c.get("name") or "").lower()
+            or any(
+                fs_lower in (s.get("name") or "").lower()
+                for s in all_subcategories
+                if str(s.get("categoryId")) in (str(c.get("id")), str(c.get("sourceId")))
+            )
+        ]
+
+    if folder_sort:
+        fs_clean = folder_sort.strip().lower()
+        if fs_clean == "name":
+            displayed_categories.sort(key=lambda c: (c.get("name") or "").lower())
+        elif fs_clean == "newest":
+            displayed_categories.sort(key=lambda c: str(c.get("created_at") or ""), reverse=True)
+        elif fs_clean == "oldest":
+            displayed_categories.sort(key=lambda c: str(c.get("created_at") or ""))
+        elif fs_clean == "sequence":
+            displayed_categories.sort(key=lambda c: c.get("sequence", 0))
+
+    # Auto-select active section
+    if request.query_params.get("tab") == "assets" or request.query_params.get("active_section") == "assets" or cat_id or sub_id or clean_type or search_query:
+        active_section = "assets"
+    elif folder_cat or folder_search or (folder_sort and folder_sort not in ("sequence", "")):
+        active_section = "folders"
+
     return templates.TemplateResponse(
         request=request,
         name="manager/instances/content.html",
@@ -220,13 +401,27 @@ async def manager_instance_content(
             "manager": manager,
             "instance": instance,
             "is_owner": is_owner,
-            "categories": all_categories,
+            "categories": displayed_categories,
+            "all_categories": all_categories,
+            "subcategories": filtered_subcategories,
             "all_subcategories": all_subcategories,
             "assets": resolved_assets,
             "central_categories": central_cats.get("items", []),
             "central_subcategories": central_subs.get("items", []),
             "active_section": active_section,
-            "selected_category_id": category_id or "",
+            "selected_cat": selected_cat_val,
+            "selected_subcat": selected_subcat_val,
+            "selected_category_id": selected_cat_val,
+            "selected_subcategory_id": selected_subcat_val,
+            "selected_type": clean_type,
+            "type": clean_type,
+            "current_sort": s_order,
+            "sort": s_order,
+            "search": search_query,
+            "q": search_query,
+            "folder_cat": folder_cat or "",
+            "folder_sort": folder_sort or "sequence",
+            "folder_search": folder_search or "",
             "active_tab": "instances",
         },
     )
@@ -309,10 +504,10 @@ async def manager_request_access_submit(
     user_id = session["user_id"]
     try:
         await create_access_request(db, manager_id=user_id, app_instance_id=app_instance_id, notes=notes)
-    except (ConflictError, NotFoundError):
-        pass
-
-    return RedirectResponse(url="/manager/instances", status_code=303)
+        msg = "Access request submitted to administrators for review."
+        return RedirectResponse(url=f"/manager/instances?msg={quote_plus(msg)}&msg_type=success", status_code=303)
+    except Exception as err:
+        return RedirectResponse(url=f"/manager/instances?msg={quote_plus(str(err))}&msg_type=error", status_code=303)
 
 
 @router.patch("/{instance_id}/assets/{assetId}/override")

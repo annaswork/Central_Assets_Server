@@ -1,13 +1,15 @@
 {% extends "base.html" %}
 
-{% block title %}Access Request Queue — Asset Admin{% endblock %}
+{% block title %}App Instance Requests — Asset Admin{% endblock %}
 
 {% block content %}
+{% include "partials/flash.html" %}
+
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
   <div>
-    <h1 style="margin:0;">App Instance Access Requests</h1>
+    <h1 style="margin:0;">App Instance Requests</h1>
     <p style="color:var(--md-sys-color-on-surface-variant); margin:0.25rem 0 0 0;">
-      Incoming requests from Managers to access existing application instances.
+      Incoming requests from Managers to create new App Instances or access existing applications.
     </p>
   </div>
 </div>
@@ -20,8 +22,11 @@
   <a href="/admin/access-requests?status=approved" class="btn {% if current_status == 'approved' %}btn-primary{% else %}btn-outlined{% endif %} btn-sm">
     Approved
   </a>
+  <a href="/admin/access-requests?status=revoked" class="btn {% if current_status == 'revoked' %}btn-primary{% else %}btn-outlined{% endif %} btn-sm">
+    Revoked
+  </a>
   <a href="/admin/access-requests?status=denied" class="btn {% if current_status == 'denied' %}btn-primary{% else %}btn-outlined{% endif %} btn-sm">
-    Denied
+    Denied / Rejected
   </a>
   <a href="/admin/access-requests?status=all" class="btn {% if current_status == 'all' %}btn-primary{% else %}btn-outlined{% endif %} btn-sm">
     All Requests
@@ -35,10 +40,11 @@
       <thead>
         <tr>
           <th>Requesting Manager</th>
-          <th>Requested App Instance</th>
-          <th>Status</th>
-          <th style="width:160px;">Requested Date</th>
-          <th style="width:180px; text-align:right;">Actions</th>
+          <th style="width:140px;">Request Type</th>
+          <th>Requested Application & Details</th>
+          <th style="width:130px; text-align:center;">Status</th>
+          <th style="width:150px;">Requested Date</th>
+          <th style="width:220px; text-align:right;">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -52,18 +58,46 @@
                 </div>
               </td>
               <td>
-                <div style="font-weight:600;">📱 {{ r.app_instance_name }}</div>
-                <div style="font-size:0.8rem; color:var(--md-sys-color-outline);">
-                  Package: <code>{{ r.app_package_name or '—' }}</code>
-                </div>
+                {% if r.request_type == 'create_instance' %}
+                  <span class="badge badge-primary" style="font-size:0.75rem; padding:0.25rem 0.55rem; background:var(--md-sys-color-primary-container); color:var(--md-sys-color-on-primary-container);">
+                    🆕 Create App
+                  </span>
+                {% else %}
+                  <span class="badge" style="font-size:0.75rem; padding:0.25rem 0.55rem; background:var(--md-sys-color-surface-container-high);">
+                    🔑 App Access
+                  </span>
+                {% endif %}
               </td>
               <td>
+                <div style="font-weight:600; font-size:0.95rem; display:flex; align-items:center; gap:0.4rem;">
+                  <span>{% if r.request_type == 'create_instance' %}📱{% else %}🔗{% endif %}</span>
+                  <span>{{ r.app_instance_name }}</span>
+                </div>
+                <div style="font-size:0.8rem; color:var(--md-sys-color-outline); margin-top:0.15rem;">
+                  Package: <code>{{ r.app_package_name or 'Not specified' }}</code>
+                </div>
+                {% if r.notes %}
+                  <div style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.25rem; font-style:italic;">
+                    "{{ r.notes }}"
+                  </div>
+                {% endif %}
+                {% if r.rejection_reason %}
+                  <div style="font-size:0.8rem; color:var(--md-sys-color-error); margin-top:0.25rem;">
+                    <strong>Rejection Reason:</strong> {{ r.rejection_reason }}
+                  </div>
+                {% endif %}
+              </td>
+              <td style="text-align:center;">
                 {% if r.status == 'pending' %}
-                  <span class="badge badge-warning">Pending Review</span>
+                  <span class="badge badge-warning" style="font-size:0.78rem;">Pending Review</span>
                 {% elif r.status == 'approved' %}
-                  <span class="badge badge-success">Approved & Granted</span>
+                  <span class="badge badge-success" style="font-size:0.78rem;">
+                    {% if r.request_type == 'create_instance' %}Created & Granted{% else %}Approved & Granted{% endif %}
+                  </span>
+                {% elif r.status == 'revoked' %}
+                  <span class="badge badge-error" style="font-size:0.78rem;">🚫 Revoked</span>
                 {% elif r.status == 'denied' %}
-                  <span class="badge badge-error">Denied</span>
+                  <span class="badge badge-error" style="font-size:0.78rem;">Rejected</span>
                 {% endif %}
               </td>
               <td style="color:var(--md-sys-color-on-surface-variant); font-size:0.85rem;">
@@ -71,17 +105,29 @@
               </td>
               <td style="text-align:right;">
                 {% if r.status == 'pending' %}
-                  <div style="display:inline-flex; gap:0.35rem;">
-                    <!-- Approve -->
+                  <div style="display:inline-flex; gap:0.4rem; justify-content:flex-end;">
+                    <!-- Approve / Accept -->
                     <form method="POST" action="/admin/access-requests/{{ r.id }}/approve" style="display:inline; margin:0;">
-                      <button type="submit" class="btn btn-primary btn-sm">Approve</button>
+                      {% if r.request_type == 'create_instance' %}
+                        <button type="submit" class="btn btn-primary btn-sm" style="display:inline-flex; align-items:center; gap:0.25rem;" title="Create this app instance and assign access to this manager">
+                          <span>✅</span>
+                          <span>Accept & Create App</span>
+                        </button>
+                      {% else %}
+                        <button type="submit" class="btn btn-primary btn-sm">Approve</button>
+                      {% endif %}
                     </form>
 
-                    <!-- Deny -->
-                    <form method="POST" action="/admin/access-requests/{{ r.id }}/deny" style="display:inline; margin:0;" onsubmit="return confirm('Deny this access request?');">
-                      <button type="submit" class="btn btn-outlined btn-sm" style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);">Deny</button>
-                    </form>
+                    <!-- Deny / Reject -->
+                    <button type="button" class="btn btn-outlined btn-sm" onclick="promptDenyRequest('{{ r.id }}', '{{ r.app_instance_name }}', {{ 'true' if r.request_type == 'create_instance' else 'false' }})" style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);">
+                      Reject
+                    </button>
                   </div>
+                {% elif r.status == 'approved' and r.target_instance_id %}
+                  <a href="/admin/instances/{{ r.target_instance_id }}/content" class="btn btn-outlined btn-sm" style="display:inline-flex; align-items:center; gap:0.3rem;">
+                    <span>⚙️</span>
+                    <span>View App</span>
+                  </a>
                 {% else %}
                   <span style="font-size:0.85rem; color:var(--md-sys-color-outline);">
                     {{ r.status|capitalize }}
@@ -92,7 +138,7 @@
           {% endfor %}
         {% else %}
           <tr>
-            <td colspan="5" style="text-align:center; padding:3.5rem 1rem; color:var(--md-sys-color-on-surface-variant);">
+            <td colspan="6" style="text-align:center; padding:3.5rem 1rem; color:var(--md-sys-color-on-surface-variant);">
               <div style="font-size:2rem; margin-bottom:0.5rem;">📥</div>
               <div style="font-weight:600;">No {{ current_status }} requests</div>
               <div style="font-size:0.85rem; margin-top:0.25rem;">Incoming requests from managers will appear here.</div>
@@ -103,4 +149,63 @@
     </table>
   </div>
 </div>
+
+<!-- Modal: Deny / Reject Request with Reason -->
+<div id="denyModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.6); align-items:center; justify-content:center; backdrop-filter:blur(3px);">
+  <div class="card" style="max-width:480px; width:92%; padding:1.5rem; border-radius:12px; border:1px solid var(--md-sys-color-outline-variant); box-shadow:0 12px 36px rgba(0,0,0,0.35);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+      <h3 id="denyModalTitle" style="margin:0; font-size:1.15rem; color:var(--md-sys-color-error);">Reject Request</h3>
+      <button type="button" onclick="closeDenyModal()" style="background:transparent; border:none; font-size:1.3rem; cursor:pointer; color:var(--md-sys-color-outline);">✕</button>
+    </div>
+    <p id="denyModalDesc" style="margin:0 0 1rem 0; font-size:0.88rem; color:var(--md-sys-color-on-surface-variant);">
+      Are you sure you want to reject this request?
+    </p>
+    <form id="denyForm" method="POST" action="">
+      <div style="margin-bottom:1.25rem;">
+        <label for="denyReason" class="label" style="display:block; font-weight:600; font-size:0.85rem; margin-bottom:0.35rem;">
+          Reason for rejection (Optional - sent to manager)
+        </label>
+        <textarea id="denyReason" name="reason" class="textarea" rows="3" style="width:100%; box-sizing:border-box;" placeholder="e.g. App duplicate already exists / Invalid naming convention..."></textarea>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+        <button type="button" class="btn btn-outlined" onclick="closeDenyModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="background-color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);">Confirm Rejection</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function promptDenyRequest(reqId, appName, isCreation) {
+  const modal = document.getElementById('denyModal');
+  const title = document.getElementById('denyModalTitle');
+  const desc = document.getElementById('denyModalDesc');
+  const form = document.getElementById('denyForm');
+
+  if (modal && form) {
+    form.action = `/admin/access-requests/${reqId}/deny`;
+    if (isCreation) {
+      title.textContent = 'Reject App Creation Request';
+      desc.innerHTML = `Are you sure you want to reject the request to create app <strong>"${appName}"</strong>?`;
+    } else {
+      title.textContent = 'Deny App Access Request';
+      desc.innerHTML = `Are you sure you want to deny access to <strong>"${appName}"</strong>?`;
+    }
+    document.getElementById('denyReason').value = '';
+    modal.style.display = 'flex';
+  }
+}
+
+function closeDenyModal() {
+  const modal = document.getElementById('denyModal');
+  if (modal) modal.style.display = 'none';
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeDenyModal();
+});
+document.getElementById('denyModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'denyModal') closeDenyModal();
+});
+</script>
 {% endblock %}

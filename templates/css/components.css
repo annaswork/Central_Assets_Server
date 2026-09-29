@@ -1600,9 +1600,53 @@ input[type="button"].btn {
 }
 
 /* ==========================================================================
-   Asset Block (Card) View Grid
+   Asset Block (Card) View Grid & Column Customizer (5 to 8 items in a row)
    ========================================================================== */
-.asset-grid {
+.cols-picker-group {
+  display: inline-flex;
+  align-items: center;
+  background-color: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.cols-picker-label {
+  font-size: 0.72rem;
+  color: var(--md-sys-color-on-surface-variant);
+  font-weight: 500;
+  padding: 0 3px 0 6px;
+  user-select: none;
+}
+
+.cols-picker-btn {
+  border: none;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+}
+
+.cols-picker-btn:hover {
+  background-color: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+}
+
+.cols-picker-btn.active {
+  background-color: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.asset-grid,
+.manager-asset-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
   gap: 1rem;
@@ -1615,9 +1659,57 @@ input[type="button"].btn {
   }
 }
 
+/* Explicit 5 to 8 items per row selectors */
+@media (min-width: 1200px) {
+  .asset-grid.grid-cols-5,
+  .manager-asset-grid.grid-cols-5 {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+  .asset-grid.grid-cols-6,
+  .manager-asset-grid.grid-cols-6 {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  }
+  .asset-grid.grid-cols-7,
+  .manager-asset-grid.grid-cols-7 {
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+    gap: 0.75rem !important;
+  }
+  .asset-grid.grid-cols-8,
+  .manager-asset-grid.grid-cols-8 {
+    grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
+    gap: 0.65rem !important;
+  }
+
+  .grid-cols-7 .asset-card-title,
+  .grid-cols-8 .asset-card-title {
+    font-size: 0.82rem !important;
+  }
+  .grid-cols-7 .asset-card-actions,
+  .grid-cols-8 .asset-card-actions {
+    padding: 0.25rem 0.4rem !important;
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1199px) {
+  .asset-grid.grid-cols-5,
+  .manager-asset-grid.grid-cols-5 {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+  .asset-grid.grid-cols-6,
+  .asset-grid.grid-cols-7,
+  .asset-grid.grid-cols-8,
+  .manager-asset-grid.grid-cols-6,
+  .manager-asset-grid.grid-cols-7,
+  .manager-asset-grid.grid-cols-8 {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    gap: 0.75rem !important;
+  }
+}
+
 @media (max-width: 640px) {
-  .asset-grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  .asset-grid,
+  .manager-asset-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important;
     gap: 0.75rem;
   }
 }
