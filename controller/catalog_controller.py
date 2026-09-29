@@ -200,6 +200,7 @@ async def get_resolved_assets(
     only_enabled: bool = False,
     sort: str | None = None,
     order: str | None = None,
+    tag: str | None = None,
 ) -> list[dict[str, Any]]:
     """Retrieve resolved assets for an app instance."""
     inst_oid = to_object_id(app_instance_id)
@@ -230,10 +231,24 @@ async def get_resolved_assets(
         else:
             match_filter["sub_category_id"] = s_oid
     if only_enabled:
-        match_filter["$or"] = [
+        enabled_condition = [
             {"overrides.is_enabled": True},
             {"overrides.is_enabled": {"$exists": False}, "is_enabled": True},
         ]
+        match_filter["$or"] = enabled_condition
+
+    if tag and tag.strip():
+        tag_condition = {
+            "$or": [
+                {"tags": tag.strip()},
+                {"overrides.tags": tag.strip()}
+            ]
+        }
+        if "$or" in match_filter:
+            prev_or = match_filter.pop("$or")
+            match_filter["$and"] = [{"$or": prev_or}, tag_condition]
+        else:
+            match_filter["$or"] = tag_condition["$or"]
 
     pipeline = [
         {"$match": match_filter},
@@ -422,6 +437,7 @@ async def get_resolved_assets(
                 "thumbnailUrl": "$merged.thumbnail_url",
                 "moreFields": "$merged.more_fields",
                 "more_fields": "$merged.more_fields",
+                "tags": {"$ifNull": ["$overrides.tags", {"$ifNull": ["$tags", {"$ifNull": ["$central.tags", []]}]}]},
             }
         },
     ]
@@ -607,6 +623,7 @@ async def get_resolved_single_asset(
                 "thumbnailUrl": "$merged.thumbnail_url",
                 "moreFields": "$merged.more_fields",
                 "more_fields": "$merged.more_fields",
+                "tags": {"$ifNull": ["$overrides.tags", {"$ifNull": ["$tags", {"$ifNull": ["$central.tags", []]}]}]},
             }
         },
     ]

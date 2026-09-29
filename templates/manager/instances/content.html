@@ -245,7 +245,7 @@
       </div>
 
       <div class="search-group-right" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; margin-left:auto; white-space:nowrap; flex-shrink:0;">
-        <input type="text" name="q" id="managerAssetSearchInput" class="input" placeholder="Search asset name..." value="{{ search }}" style="max-width:260px;">
+        <input type="text" name="q" id="managerAssetSearchInput" class="input" placeholder="Search name or tag..." value="{{ search }}" style="max-width:260px;">
         <button type="submit" class="btn btn-outlined btn-filter">Search</button>
         <a href="javascript:void(0)" id="managerAssetSearchClearBtn" onclick="handleManagerClearAssetFilters(event, 'search')" class="btn btn-outlined btn-filter" style="display:{% if search %}inline-flex{% else %}none{% endif %};">Clear</a>
       </div>
@@ -259,17 +259,33 @@
         <div>
           <h3 style="margin:0; font-size:1.1rem;">Referenced Creative Assets ({{ assets|length }})</h3>
           <span style="font-size:0.82rem; color:var(--md-sys-color-on-surface-variant);">
-            Configure sequence order, enabled state, and premium tier for this app instance.
+            Configure sequence order, enabled state, premium tier, and tags for this app instance.
           </span>
+        </div>
+        <div id="assetBulkActionsBar" style="display:none; align-items:center; gap:0.65rem; background:var(--md-sys-color-surface-container-high, #e2e8f0); padding:0.35rem 0.75rem; border-radius:8px; border:1px solid var(--md-sys-color-primary, #6366f1);">
+          <span style="font-size:0.85rem; font-weight:600; color:var(--md-sys-color-primary, #4338ca);">
+            <span id="selectedAssetCount">0</span> selected
+          </span>
+          <button type="button" class="btn btn-primary btn-sm" onclick="openBulkTagsModal()" style="display:inline-flex; align-items:center; gap:0.35rem; font-size:0.8rem; padding:0.25rem 0.65rem;" title="Add or edit tags on all selected assets">
+            <span>🏷️</span>
+            <span>Add Tags</span>
+          </button>
+          <button type="button" class="btn btn-outlined btn-sm" onclick="clearSelectedAssets()" style="font-size:0.8rem; padding:0.25rem 0.5rem;">
+            Deselect
+          </button>
         </div>
       </div>
 
       <table class="data-table" id="managerAssetTable">
         <thead>
           <tr>
+            <th style="width:38px; text-align:center;">
+              <input type="checkbox" id="selectAllAssetsCheckbox" onchange="toggleSelectAllAssets(this.checked)" title="Select all assets" style="cursor:pointer; width:16px; height:16px;">
+            </th>
             <th style="width:65px; text-align:center;">Seq</th>
             <th style="width:60px;">Thumb</th>
             <th>Asset Name</th>
+            <th style="min-width:140px;">Tags</th>
             <th>Category</th>
             <th>Subcategory</th>
             <th style="width:80px; text-align:center;">Enabled</th>
@@ -282,6 +298,9 @@
         <tbody id="managerAssetTbody">
           {% for asset in assets %}
             <tr data-asset-id="{{ asset.id }}" class="manager-asset-row" draggable="true" style="cursor:default;">
+              <td style="text-align:center;">
+                <input type="checkbox" class="asset-checkbox" value="{{ asset.id }}" onchange="onAssetCheckboxChange(this)" style="cursor:pointer; width:16px; height:16px;">
+              </td>
               <td style="text-align:center;">
                 <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
                   <span class="asset-drag-handle" style="cursor:grab; font-size:1.15rem; color:var(--md-sys-color-on-surface-variant); user-select:none;" title="Drag to reorder asset">⠿</span>
@@ -299,6 +318,18 @@
               </td>
               <td>
                 <strong style="font-size:0.9rem;">{{ asset.name }}</strong>
+              </td>
+              <td>
+                <div class="asset-tags-wrap" id="assetTagsWrap_{{ asset.id }}" data-asset-name="{{ asset.name }}" style="display:flex; flex-wrap:wrap; gap:0.25rem; align-items:center; max-width:220px;">
+                  {% if asset.tags and asset.tags|length > 0 %}
+                    {% for tag in asset.tags %}
+                      <span class="badge" style="background:var(--md-sys-color-secondary-container, #e2e8f0); color:var(--md-sys-color-on-secondary-container, #1e293b); font-size:0.75rem; padding:0.12rem 0.45rem; border-radius:10px;">{{ tag }}</span>
+                    {% endfor %}
+                  {% else %}
+                    <span class="no-tags-hint" style="color:var(--md-sys-color-outline); font-size:0.75rem; font-style:italic;">No tags</span>
+                  {% endif %}
+                  <button type="button" class="btn-edit-tags-single" onclick="openSingleAssetTagModal('{{ asset.id }}', '{{ asset.name|escape }}')" title="Edit tags for this asset" style="background:none; border:none; color:var(--md-sys-color-primary); cursor:pointer; font-size:0.8rem; padding:0.1rem 0.3rem; border-radius:4px; opacity:0.7;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">✏️</button>
+                </div>
               </td>
               <td>
                 <span class="badge" style="background:var(--md-sys-color-surface-container-high); font-size:0.8rem;">
@@ -401,6 +432,65 @@
     <div style="padding:1rem 1.5rem; border-top:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); display:flex; justify-content:flex-end; gap:0.75rem;">
       <button type="button" class="btn btn-outlined" onclick="closeImportModal()">Cancel</button>
       <button type="button" class="btn btn-primary" onclick="submitImport()">Import Selected into Instance</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Bulk / Single Add Tags -->
+<div id="addTagsModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1100; align-items:center; justify-content:center; padding:1.5rem;">
+  <div class="card" style="max-width:520px; width:100%; border-radius:12px; box-shadow:var(--md-sys-elevation-4); overflow:hidden; padding:0; background:var(--md-sys-color-surface);">
+    <div style="padding:1.25rem 1.5rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center; background:var(--md-sys-color-surface-container-low);">
+      <div>
+        <h3 style="margin:0; font-size:1.15rem; display:flex; align-items:center; gap:0.5rem;">
+          <span>🏷️</span>
+          <span id="tagModalTitle">Add Tags to Selected Assets</span>
+        </h3>
+        <p style="margin:0.25rem 0 0 0; font-size:0.82rem; color:var(--md-sys-color-on-surface-variant);" id="tagModalSubtitle">
+          Applying tags to <strong id="tagModalAssetCount">0</strong> selected asset(s) in this app instance.
+        </p>
+      </div>
+      <button type="button" onclick="closeTagsModal()" style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:var(--md-sys-color-on-surface);">✕</button>
+    </div>
+
+    <div style="padding:1.5rem;">
+      <div class="form-group" style="margin-bottom:1.25rem;">
+        <label class="form-label" style="font-weight:600; font-size:0.88rem; margin-bottom:0.35rem; display:block;">
+          Tags *
+        </label>
+        <input type="text" id="tagModalInput" class="input" placeholder="e.g. summer, neon, party, 3d, featured" style="width:100%;" onkeydown="if(event.key==='Enter'){event.preventDefault();submitTagsModal();}">
+        <span style="font-size:0.76rem; color:var(--md-sys-color-on-surface-variant); display:block; margin-top:0.35rem;">
+          Separate multiple tags with commas (e.g. <code>summer, neon, trending</code>).
+        </span>
+      </div>
+
+      <div class="form-group" style="margin-bottom:1.5rem;">
+        <label class="form-label" style="font-weight:600; font-size:0.88rem; margin-bottom:0.45rem; display:block;">
+          Tagging Mode
+        </label>
+        <div style="display:flex; flex-direction:column; gap:0.5rem;">
+          <label style="display:flex; align-items:flex-start; gap:0.5rem; font-size:0.88rem; cursor:pointer;">
+            <input type="radio" name="tagApplyMode" value="add" checked style="margin-top:0.15rem;">
+            <div>
+              <strong>Append tags</strong>
+              <div style="font-size:0.78rem; color:var(--md-sys-color-on-surface-variant);">Keeps existing tags and appends new ones (prevents duplicates)</div>
+            </div>
+          </label>
+          <label style="display:flex; align-items:flex-start; gap:0.5rem; font-size:0.88rem; cursor:pointer;">
+            <input type="radio" name="tagApplyMode" value="replace" style="margin-top:0.15rem;">
+            <div>
+              <strong>Replace all tags</strong>
+              <div style="font-size:0.78rem; color:var(--md-sys-color-on-surface-variant);">Overwrites all tags on the selected assets with the tags entered above</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+        <button type="button" class="btn btn-outlined" onclick="closeTagsModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnApplyTags" onclick="submitTagsModal()" style="display:inline-flex; align-items:center; gap:0.4rem;">
+          <span>Apply Tags</span>
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -728,6 +818,170 @@
       showToast('✓ Credits updated successfully', 'success');
     } catch (err) {
       showToast('Error updating credits: ' + err.message, 'error');
+    }
+  }
+
+  // --- Multiple Asset Selection & Bulk Tag Management ---
+  const selectedAssetIds = new Set();
+  let targetSingleAssetId = null;
+
+  function onAssetCheckboxChange(checkbox) {
+    const assetId = checkbox.value;
+    if (checkbox.checked) {
+      selectedAssetIds.add(assetId);
+    } else {
+      selectedAssetIds.delete(assetId);
+    }
+    updateAssetSelectionUI();
+  }
+
+  function toggleSelectAllAssets(isChecked) {
+    const checkboxes = document.querySelectorAll('.asset-checkbox');
+    checkboxes.forEach(cb => {
+      cb.checked = isChecked;
+      if (isChecked) {
+        selectedAssetIds.add(cb.value);
+      } else {
+        selectedAssetIds.delete(cb.value);
+      }
+    });
+    updateAssetSelectionUI();
+  }
+
+  function clearSelectedAssets() {
+    selectedAssetIds.clear();
+    const selectAll = document.getElementById('selectAllAssetsCheckbox');
+    if (selectAll) {
+      selectAll.checked = false;
+      selectAll.indeterminate = false;
+    }
+    document.querySelectorAll('.asset-checkbox').forEach(cb => cb.checked = false);
+    updateAssetSelectionUI();
+  }
+
+  function updateAssetSelectionUI() {
+    const count = selectedAssetIds.size;
+    const bar = document.getElementById('assetBulkActionsBar');
+    const countSpan = document.getElementById('selectedAssetCount');
+    const selectAll = document.getElementById('selectAllAssetsCheckbox');
+    const allCbs = document.querySelectorAll('.asset-checkbox');
+
+    if (countSpan) countSpan.textContent = count;
+    if (bar) bar.style.display = count > 0 ? 'inline-flex' : 'none';
+    if (selectAll) {
+      selectAll.checked = (allCbs.length > 0 && count === allCbs.length);
+      selectAll.indeterminate = (count > 0 && count < allCbs.length);
+    }
+  }
+
+  function openBulkTagsModal() {
+    targetSingleAssetId = null;
+    if (selectedAssetIds.size === 0) {
+      showToast('Please select at least one asset first', 'error');
+      return;
+    }
+    document.getElementById('tagModalTitle').textContent = 'Add Tags to Selected Assets';
+    document.getElementById('tagModalSubtitle').innerHTML = `Applying tags to <strong>${selectedAssetIds.size}</strong> selected asset(s) in this app instance.`;
+    document.getElementById('tagModalInput').value = '';
+    const addRadio = document.querySelector('input[name="tagApplyMode"][value="add"]');
+    if (addRadio) addRadio.checked = true;
+    document.getElementById('addTagsModal').style.display = 'flex';
+    setTimeout(() => {
+      const inp = document.getElementById('tagModalInput');
+      if (inp) inp.focus();
+    }, 50);
+  }
+
+  function openSingleAssetTagModal(assetId, assetName) {
+    targetSingleAssetId = assetId;
+    document.getElementById('tagModalTitle').textContent = `Manage Tags for "${assetName}"`;
+    document.getElementById('tagModalSubtitle').innerHTML = `Updating tags for <strong>${assetName}</strong> in this app instance.`;
+
+    const wrap = document.getElementById(`assetTagsWrap_${assetId}`);
+    let existingTags = [];
+    if (wrap) {
+      const badges = wrap.querySelectorAll('.badge');
+      badges.forEach(b => existingTags.push(b.textContent.trim()));
+    }
+    document.getElementById('tagModalInput').value = existingTags.join(', ');
+    const addRadio = document.querySelector('input[name="tagApplyMode"][value="add"]');
+    if (addRadio) addRadio.checked = true;
+    document.getElementById('addTagsModal').style.display = 'flex';
+    setTimeout(() => {
+      const inp = document.getElementById('tagModalInput');
+      if (inp) inp.focus();
+    }, 50);
+  }
+
+  function closeTagsModal() {
+    document.getElementById('addTagsModal').style.display = 'none';
+    targetSingleAssetId = null;
+  }
+
+  async function submitTagsModal() {
+    const rawInput = document.getElementById('tagModalInput').value.trim();
+    const modeEl = document.querySelector('input[name="tagApplyMode"]:checked');
+    const mode = modeEl ? modeEl.value : 'add';
+
+    const tags = rawInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
+    if (tags.length === 0 && mode !== 'replace') {
+      showToast('Please enter at least one tag', 'error');
+      return;
+    }
+
+    const assetIds = targetSingleAssetId ? [targetSingleAssetId] : Array.from(selectedAssetIds);
+    if (assetIds.length === 0) {
+      showToast('No assets selected', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('btnApplyTags');
+    const origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span>Saving...</span>';
+
+    try {
+      const res = await fetch(`/manager/instances/${instanceId}/assets/bulk-tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          asset_ids: assetIds,
+          tags: tags,
+          mode: mode
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to update tags');
+
+      showToast(`✓ ${data.message || 'Tags updated successfully'}`, 'success');
+      closeTagsModal();
+
+      // Update DOM tags dynamically for each asset
+      if (data.asset_tags) {
+        for (const [aid, tList] of Object.entries(data.asset_tags)) {
+          const wrap = document.getElementById(`assetTagsWrap_${aid}`);
+          if (wrap) {
+            const assetName = wrap.dataset.assetName || 'asset';
+            let html = '';
+            if (tList && tList.length > 0) {
+              tList.forEach(t => {
+                html += `<span class="badge" style="background:var(--md-sys-color-secondary-container, #e2e8f0); color:var(--md-sys-color-on-secondary-container, #1e293b); font-size:0.75rem; padding:0.12rem 0.45rem; border-radius:10px;">${t}</span> `;
+              });
+            } else {
+              html = `<span class="no-tags-hint" style="color:var(--md-sys-color-outline); font-size:0.75rem; font-style:italic;">No tags</span> `;
+            }
+            html += `<button type="button" class="btn-edit-tags-single" onclick="openSingleAssetTagModal('${aid}', '${assetName.replace(/'/g, "\\'")}')" title="Edit tags for this asset" style="background:none; border:none; color:var(--md-sys-color-primary); cursor:pointer; font-size:0.8rem; padding:0.1rem 0.3rem; border-radius:4px; opacity:0.7;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">✏️</button>`;
+            wrap.innerHTML = html;
+          }
+        }
+      }
+
+      clearSelectedAssets();
+    } catch (err) {
+      showToast('Error applying tags: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
     }
   }
 

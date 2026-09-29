@@ -85,6 +85,7 @@ class InstanceAssetInDB(MongoInDBModel, TimestampMixin, SoftDeleteMixin):
     rewarded_credits: int = 5
     views: int = 0
     downloads: int = 0
+    tags: list[str] = Field(default_factory=list)
     overrides: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -128,4 +129,5 @@ class ResolvedAssetOut(MongoModel):
     sequence: int
     views: int = 0
     downloads: int = 0
+    tags: list[str] = Field(default_factory=list)
     overrides: dict[str, Any] = Field(default_factory=dict)

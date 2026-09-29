@@ -76,6 +76,7 @@ async def get_instance_assets_endpoint(
     only_enabled: bool = Query(default=False),
     sort: str | None = Query(default=None),
     order: str | None = Query(default=None),
+    tag: str | None = Query(default=None, description="Filter assets by tag"),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Retrieve resolved assets for a specific app instance."""
@@ -88,6 +89,7 @@ async def get_instance_assets_endpoint(
         only_enabled=only_enabled,
         sort=sort,
         order=order,
+        tag=tag,
     )
 
 

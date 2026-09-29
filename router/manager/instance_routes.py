@@ -44,9 +44,8 @@ from database.collections import (
     SUBCATEGORIES,
 )
 from database.models.app_instance import AppInstanceCreate, AppInstanceUpdate
-from database.models.instance_content import ReorderPayload
 from router.deps import get_db
-from utils.datetimes import format_datetime_display
+from utils.datetimes import format_datetime_display, utc_now
 from utils.errors import ConflictError, ForbiddenError, NotFoundError, ValidationError
 from utils.ids import to_object_id
 
@@ -354,6 +353,7 @@ async def manager_instance_content(
             if sq_lower in (a.get("name") or "").lower()
             or sq_lower in (a.get("category_name") or "").lower()
             or sq_lower in (a.get("subcategory_name") or "").lower()
+            or any(sq_lower in str(t).lower() for t in a.get("tags", []))
         ]
 
     # Handle Category & Subcategory folder filtering (Section 1)
@@ -543,6 +543,15 @@ async def manager_instance_asset_override(
     overrides = {}
     if name is not None:
         overrides["name"] = str(name).strip()
+    if "tags" in payload:
+        raw_tags = payload.get("tags")
+        if isinstance(raw_tags, str):
+            clean_tags = [t.strip() for t in raw_tags.split(",") if t.strip()]
+        elif isinstance(raw_tags, list):
+            clean_tags = [str(t).strip() for t in raw_tags if str(t).strip()]
+        else:
+            clean_tags = []
+        overrides["tags"] = clean_tags
 
     res = await update_item_settings_and_overrides(
         db,
@@ -557,6 +566,119 @@ async def manager_instance_asset_override(
         overrides=overrides if overrides else None,
     )
     return JSONResponse(status_code=200, content={"success": True, "data": serialize_mongo_doc(res)})
+
+
+@router.post("/{instance_id}/assets/bulk-tags")
+async def manager_bulk_add_asset_tags(
+    request: Request,
+    instance_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Add, append, or replace tags on multiple selected assets in an app instance."""
+    session = get_current_manager_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    user_id = session["user_id"]
+    await verify_manager_instance_access(db, user_id, instance_id)
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False, "message": "Invalid JSON body"})
+
+    asset_ids = payload.get("asset_ids") or []
+    tags = payload.get("tags") or []
+    mode = payload.get("mode", "add")  # "add", "replace", or "remove"
+
+    if not asset_ids:
+        return JSONResponse(status_code=400, content={"success": False, "message": "No assets selected"})
+
+    # Parse and clean tags
+    clean_tags: list[str] = []
+    if isinstance(tags, str):
+        clean_tags = [t.strip() for t in tags.split(",") if t.strip()]
+    elif isinstance(tags, list):
+        for item in tags:
+            if isinstance(item, str):
+                for part in item.split(","):
+                    p = part.strip()
+                    if p and p not in clean_tags:
+                        clean_tags.append(p)
+
+    if not clean_tags and mode in ("add", "replace"):
+        return JSONResponse(status_code=400, content={"success": False, "message": "Please enter at least one tag"})
+
+    inst_oid = to_object_id(instance_id)
+    oids = []
+    for aid in asset_ids:
+        try:
+            oids.append(to_object_id(aid))
+        except Exception:
+            pass
+
+    if not oids:
+        return JSONResponse(status_code=400, content={"success": False, "message": "No valid asset IDs provided"})
+
+    query = {
+        "app_instance_id": inst_oid,
+        "$or": [{"_id": {"$in": oids}}, {"source_id": {"$in": oids}}],
+        "deleted_at": None,
+    }
+
+    if mode == "replace":
+        update_op = {
+            "$set": {
+                "tags": clean_tags,
+                "overrides.tags": clean_tags,
+                "updated_at": utc_now(),
+            }
+        }
+    elif mode == "remove":
+        update_op = {
+            "$pull": {
+                "tags": {"$in": clean_tags},
+                "overrides.tags": {"$in": clean_tags},
+            },
+            "$set": {"updated_at": utc_now()},
+        }
+    else:  # "add"
+        update_op = {
+            "$addToSet": {
+                "tags": {"$each": clean_tags},
+                "overrides.tags": {"$each": clean_tags},
+            },
+            "$set": {"updated_at": utc_now()},
+        }
+
+    res = await db[INSTANCE_ASSETS].update_many(query, update_op)
+
+    # Fetch updated docs to return latest tag map for live UI DOM update
+    updated_docs = await db[INSTANCE_ASSETS].find(
+        query,
+        {"_id": 1, "source_id": 1, "tags": 1, "overrides": 1}
+    ).to_list(length=1000)
+
+    asset_tags_map = {}
+    for doc in updated_docs:
+        doc_id = str(doc["_id"])
+        src_id = str(doc.get("source_id") or "")
+        t_list = doc.get("tags") or doc.get("overrides", {}).get("tags") or []
+        asset_tags_map[doc_id] = t_list
+        if src_id:
+            asset_tags_map[src_id] = t_list
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "message": f"Successfully updated tags for {res.modified_count} asset(s)",
+            "modified_count": res.modified_count,
+            "tags": clean_tags,
+            "mode": mode,
+            "asset_tags": asset_tags_map,
+        },
+    )
 
 
 @router.patch("/{instance_id}/folders/{folder_type}/{folder_id}/override")

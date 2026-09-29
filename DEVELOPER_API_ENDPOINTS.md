@@ -251,6 +251,7 @@ Fetches assets with filtering, sorting, and metadata blocks.
 | :--- | :--- | :--- | :--- | :--- |
 | `categoryId` | `string` | No | `null` | Filter by Category ID. |
 | `subCategoryId` | `string` | No | `null` | Filter by Subcategory ID. |
+| `tag` | `string` | No | `null` | Filter by instance tag (e.g. `summer`, `trending`). |
 | `only_enabled` | `boolean` | No | `false` | If `true`, returns only enabled assets. |
 | `sort` | `string` | No | `null` | Sort field: `views`, `downloads`, `sequence`, `created_at`. |
 | `order` | `string` | No | `asc` | Sort direction: `asc` or `desc`. |
@@ -265,6 +266,7 @@ Fetches assets with filtering, sorting, and metadata blocks.
     "sourceId": "66b01234abcd5678ef901234",
     "name": "Sun Beach",
     "description": "Sunny beach sticker with sunglasses",
+    "tags": ["summer", "beach", "trending"],
     "thumbnail_url": "/static/central_data/stickers/summer/sun_thumb.webp",
     "thumbnailUrl": "/static/central_data/stickers/summer/sun_thumb.webp",
     "categoryId": "66a1b2c3d4e5f60012345678",
@@ -276,6 +278,7 @@ Fetches assets with filtering, sorting, and metadata blocks.
     "is_enabled": true,
     "is_premium": false,
     "is_rewarded": false,
+    "rewarded_credits": 5,
     "views": 450,
     "downloads": 82,
     "sequence": 1,

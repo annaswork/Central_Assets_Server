@@ -21,7 +21,7 @@ from utils.sequencing import generate_sequence_reordering
 
 ALLOWED_CATEGORY_OVERRIDES = {"name", "thumbnail_url", "image_url"}
 ALLOWED_SUBCATEGORY_OVERRIDES = {"name", "thumbnail_url", "image_url"}
-ALLOWED_ASSET_OVERRIDES = {"name", "description", "thumbnail_url", "more_fields"}
+ALLOWED_ASSET_OVERRIDES = {"name", "description", "thumbnail_url", "more_fields", "tags"}
 BLOCKED_OVERRIDE_KEYS = {
     "category_id",
     "sub_category_id",
@@ -106,6 +106,10 @@ async def update_item_settings_and_overrides(
             else:
                 merged[k] = v
         set_fields["overrides"] = merged
+        if "tags" in merged:
+            set_fields["tags"] = merged["tags"]
+        elif "tags" in overrides and overrides["tags"] is None:
+            set_fields["tags"] = []
 
     await db[col_name].update_one({"_id": doc["_id"]}, {"$set": set_fields})
     updated = await db[col_name].find_one({"_id": doc["_id"]})
