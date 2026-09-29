@@ -133,7 +133,9 @@
                 <input type="hidden" name="cascade" value="false">
                 {% if return_url %}<input type="hidden" name="return_url" value="{{ return_url }}">{% endif %}
               </form>
-              <button type="button" class="action-btn-circle action-btn-delete" title="Delete Subcategory" onclick="promptDeleteSubcategory('{{ item.id }}', '{{ item.name }}', {{ item.asset_count | default(0) }})">
+              <button type="button" class="action-btn-circle action-btn-delete" title="Delete Subcategory"
+                      data-name="{{ item.name }}"
+                      onclick="promptDeleteSubcategory('{{ item.id }}', this.getAttribute('data-name'), {{ item.asset_count | default(0) }})">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -157,36 +159,50 @@
 
 <script>
 function promptDeleteSubcategory(id, name, assetCount) {
-  if (assetCount > 0) {
-    showConfirmModal({
-      title: 'CRITICAL WARNING: Active Assets Detected',
-      body: `Subcategory <strong>"${name}"</strong> currently contains <strong>${assetCount} active asset${assetCount > 1 ? 's' : ''}</strong>.<br><br>
-             <div class="alert alert-error" style="margin-bottom:0; font-size:0.9rem;">
-               🚨 <strong>CRITICAL IMPACT:</strong> Deleting this subcategory will permanently delete all <strong>${assetCount} child assets</strong> and remove the subcategory storage folder from disk! This action cannot be undone.
-             </div>`,
-      confirmText: 'Confirm Cascade Delete',
-      cancelText: 'Cancel',
-      isCritical: true,
-      onConfirm: () => {
-        const form = document.getElementById('delSubForm_' + id);
-        if (form) {
-          form.querySelector('input[name="cascade"]').value = 'true';
-          form.submit();
+  const safeName = typeof escapeHtml === 'function' ? escapeHtml(name) : (name || 'Subcategory');
+  if (typeof showConfirmModal === 'function') {
+    if (assetCount > 0) {
+      showConfirmModal({
+        title: 'CRITICAL WARNING: Active Assets Detected',
+        body: `Subcategory <strong>"${safeName}"</strong> currently contains <strong>${assetCount} active asset${assetCount > 1 ? 's' : ''}</strong>.<br><br>
+               <div class="alert alert-error" style="margin-bottom:0; font-size:0.9rem;">
+                 🚨 <strong>CRITICAL IMPACT:</strong> Deleting this subcategory will permanently delete all <strong>${assetCount} child assets</strong> and remove the subcategory storage folder from disk! This action cannot be undone.
+               </div>`,
+        confirmText: 'Confirm Cascade Delete',
+        cancelText: 'Cancel',
+        isCritical: true,
+        onConfirm: () => {
+          const form = document.getElementById('delSubForm_' + id);
+          if (form) {
+            form.querySelector('input[name="cascade"]').value = 'true';
+            form.submit();
+          }
         }
-      }
-    });
+      });
+    } else {
+      showConfirmModal({
+        title: 'Delete Empty Subcategory',
+        body: `Are you sure you want to delete empty subcategory <strong>"${safeName}"</strong>?<br><br>Its storage folder will be removed from disk.`,
+        confirmText: 'Delete Subcategory',
+        cancelText: 'Cancel',
+        isCritical: false,
+        onConfirm: () => {
+          const form = document.getElementById('delSubForm_' + id);
+          if (form) form.submit();
+        }
+      });
+    }
   } else {
-    showConfirmModal({
-      title: 'Delete Empty Subcategory',
-      body: `Are you sure you want to delete empty subcategory <strong>"${name}"</strong>?<br><br>Its storage folder will be removed from disk.`,
-      confirmText: 'Delete Subcategory',
-      cancelText: 'Cancel',
-      isCritical: false,
-      onConfirm: () => {
-        const form = document.getElementById('delSubForm_' + id);
-        if (form) form.submit();
+    const confirmMsg = assetCount > 0
+      ? `CRITICAL WARNING: Subcategory "${name}" contains ${assetCount} active assets.\n\nDeleting will permanently delete all child assets and files on disk.\n\nProceed with cascade delete?`
+      : `Are you sure you want to delete empty subcategory "${name}"?`;
+    if (confirm(confirmMsg)) {
+      const form = document.getElementById('delSubForm_' + id);
+      if (form) {
+        if (assetCount > 0) form.querySelector('input[name="cascade"]').value = 'true';
+        form.submit();
       }
-    });
+    }
   }
 }
 

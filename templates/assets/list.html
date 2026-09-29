@@ -225,7 +225,9 @@
               <form id="delForm_{{ item.id }}" method="POST" action="/admin/assets/{{ item.id }}/delete" style="display:none;">
                 {% if return_url %}<input type="hidden" name="return_url" value="{{ return_url }}">{% endif %}
               </form>
-              <button type="button" class="action-btn-circle action-btn-delete" title="Delete Asset" onclick="promptDeleteAsset('{{ item.id }}', '{{ item.name }}')">
+              <button type="button" class="action-btn-circle action-btn-delete" title="Delete Asset"
+                      data-name="{{ item.name }}"
+                      onclick="promptDeleteAsset('{{ item.id }}', this.getAttribute('data-name'))">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -300,7 +302,9 @@
 
         <div class="asset-card-actions">
           <a href="/admin/assets/{{ item.id }}/edit{% if return_url %}?return_url={{ return_url | urlencode }}{% endif %}" class="asset-card-btn-edit">Edit</a>
-          <button type="button" class="asset-card-btn-delete" onclick="promptDeleteAsset('{{ item.id }}', '{{ item.name }}')">Delete</button>
+          <button type="button" class="asset-card-btn-delete"
+                  data-name="{{ item.name }}"
+                  onclick="promptDeleteAsset('{{ item.id }}', this.getAttribute('data-name'))">Delete</button>
         </div>
       </div>
     </div>
@@ -315,13 +319,32 @@
 
 <script>
 function promptDeleteAsset(id, name) {
-  showConfirmModal({
-    title: 'Delete Asset & File',
-    body: `Are you sure you want to delete asset <strong>"${name}"</strong>?<br><br><div class="alert alert-error" style="margin-bottom:0; font-size:0.88rem;">⚠️ This will delete the database record AND permanently remove the media file from its storage folder on disk.</div>`,
-    confirmText: 'Delete Asset & File',
-    cancelText: 'Cancel',
-    isCritical: true,
-    onConfirm: () => {
+  const safeName = typeof escapeHtml === 'function' ? escapeHtml(name) : (name || 'Asset');
+  if (typeof showConfirmModal === 'function') {
+    showConfirmModal({
+      title: 'Delete Asset & File',
+      body: `Are you sure you want to delete asset <strong>"${safeName}"</strong>?<br><br><div class="alert alert-error" style="margin-bottom:0; font-size:0.88rem;">⚠️ This will delete the database record AND permanently remove the media file from its storage folder on disk.</div>`,
+      confirmText: 'Delete Asset & File',
+      cancelText: 'Cancel',
+      isCritical: true,
+      onConfirm: () => {
+        let form = document.getElementById('delForm_' + id);
+        if (!form) {
+          form = document.createElement('form');
+          form.method = 'POST';
+          form.action = `/admin/assets/${id}/delete`;
+          const rInp = document.createElement('input');
+          rInp.type = 'hidden';
+          rInp.name = 'return_url';
+          rInp.value = '{{ return_url or "" }}';
+          form.appendChild(rInp);
+          document.body.appendChild(form);
+        }
+        form.submit();
+      }
+    });
+  } else {
+    if (confirm(`Are you sure you want to delete asset "${name}"? This will permanently delete the file on disk.`)) {
       let form = document.getElementById('delForm_' + id);
       if (!form) {
         form = document.createElement('form');
@@ -336,7 +359,7 @@ function promptDeleteAsset(id, name) {
       }
       form.submit();
     }
-  });
+  }
 }
 
 if (window.location.search) {
