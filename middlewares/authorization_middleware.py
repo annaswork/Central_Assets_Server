@@ -111,10 +111,12 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
             if admin_session:
                 request.state.api_key = {
                     "id": "session_admin",
+                    "key_prefix": "session_admin",
                     "name": admin_session.get("username", "admin"),
                     "app_instance_id": None,
                     "scopes": list(ALL_SCOPES),
                     "rate_limit_per_min": 10000,
+                    "app_surge_ceiling_per_min": 50000,
                 }
                 return await call_next(request)
 

@@ -54,6 +54,7 @@ async def admin_create_key(
     app_instance_id: str | None = Form(default=None),
     scopes: list[str] = Form(default_factory=list),
     rate_limit_per_min: int = Form(default=60),
+    app_surge_ceiling_per_min: int = Form(default=10000),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -67,6 +68,7 @@ async def admin_create_key(
             app_instance_id=app_instance_id or None,
             scopes=scopes,
             rate_limit_per_min=rate_limit_per_min,
+            app_surge_ceiling_per_min=app_surge_ceiling_per_min,
         ),
     )
 
@@ -117,15 +119,17 @@ async def admin_delete_key(
 async def admin_update_key_rate_limit(
     request: Request,
     id: str,
-    rate_limit_per_min: int = Form(...),
+    rate_limit_per_min: int = Form(default=60),
+    app_surge_ceiling_per_min: int = Form(default=10000),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
     if not session:
         return RedirectResponse(url="/admin/login", status_code=303)
 
-    clamped = max(1, min(10000, rate_limit_per_min))
-    await update_key_rate_limit(db, key_id=id, rate_limit=clamped)
+    clamped = max(1, min(100000, rate_limit_per_min))
+    clamped_surge = max(1, min(1000000, app_surge_ceiling_per_min))
+    await update_key_rate_limit(db, key_id=id, rate_limit=clamped, app_surge_ceiling=clamped_surge)
     return RedirectResponse(url="/admin/keys", status_code=303)
 
 

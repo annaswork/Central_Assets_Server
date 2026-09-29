@@ -226,6 +226,12 @@
   }
   function closeProposalModal() {
     document.getElementById('proposalModal').style.display = 'none';
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('propose') || url.searchParams.has('action')) {
+      url.searchParams.delete('propose');
+      url.searchParams.delete('action');
+      window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
+    }
   }
 
   function onManagerProposalCatChange(catId, preselectedSubId) {
@@ -371,10 +377,15 @@
     document.getElementById('proposalForm').submit();
   }
 
-  // Scroll to bottom of message thread
+  // Scroll to bottom of message thread & auto-open proposal if triggered from sidebar
   window.addEventListener('load', () => {
     const c = document.getElementById('messagesHistory');
     if (c) c.scrollTop = c.scrollHeight;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('propose') === '1' || urlParams.get('action') === 'propose' || {{ 'true' if auto_open_proposal else 'false' }}) {
+      openProposalModal();
+    }
   });
 </script>
 {% endblock %}

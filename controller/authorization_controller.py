@@ -67,17 +67,26 @@ async def activate_key(db: AsyncIOMotorDatabase, key_id: str) -> bool:
     return await activate_api_key(db, key_id)
 
 
-async def update_key_rate_limit(db: AsyncIOMotorDatabase, key_id: str, rate_limit: int) -> bool:
-    """Update an API key's rate limit."""
+async def update_key_rate_limit(
+    db: AsyncIOMotorDatabase,
+    key_id: str,
+    rate_limit: int,
+    app_surge_ceiling: int | None = None,
+) -> bool:
+    """Update an API key's dual-layer rate limits (user IP limit and app surge ceiling)."""
     from database.collections import API_KEYS
     from utils.datetimes import utc_now
     from utils.ids import to_object_id
 
     oid = to_object_id(key_id)
-    res = await db[API_KEYS].update_one(
-        {"_id": oid},
-        {"$set": {"rate_limit_per_min": rate_limit, "updated_at": utc_now()}},
-    )
+    update_data: dict[str, Any] = {
+        "rate_limit_per_min": max(1, rate_limit),
+        "updated_at": utc_now(),
+    }
+    if app_surge_ceiling is not None:
+        update_data["app_surge_ceiling_per_min"] = max(1, app_surge_ceiling)
+
+    res = await db[API_KEYS].update_one({"_id": oid}, {"$set": update_data})
     if res.matched_count == 0:
         from utils.errors import NotFoundError
 

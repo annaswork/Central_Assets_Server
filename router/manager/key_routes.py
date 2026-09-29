@@ -71,6 +71,7 @@ async def manager_create_key(
     name: str = Form(...),
     app_instance_id: str = Form(...),
     rate_limit_per_min: int = Form(default=60),
+    app_surge_ceiling_per_min: int = Form(default=10000),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     """Generate a new API key scoped to manager's app instance and reveal once."""
@@ -87,6 +88,7 @@ async def manager_create_key(
             app_instance_id=app_instance_id,
             scopes=["assets:read", "categories:read", "subcategories:read"],
             rate_limit_per_min=max(1, rate_limit_per_min),
+            app_surge_ceiling_per_min=max(1, app_surge_ceiling_per_min),
         )
         created_key = await create_manager_key(db, user_id, data)
 
@@ -146,17 +148,22 @@ async def manager_delete_key_endpoint(
 async def manager_update_rate_limit(
     key_id: str,
     request: Request,
-    rate_limit: int = Form(...),
+    rate_limit: int = Form(default=60),
+    app_surge_ceiling_per_min: int = Form(default=10000),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
-    """Update rate limit for an API key owned by this manager."""
+    """Update dual-layer rate limits for an API key owned by this manager."""
     session = get_current_manager_session(request)
     if not session:
         return RedirectResponse(url="/manager/login", status_code=303)
 
     try:
         await update_manager_key_rate_limit(
-            db, manager_id=session["user_id"], key_id=key_id, rate_limit=rate_limit
+            db,
+            manager_id=session["user_id"],
+            key_id=key_id,
+            rate_limit=rate_limit,
+            app_surge_ceiling=app_surge_ceiling_per_min,
         )
     except ForbiddenError:
         pass

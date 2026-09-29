@@ -45,12 +45,13 @@ from authorization.encryption import (
     verify_secret,
 )
 from authorization.instance_guard import get_instance_filter
-from authorization.rate_limiter import check_rate_limit
+from authorization.rate_limiter import check_dual_layer_rate_limit, check_rate_limit
 from authorization.scopes import require_scope
 
 __all__ = [
     "activate_api_key",
     "authenticate_admin_user",
+    "check_dual_layer_rate_limit",
     "check_rate_limit",
     "clear_admin_session_cookie",
     "delete_api_key",

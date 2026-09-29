@@ -21,6 +21,7 @@ async def issue_api_key(
     app_instance_id: str | None = None,
     scopes: list[str] | None = None,
     rate_limit_per_min: int = 60,
+    app_surge_ceiling_per_min: int = 10000,
     expires_at: datetime | None = None,
 ) -> ApiKeyOut:
     """Issue a new API key, revealing the full key secret exactly once."""
@@ -34,6 +35,7 @@ async def issue_api_key(
         "app_instance_id": to_object_id(app_instance_id) if app_instance_id else None,
         "scopes": scopes or [],
         "rate_limit_per_min": rate_limit_per_min,
+        "app_surge_ceiling_per_min": app_surge_ceiling_per_min,
         "is_active": True,
         "last_used_at": None,
         "expires_at": expires_at,
@@ -111,6 +113,7 @@ async def rotate_api_key(
         ),
         scopes=existing.get("scopes", []),
         rate_limit_per_min=existing.get("rate_limit_per_min", 60),
+        app_surge_ceiling_per_min=existing.get("app_surge_ceiling_per_min", 10000),
     )
 
     # Set grace period expiry on old key

@@ -76,6 +76,12 @@
               <span class="nav-text">Assets</span>
             </a>
           </li>
+          <li>
+            <a href="/manager/messages?propose=1" class="nav-link {% if active_tab == 'proposals' %}active{% endif %}" title="Propose Central Data">
+              <span class="nav-icon">💡</span>
+              <span class="nav-text">Propose Central Data</span>
+            </a>
+          </li>
 
           <li class="nav-section-header" style="padding:0.5rem 1rem 0.25rem; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--md-sys-color-on-surface-variant); opacity:0.75;">
             My Workspace
@@ -171,6 +177,7 @@
         <a href="/manager/categories" title="Categories" class="nav-link {% if active_tab == 'categories' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📁</a>
         <a href="/manager/subcategories" title="Subcategories" class="nav-link {% if active_tab == 'subcategories' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📂</a>
         <a href="/manager/assets" title="Assets" class="nav-link {% if active_tab == 'assets' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">🖼️</a>
+        <a href="/manager/messages?propose=1" title="Propose Central Data" class="nav-link {% if active_tab == 'proposals' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">💡</a>
         <a href="/manager/instances" title="App Instances" class="nav-link {% if active_tab == 'instances' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📱</a>
         <a href="/manager/keys" title="API Keys" class="nav-link {% if active_tab == 'keys' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">🔑</a>
         <a href="/manager/messages" title="Messages" class="nav-link {% if active_tab == 'messages' %}active{% endif %}" style="padding:0.75rem; justify-content:center; position:relative;">

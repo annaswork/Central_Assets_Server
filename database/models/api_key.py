@@ -14,7 +14,8 @@ class ApiKeyCreate(BaseModel):
     owner_id: str | None = None
     owner_role: str | None = "admin"
     scopes: list[str] = Field(default_factory=list)
-    rate_limit_per_min: int = Field(default=60, ge=1, le=10000)
+    rate_limit_per_min: int = Field(default=60, ge=1, le=100000)
+    app_surge_ceiling_per_min: int = Field(default=10000, ge=1, le=1000000)
     expires_at: datetime | None = None
 
 
@@ -26,7 +27,8 @@ class ApiKeyOut(MongoModel):
     owner_id: str | None = None
     owner_role: str | None = "admin"
     scopes: list[str]
-    rate_limit_per_min: int
+    rate_limit_per_min: int = 60
+    app_surge_ceiling_per_min: int = 10000
     is_active: bool
     is_revoked: bool = False
     last_used_at: datetime | None = None
@@ -46,6 +48,7 @@ class ApiKeyInDB(MongoInDBModel, TimestampMixin):
     owner_role: str | None = "admin"
     scopes: list[str] = Field(default_factory=list)
     rate_limit_per_min: int = 60
+    app_surge_ceiling_per_min: int = 10000
     is_active: bool = True
     is_revoked: bool = False
     last_used_at: datetime | None = None

@@ -34,4 +34,13 @@ async def manager_root_redirect():
     return RedirectResponse(url="/manager/dashboard", status_code=303)
 
 
+@manager.get("/propose", include_in_schema=False)
+@manager.get("/proposals", include_in_schema=False)
+async def manager_proposals_shortcut_redirect():
+    """Redirect /manager/propose and /manager/proposals to /manager/messages?propose=1."""
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse(url="/manager/messages?propose=1", status_code=303)
+
+
 __all__ = ["manager", "manager_api_router"]

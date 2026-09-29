@@ -32,8 +32,9 @@
     </div>
 
     <div style="background:var(--md-sys-color-surface-container-low); padding:1rem; border-radius:var(--radius-sm); margin-bottom:1.5rem; font-size:0.85rem;">
-      <div><strong>Rate Limit:</strong> {{ key.rate_limit_per_min }} requests/minute</div>
-      <div style="margin-top:0.25rem;"><strong>App Scoped:</strong> {{ key.app_instance_id }}</div>
+      <div><strong>👤 User IP Rate Limit:</strong> {{ key.rate_limit_per_min }} requests/minute per IP</div>
+      <div style="margin-top:0.25rem;"><strong>⚡ App Surge Ceiling:</strong> {{ "{:,}".format(key.app_surge_ceiling_per_min or 10000) }} requests/minute total</div>
+      <div style="margin-top:0.25rem;"><strong>📱 App Scoped:</strong> {{ key.app_instance_id }}</div>
     </div>
 
     <div style="display:flex; justify-content:flex-end;">

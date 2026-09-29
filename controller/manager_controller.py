@@ -464,6 +464,7 @@ async def create_manager_key(
         app_instance_id=data.app_instance_id,
         scopes=data.scopes,
         rate_limit_per_min=data.rate_limit_per_min,
+        app_surge_ceiling_per_min=data.app_surge_ceiling_per_min,
         expires_at=data.expires_at,
     )
 
@@ -513,9 +514,13 @@ async def delete_manager_key(
 
 
 async def update_manager_key_rate_limit(
-    db: AsyncIOMotorDatabase, manager_id: str, key_id: str, rate_limit: int
+    db: AsyncIOMotorDatabase,
+    manager_id: str,
+    key_id: str,
+    rate_limit: int,
+    app_surge_ceiling: int | None = None,
 ) -> bool:
-    """Update rate limit on an API key owned by this manager."""
+    """Update dual-layer rate limits on an API key owned by this manager."""
     k_oid = to_object_id(key_id)
     m_oid = to_object_id(manager_id)
     key_doc = await db[API_KEYS].find_one(
@@ -524,9 +529,16 @@ async def update_manager_key_rate_limit(
     if not key_doc:
         raise ForbiddenError("API key not found or you do not have permission to modify it.")
 
+    update_data: dict[str, Any] = {
+        "rate_limit_per_min": max(1, rate_limit),
+        "updated_at": utc_now(),
+    }
+    if app_surge_ceiling is not None:
+        update_data["app_surge_ceiling_per_min"] = max(1, app_surge_ceiling)
+
     await db[API_KEYS].update_one(
         {"_id": k_oid},
-        {"$set": {"rate_limit_per_min": max(1, rate_limit), "updated_at": utc_now()}},
+        {"$set": update_data},
     )
     return True
 

@@ -30,6 +30,8 @@ router = APIRouter(prefix="/messages", tags=["Manager Messaging"])
 @router.get("")
 async def manager_messages_view(
     request: Request,
+    propose: int | None = None,
+    action: str | None = None,
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     """Manager messaging thread with Admin and proposal creation."""
@@ -45,6 +47,9 @@ async def manager_messages_view(
     categories_res = await list_categories(db, page=1, page_size=200)
     subcategories_res = await list_subcategories(db, page=1, page_size=500)
 
+    is_proposing = (propose == 1) or (action == "propose")
+    active_tab = "proposals" if is_proposing else "messages"
+
     return templates.TemplateResponse(
         request=request,
         name="manager/messages/index.html",
@@ -54,9 +59,16 @@ async def manager_messages_view(
             "messages": messages,
             "categories": categories_res.get("items", []),
             "subcategories": subcategories_res.get("items", []),
-            "active_tab": "messages",
+            "active_tab": active_tab,
+            "auto_open_proposal": is_proposing,
         },
     )
+
+
+@router.get("/propose", include_in_schema=False)
+async def manager_propose_redirect():
+    """Redirect /manager/messages/propose to /manager/messages?propose=1."""
+    return RedirectResponse(url="/manager/messages?propose=1", status_code=303)
 
 
 @router.post("")

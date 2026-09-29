@@ -664,10 +664,11 @@ Content-Type: application/json
 
 ## 8. Rate Limiting
 
-- **Mechanism:** Sliding-window per API key, tracked per minute.
-- **Default:** 60 requests/minute (admin can increase up to 10,000).
-- **Headers:** `Retry-After` is set on 429 responses.
-- **Strategy:** Implement exponential backoff in your client.
+- **Dual-Layer Architecture:**
+  1. **Layer 1 (Per-Client IP):** Tracked per client IP address under the API key (default: 60 req/min). Editable by Admin and Manager. Prevents abuse from single rogue devices.
+  2. **Layer 2 (App Surge Ceiling):** Tracked globally across all users for that API key (default: 10,000 req/min). Editable by Admin and Manager. Protects overall infrastructure during viral surges.
+- **Headers:** `Retry-After`, `X-RateLimit-Limit-User`, `X-RateLimit-Limit-App`, and `X-RateLimit-Violation` (`user_ip_limit` or `app_surge_ceiling`) are sent on 429 responses.
+- **Strategy:** Implement exponential backoff in your client app.
 
 **Recommended client behavior:**
 
