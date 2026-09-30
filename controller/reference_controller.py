@@ -228,46 +228,67 @@ async def add_references(
         central_sub = await db[SUBCATEGORIES].find_one({"_id": s_oid, "deleted_at": None})
         if not central_sub:
             continue
-        parent_cat_oid = central_sub["category_id"]
 
-        # Ensure parent category reference exists in this instance
-        parent_inst_cat = await db[INSTANCE_CATEGORIES].find_one(
-            {
-                "app_instance_id": inst_oid,
-                "source_id": parent_cat_oid,
-            }
-        )
-        if parent_inst_cat:
-            if parent_inst_cat.get("deleted_at") is not None:
-                await db[INSTANCE_CATEGORIES].update_one(
-                    {"_id": parent_inst_cat["_id"]},
-                    {"$set": {"deleted_at": None, "is_enabled": True, "updated_at": now}},
-                )
-                added_cats += 1
-        else:
-            max_seq = await db[INSTANCE_CATEGORIES].find_one(
-                {"app_instance_id": inst_oid, "deleted_at": None}, sort=[("sequence", -1)]
+        target_inst_cat = None
+        if target_category_id:
+            t_cat_oid = to_object_id(target_category_id)
+            target_inst_cat = await db[INSTANCE_CATEGORIES].find_one(
+                {
+                    "app_instance_id": inst_oid,
+                    "$or": [{"_id": t_cat_oid}, {"source_id": t_cat_oid}],
+                }
             )
-            cat_seq = compute_next_sequence(max_seq.get("sequence") if max_seq else None)
-            try:
-                await cat_repo.insert_one(
-                    {
-                        "app_instance_id": inst_oid,
-                        "source_id": parent_cat_oid,
-                        "is_enabled": True,
-                        "sequence": cat_seq,
-                        "overrides": {},
-                        "created_at": now,
-                        "updated_at": now,
-                        "deleted_at": None,
-                    }
-                )
-                added_cats += 1
-            except DuplicateKeyError:
+
+        if target_inst_cat:
+            if target_inst_cat.get("deleted_at") is not None:
                 await db[INSTANCE_CATEGORIES].update_one(
-                    {"app_instance_id": inst_oid, "source_id": parent_cat_oid},
+                    {"_id": target_inst_cat["_id"]},
                     {"$set": {"deleted_at": None, "is_enabled": True, "updated_at": now}},
                 )
+                added_cats += 1
+            cat_link_id = target_inst_cat.get("source_id") or target_inst_cat["_id"]
+        else:
+            parent_cat_oid = central_sub["category_id"]
+            cat_link_id = parent_cat_oid
+
+            # Ensure parent category reference exists in this instance
+            parent_inst_cat = await db[INSTANCE_CATEGORIES].find_one(
+                {
+                    "app_instance_id": inst_oid,
+                    "source_id": parent_cat_oid,
+                }
+            )
+            if parent_inst_cat:
+                if parent_inst_cat.get("deleted_at") is not None:
+                    await db[INSTANCE_CATEGORIES].update_one(
+                        {"_id": parent_inst_cat["_id"]},
+                        {"$set": {"deleted_at": None, "is_enabled": True, "updated_at": now}},
+                    )
+                    added_cats += 1
+            else:
+                max_seq = await db[INSTANCE_CATEGORIES].find_one(
+                    {"app_instance_id": inst_oid, "deleted_at": None}, sort=[("sequence", -1)]
+                )
+                cat_seq = compute_next_sequence(max_seq.get("sequence") if max_seq else None)
+                try:
+                    await cat_repo.insert_one(
+                        {
+                            "app_instance_id": inst_oid,
+                            "source_id": parent_cat_oid,
+                            "is_enabled": True,
+                            "sequence": cat_seq,
+                            "overrides": {},
+                            "created_at": now,
+                            "updated_at": now,
+                            "deleted_at": None,
+                        }
+                    )
+                    added_cats += 1
+                except DuplicateKeyError:
+                    await db[INSTANCE_CATEGORIES].update_one(
+                        {"app_instance_id": inst_oid, "source_id": parent_cat_oid},
+                        {"$set": {"deleted_at": None, "is_enabled": True, "updated_at": now}},
+                    )
 
         existing = await db[INSTANCE_SUBCATEGORIES].find_one(
             {
@@ -283,17 +304,27 @@ async def add_references(
                         "$set": {
                             "deleted_at": None,
                             "is_enabled": True,
-                            "category_id": parent_cat_oid,
+                            "category_id": cat_link_id,
                             "updated_at": now,
                         }
                     },
                 )
                 added_subs += 1
             else:
+                if target_category_id:
+                    await db[INSTANCE_SUBCATEGORIES].update_one(
+                        {"_id": existing["_id"]},
+                        {
+                            "$set": {
+                                "category_id": cat_link_id,
+                                "updated_at": now,
+                            }
+                        },
+                    )
                 already_present += 1
         else:
             max_seq_sub = await db[INSTANCE_SUBCATEGORIES].find_one(
-                {"app_instance_id": inst_oid, "category_id": parent_cat_oid, "deleted_at": None},
+                {"app_instance_id": inst_oid, "category_id": cat_link_id, "deleted_at": None},
                 sort=[("sequence", -1)],
             )
             sub_seq = compute_next_sequence(max_seq_sub.get("sequence") if max_seq_sub else None)
@@ -302,7 +333,7 @@ async def add_references(
                     {
                         "app_instance_id": inst_oid,
                         "source_id": s_oid,
-                        "category_id": parent_cat_oid,
+                        "category_id": cat_link_id,
                         "is_enabled": True,
                         "sequence": sub_seq,
                         "overrides": {},
@@ -319,7 +350,7 @@ async def add_references(
                         "$set": {
                             "deleted_at": None,
                             "is_enabled": True,
-                            "category_id": parent_cat_oid,
+                            "category_id": cat_link_id,
                             "updated_at": now,
                         }
                     },
@@ -341,18 +372,30 @@ async def add_references(
                             "$set": {
                                 "deleted_at": None,
                                 "is_enabled": True,
-                                "category_id": parent_cat_oid,
+                                "category_id": cat_link_id,
                                 "sub_category_id": s_oid,
                                 "updated_at": now,
                             }
                         },
                     )
                     added_assets += 1
+                else:
+                    if target_category_id:
+                        await db[INSTANCE_ASSETS].update_one(
+                            {"_id": asset_exists["_id"]},
+                            {
+                                "$set": {
+                                    "category_id": cat_link_id,
+                                    "sub_category_id": s_oid,
+                                    "updated_at": now,
+                                }
+                            },
+                        )
             else:
                 max_seq_asset = await db[INSTANCE_ASSETS].find_one(
                     {
                         "app_instance_id": inst_oid,
-                        "category_id": parent_cat_oid,
+                        "category_id": cat_link_id,
                         "sub_category_id": s_oid,
                         "deleted_at": None,
                     },
@@ -364,7 +407,7 @@ async def add_references(
                         {
                             "app_instance_id": inst_oid,
                             "source_id": a_oid,
-                            "category_id": parent_cat_oid,
+                            "category_id": cat_link_id,
                             "sub_category_id": s_oid,
                             "is_enabled": True,
                             "sequence": asset_seq,
@@ -387,7 +430,7 @@ async def add_references(
                             "$set": {
                                 "deleted_at": None,
                                 "is_enabled": True,
-                                "category_id": parent_cat_oid,
+                                "category_id": cat_link_id,
                                 "sub_category_id": s_oid,
                                 "updated_at": now,
                             }
@@ -411,123 +454,183 @@ async def add_references(
         if not central_asset:
             continue
 
-        cat_oid = to_object_id(target_category_id) if target_category_id else central_asset["category_id"]
-        sub_oid = to_object_id(target_sub_category_id) if target_sub_category_id else central_asset["sub_category_id"]
-
-        # Ensure parent category reference exists
-        parent_inst_cat = await db[INSTANCE_CATEGORIES].find_one(
-            {
-                "app_instance_id": inst_oid,
-                "$or": [{"source_id": cat_oid}, {"_id": cat_oid}],
-            }
-        )
-        if parent_inst_cat:
-            if parent_inst_cat.get("deleted_at") is not None:
-                await db[INSTANCE_CATEGORIES].update_one(
-                    {"_id": parent_inst_cat["_id"]},
-                    {"$set": {"deleted_at": None, "is_enabled": True, "updated_at": now}},
-                )
-                added_cats += 1
-        else:
-            max_seq = await db[INSTANCE_CATEGORIES].find_one(
-                {"app_instance_id": inst_oid, "deleted_at": None}, sort=[("sequence", -1)]
-            )
-            cat_seq = compute_next_sequence(max_seq.get("sequence") if max_seq else None)
-            try:
-                await cat_repo.insert_one(
-                    {
-                        "app_instance_id": inst_oid,
-                        "source_id": cat_oid,
-                        "is_enabled": True,
-                        "sequence": cat_seq,
-                        "overrides": {},
-                        "created_at": now,
-                        "updated_at": now,
-                        "deleted_at": None,
-                    }
-                )
-                added_cats += 1
-            except DuplicateKeyError:
-                await db[INSTANCE_CATEGORIES].update_one(
-                    {"app_instance_id": inst_oid, "source_id": cat_oid},
-                    {"$set": {"deleted_at": None, "is_enabled": True, "updated_at": now}},
-                )
-
-        # Ensure parent subcategory reference exists
-        parent_inst_sub = await db[INSTANCE_SUBCATEGORIES].find_one(
-            {
-                "app_instance_id": inst_oid,
-                "$or": [{"source_id": sub_oid}, {"_id": sub_oid}],
-            }
-        )
-        if parent_inst_sub:
-            if parent_inst_sub.get("deleted_at") is not None:
-                await db[INSTANCE_SUBCATEGORIES].update_one(
-                    {"_id": parent_inst_sub["_id"]},
-                    {
-                        "$set": {
-                            "deleted_at": None,
-                            "is_enabled": True,
-                            "category_id": cat_oid,
-                            "updated_at": now,
-                        }
-                    },
-                )
-                added_subs += 1
-        else:
-            max_seq_sub = await db[INSTANCE_SUBCATEGORIES].find_one(
-                {"app_instance_id": inst_oid, "category_id": cat_oid, "deleted_at": None},
-                sort=[("sequence", -1)],
-            )
-            sub_seq = compute_next_sequence(max_seq_sub.get("sequence") if max_seq_sub else None)
-            try:
-                await sub_repo.insert_one(
-                    {
-                        "app_instance_id": inst_oid,
-                        "source_id": sub_oid,
-                        "category_id": cat_oid,
-                        "is_enabled": True,
-                        "sequence": sub_seq,
-                        "overrides": {},
-                        "created_at": now,
-                        "updated_at": now,
-                        "deleted_at": None,
-                    }
-                )
-                added_subs += 1
-            except DuplicateKeyError:
-                await db[INSTANCE_SUBCATEGORIES].update_one(
-                    {"app_instance_id": inst_oid, "source_id": sub_oid},
-                    {
-                        "$set": {
-                            "deleted_at": None,
-                            "is_enabled": True,
-                            "category_id": cat_oid,
-                            "updated_at": now,
-                        }
-                    },
-                )
-
-        if existing and existing.get("deleted_at") is not None:
-            await db[INSTANCE_ASSETS].update_one(
-                {"_id": existing["_id"]},
+        target_inst_cat = None
+        if target_category_id:
+            t_cat_oid = to_object_id(target_category_id)
+            target_inst_cat = await db[INSTANCE_CATEGORIES].find_one(
                 {
-                    "$set": {
-                        "deleted_at": None,
-                        "is_enabled": True,
-                        "category_id": cat_oid,
-                        "sub_category_id": sub_oid,
-                        "updated_at": now,
-                    }
-                },
+                    "app_instance_id": inst_oid,
+                    "$or": [{"_id": t_cat_oid}, {"source_id": t_cat_oid}],
+                }
             )
-            added_assets += 1
+
+        if target_inst_cat:
+            if target_inst_cat.get("deleted_at") is not None:
+                await db[INSTANCE_CATEGORIES].update_one(
+                    {"_id": target_inst_cat["_id"]},
+                    {"$set": {"deleted_at": None, "is_enabled": True, "updated_at": now}},
+                )
+                added_cats += 1
+            cat_link_id = target_inst_cat.get("source_id") or target_inst_cat["_id"]
+        else:
+            cat_oid = central_asset["category_id"]
+            cat_link_id = cat_oid
+            # Ensure parent category reference exists
+            parent_inst_cat = await db[INSTANCE_CATEGORIES].find_one(
+                {
+                    "app_instance_id": inst_oid,
+                    "source_id": cat_oid,
+                }
+            )
+            if parent_inst_cat:
+                if parent_inst_cat.get("deleted_at") is not None:
+                    await db[INSTANCE_CATEGORIES].update_one(
+                        {"_id": parent_inst_cat["_id"]},
+                        {"$set": {"deleted_at": None, "is_enabled": True, "updated_at": now}},
+                    )
+                    added_cats += 1
+            else:
+                max_seq = await db[INSTANCE_CATEGORIES].find_one(
+                    {"app_instance_id": inst_oid, "deleted_at": None}, sort=[("sequence", -1)]
+                )
+                cat_seq = compute_next_sequence(max_seq.get("sequence") if max_seq else None)
+                try:
+                    await cat_repo.insert_one(
+                        {
+                            "app_instance_id": inst_oid,
+                            "source_id": cat_oid,
+                            "is_enabled": True,
+                            "sequence": cat_seq,
+                            "overrides": {},
+                            "created_at": now,
+                            "updated_at": now,
+                            "deleted_at": None,
+                        }
+                    )
+                    added_cats += 1
+                except DuplicateKeyError:
+                    await db[INSTANCE_CATEGORIES].update_one(
+                        {"app_instance_id": inst_oid, "source_id": cat_oid},
+                        {"$set": {"deleted_at": None, "is_enabled": True, "updated_at": now}},
+                    )
+
+        target_inst_sub = None
+        if target_sub_category_id:
+            t_sub_oid = to_object_id(target_sub_category_id)
+            target_inst_sub = await db[INSTANCE_SUBCATEGORIES].find_one(
+                {
+                    "app_instance_id": inst_oid,
+                    "$or": [{"_id": t_sub_oid}, {"source_id": t_sub_oid}],
+                }
+            )
+
+        if target_inst_sub:
+            if target_inst_sub.get("deleted_at") is not None:
+                await db[INSTANCE_SUBCATEGORIES].update_one(
+                    {"_id": target_inst_sub["_id"]},
+                    {
+                        "$set": {
+                            "deleted_at": None,
+                            "is_enabled": True,
+                            "category_id": cat_link_id,
+                            "updated_at": now,
+                        }
+                    },
+                )
+                added_subs += 1
+            sub_link_id = target_inst_sub.get("source_id") or target_inst_sub["_id"]
+        else:
+            sub_oid = central_asset["sub_category_id"]
+            sub_link_id = sub_oid
+            # Ensure parent subcategory reference exists
+            parent_inst_sub = await db[INSTANCE_SUBCATEGORIES].find_one(
+                {
+                    "app_instance_id": inst_oid,
+                    "source_id": sub_oid,
+                }
+            )
+            if parent_inst_sub:
+                if parent_inst_sub.get("deleted_at") is not None:
+                    await db[INSTANCE_SUBCATEGORIES].update_one(
+                        {"_id": parent_inst_sub["_id"]},
+                        {
+                            "$set": {
+                                "deleted_at": None,
+                                "is_enabled": True,
+                                "category_id": cat_link_id,
+                                "updated_at": now,
+                            }
+                        },
+                    )
+                    added_subs += 1
+            else:
+                max_seq_sub = await db[INSTANCE_SUBCATEGORIES].find_one(
+                    {"app_instance_id": inst_oid, "category_id": cat_link_id, "deleted_at": None},
+                    sort=[("sequence", -1)],
+                )
+                sub_seq = compute_next_sequence(max_seq_sub.get("sequence") if max_seq_sub else None)
+                try:
+                    await sub_repo.insert_one(
+                        {
+                            "app_instance_id": inst_oid,
+                            "source_id": sub_oid,
+                            "category_id": cat_link_id,
+                            "is_enabled": True,
+                            "sequence": sub_seq,
+                            "overrides": {},
+                            "created_at": now,
+                            "updated_at": now,
+                            "deleted_at": None,
+                        }
+                    )
+                    added_subs += 1
+                except DuplicateKeyError:
+                    await db[INSTANCE_SUBCATEGORIES].update_one(
+                        {"app_instance_id": inst_oid, "source_id": sub_oid},
+                        {
+                            "$set": {
+                                "deleted_at": None,
+                                "is_enabled": True,
+                                "category_id": cat_link_id,
+                                "updated_at": now,
+                            }
+                        },
+                    )
+
+        if existing:
+            if existing.get("deleted_at") is not None:
+                await db[INSTANCE_ASSETS].update_one(
+                    {"_id": existing["_id"]},
+                    {
+                        "$set": {
+                            "deleted_at": None,
+                            "is_enabled": True,
+                            "category_id": cat_link_id,
+                            "sub_category_id": sub_link_id,
+                            "updated_at": now,
+                        }
+                    },
+                )
+                added_assets += 1
+            else:
+                if target_category_id or target_sub_category_id:
+                    await db[INSTANCE_ASSETS].update_one(
+                        {"_id": existing["_id"]},
+                        {
+                            "$set": {
+                                "category_id": cat_link_id,
+                                "sub_category_id": sub_link_id,
+                                "updated_at": now,
+                            }
+                        },
+                    )
+                already_present += 1
         else:
             max_seq_asset = await db[INSTANCE_ASSETS].find_one(
                 {
                     "app_instance_id": inst_oid,
-                    "category_id": cat_oid,
-                    "sub_category_id": sub_oid,
+                    "category_id": cat_link_id,
+                    "sub_category_id": sub_link_id,
                     "deleted_at": None,
                 },
                 sort=[("sequence", -1)],
@@ -538,8 +641,8 @@ async def add_references(
                     {
                         "app_instance_id": inst_oid,
                         "source_id": a_oid,
-                        "category_id": cat_oid,
-                        "sub_category_id": sub_oid,
+                        "category_id": cat_link_id,
+                        "sub_category_id": sub_link_id,
                         "is_enabled": True,
                         "sequence": asset_seq,
                         "is_premium": False,
@@ -561,8 +664,8 @@ async def add_references(
                         "$set": {
                             "deleted_at": None,
                             "is_enabled": True,
-                            "category_id": cat_oid,
-                            "sub_category_id": sub_oid,
+                            "category_id": cat_link_id,
+                            "sub_category_id": sub_link_id,
                             "updated_at": now,
                         }
                     },

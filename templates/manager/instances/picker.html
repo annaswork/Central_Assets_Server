@@ -1,10 +1,10 @@
-{% extends "base.html" %}
+{% extends "manager/base.html" %}
 
 {% block title %}Central Library Content Picker — {{ instance.name }}{% endblock %}
 
 {% block content %}
 <div style="margin-bottom:1.5rem;">
-  <a href="/admin/instances/{{ instance.id }}/content" style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
+  <a href="/manager/instances/{{ instance.id }}/content" style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
     ← Back to {{ instance.name }}
   </a>
   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
@@ -22,11 +22,11 @@
 </div>
 
 {% if target_category_id or target_sub_category_id %}
-<div class="banner banner-info" style="margin-bottom:1.5rem; display:flex; align-items:center; justify-content:space-between;">
+<div class="banner banner-info" style="margin-bottom:1.5rem; display:flex; align-items:center; justify-content:space-between; padding:0.85rem 1.25rem; border-radius:var(--radius-sm, 8px); background:var(--md-sys-color-surface-container); border:1px solid var(--md-sys-color-outline-variant);">
   <div>
-    📁 <strong>Target Folder Active:</strong> Creative assets added will be placed directly into this folder in {{ instance.name }}.
+    📁 <strong>Target Folder Active:</strong> Items added will be placed directly into this folder in {{ instance.name }}.
   </div>
-  <a href="/admin/instances/{{ instance.id }}/picker" style="font-size:0.85rem; color:inherit; text-decoration:underline;">
+  <a href="/manager/instances/{{ instance.id }}/picker" style="font-size:0.85rem; color:inherit; text-decoration:underline;">
     Clear target folder
   </a>
 </div>
@@ -58,7 +58,7 @@
     </div>
   </div>
 
-  <div id="categoriesGrid" class="grid grid-3" style="gap:1.25rem;">
+  <div id="categoriesGrid" class="grid grid-3" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:1.25rem;">
     {% for cat in categories %}
       <div class="card cat-card-item" data-cat-id="{{ cat.id }}" data-cat-name="{{ cat.name | lower }}" style="padding:1rem; display:flex; flex-direction:column; border:1px solid var(--md-sys-color-outline-variant); transition:border-color 0.15s, box-shadow 0.15s;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
@@ -70,7 +70,7 @@
         </div>
 
         <div style="display:flex; gap:0.75rem; align-items:center; margin-bottom:0.75rem;">
-          <div style="width:54px; height:54px; border-radius:var(--radius-sm); overflow:hidden; background:var(--md-sys-color-surface-container-low); display:flex; align-items:center; justify-content:center; border:1px solid var(--md-sys-color-outline-variant); flex-shrink:0;">
+          <div style="width:54px; height:54px; border-radius:var(--radius-sm, 6px); overflow:hidden; background:var(--md-sys-color-surface-container-low); display:flex; align-items:center; justify-content:center; border:1px solid var(--md-sys-color-outline-variant); flex-shrink:0;">
             {% if cat.thumbnail_url or cat.thumbnailUrl or cat.image_url %}
               <img src="{{ cat.thumbnail_url or cat.thumbnailUrl or cat.image_url }}" alt="{{ cat.name }}" style="width:100%; height:100%; object-fit:cover;">
             {% else %}
@@ -120,7 +120,7 @@
     </div>
   </div>
 
-  <div id="subcategoriesGrid" class="grid grid-3" style="gap:1.25rem;">
+  <div id="subcategoriesGrid" class="grid grid-3" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:1.25rem;">
     {% for sub in subcategories %}
       <div class="card sub-card-item" data-sub-id="{{ sub.id }}" data-cat-id="{{ sub.category_id }}" data-sub-name="{{ sub.name | lower }}" style="padding:1rem; display:flex; flex-direction:column; border:1px solid var(--md-sys-color-outline-variant); transition:border-color 0.15s, box-shadow 0.15s;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
@@ -132,7 +132,7 @@
         </div>
 
         <div style="display:flex; gap:0.75rem; align-items:center; margin-bottom:0.75rem;">
-          <div style="width:54px; height:54px; border-radius:var(--radius-sm); overflow:hidden; background:var(--md-sys-color-surface-container-low); display:flex; align-items:center; justify-content:center; border:1px solid var(--md-sys-color-outline-variant); flex-shrink:0;">
+          <div style="width:54px; height:54px; border-radius:var(--radius-sm, 6px); overflow:hidden; background:var(--md-sys-color-surface-container-low); display:flex; align-items:center; justify-content:center; border:1px solid var(--md-sys-color-outline-variant); flex-shrink:0;">
             {% if sub.thumbnail_url or sub.thumbnailUrl or sub.image_url %}
               <img src="{{ sub.thumbnail_url or sub.thumbnailUrl or sub.image_url }}" alt="{{ sub.name }}" style="width:100%; height:100%; object-fit:cover;">
             {% else %}
@@ -208,7 +208,7 @@
       <div style="font-size:0.85rem;">Try changing your category or search criteria.</div>
     </div>
 
-    <div id="pickerGrid" class="grid grid-4" style="gap:1rem;"></div>
+    <div id="pickerGrid" class="grid grid-4" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:1rem;"></div>
   </div>
 </div>
 
@@ -253,12 +253,12 @@ function toggleCategorySelect(catId) {
 
 function updateCatCardStyles() {
   document.querySelectorAll('.cat-card-item').forEach(card => {
-    const id = card.dataset.catId;
-    const isChecked = selectedCategoryIds.has(id);
+    const cid = card.dataset.catId;
+    const isSelected = selectedCategoryIds.has(cid);
+    card.style.borderColor = isSelected ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-outline-variant)';
+    card.style.background = isSelected ? 'var(--md-sys-color-surface-container)' : 'var(--md-sys-color-surface)';
     const cb = card.querySelector('.cat-checkbox');
-    if (cb) cb.checked = isChecked;
-    card.style.borderColor = isChecked ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-outline-variant)';
-    card.style.background = isChecked ? 'var(--md-sys-color-surface-container)' : 'var(--md-sys-color-surface)';
+    if (cb) cb.checked = isSelected;
   });
 }
 
@@ -283,12 +283,12 @@ function toggleSubcategorySelect(subId) {
 
 function updateSubCardStyles() {
   document.querySelectorAll('.sub-card-item').forEach(card => {
-    const id = card.dataset.subId;
-    const isChecked = selectedSubcategoryIds.has(id);
+    const sid = card.dataset.subId;
+    const isSelected = selectedSubcategoryIds.has(sid);
+    card.style.borderColor = isSelected ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-outline-variant)';
+    card.style.background = isSelected ? 'var(--md-sys-color-surface-container)' : 'var(--md-sys-color-surface)';
     const cb = card.querySelector('.sub-checkbox');
-    if (cb) cb.checked = isChecked;
-    card.style.borderColor = isChecked ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-outline-variant)';
-    card.style.background = isChecked ? 'var(--md-sys-color-surface-container)' : 'var(--md-sys-color-surface)';
+    if (cb) cb.checked = isSelected;
   });
 }
 
@@ -307,7 +307,7 @@ function filterSubcategoriesList() {
 function onAssetCategoryChange(catId) {
   const subSelect = document.getElementById('pickerSubCategorySelect');
   if (catId) {
-    fetch(`/admin/instances/${instanceId}/picker/subcategories?categoryId=${catId}`)
+    fetch(`/manager/instances/${instanceId}/picker/subcategories?categoryId=${encodeURIComponent(catId)}`)
       .then(r => r.json())
       .then(data => {
         if (data.items && data.items.length > 0) {
@@ -366,7 +366,7 @@ async function loadPickerAssets() {
     if (query) params.set('q', query);
     params.set('page_size', '200');
 
-    const res = await fetch(`/admin/instances/${instanceId}/picker/assets?${params.toString()}`);
+    const res = await fetch(`/manager/instances/${instanceId}/picker/assets?${params.toString()}`);
     const json = await res.json();
     loadedAssets = json.items || [];
 
@@ -423,7 +423,7 @@ function renderAssetGrid(assets) {
         ${asset.type ? `<span class="badge badge-secondary" style="font-size:0.7rem; text-transform:uppercase;">${asset.type}</span>` : ''}
       </div>
 
-      <div style="width:100%; height:130px; border-radius:var(--radius-sm); overflow:hidden; background:var(--md-sys-color-surface-container-low); display:flex; align-items:center; justify-content:center; margin-bottom:0.5rem; border:1px solid var(--md-sys-color-outline-variant);">
+      <div style="width:100%; height:130px; border-radius:var(--radius-sm, 6px); overflow:hidden; background:var(--md-sys-color-surface-container-low); display:flex; align-items:center; justify-content:center; margin-bottom:0.5rem; border:1px solid var(--md-sys-color-outline-variant);">
         ${thumbUrl ? `<img src="${thumbUrl}" alt="${asset.name}" style="max-width:100%; max-height:100%; object-fit:contain;" loading="lazy">` : '<span style="font-size:2rem; opacity:0.6;">🖼️</span>'}
       </div>
 
@@ -515,15 +515,15 @@ async function sendAddReferencesRequest(payload) {
   btn.textContent = 'Importing references...';
 
   try {
-    const res = await fetch(`/admin/instances/${instanceId}/references`, {
+    const res = await fetch(`/manager/instances/${instanceId}/references`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
     const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Failed to add references');
+    if (!res.ok) throw new Error(json.message || json.error || 'Failed to add references');
 
-    window.location.href = `/admin/instances/${instanceId}/content`;
+    window.location.href = `/manager/instances/${instanceId}/content`;
   } catch (err) {
     alert('Error adding references: ' + err.message);
     btn.disabled = false;
@@ -550,4 +550,3 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 {% endblock %}
-

@@ -22,11 +22,14 @@
       </p>
     </div>
 
-    <div>
-      <button type="button" class="btn btn-primary" onclick="openImportModal()" style="display:inline-flex; align-items:center; gap:0.5rem;">
-        <span>📥</span>
-        <span>Import from Central Library</span>
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+      <button type="button" class="btn btn-outlined" onclick="openCreateFolderModal()">
+        📁 + Create Folder
       </button>
+      <a href="/manager/instances/{{ instance.id }}/picker" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:0.5rem;">
+        <span>📥</span>
+        <span>+ Add from Central Library</span>
+      </a>
     </div>
   </div>
 </div>
@@ -43,6 +46,17 @@
 
 <!-- SECTION 1: FOLDERS & HIERARCHY -->
 <div id="sectionFolders" style="display:{% if active_section == 'assets' %}none{% else %}block{% endif %};">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+    <div>
+      <h3 style="margin:0;">Categories & Subcategories</h3>
+      <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.85rem; margin:0.2rem 0 0 0;">
+        Manage folder structure, categories, and subcategories for this app instance
+      </p>
+    </div>
+    <button type="button" class="btn btn-outlined" style="font-size:0.85rem;" onclick="openCreateFolderModal()">
+      + New Folder / Sub-folder
+    </button>
+  </div>
   <!-- Filters & Search (Categories & Subcategories) -->
   <div class="card search-filter-card" style="padding:0.85rem 1rem; margin-bottom:1.5rem; overflow-x:auto;">
     <form method="GET" action="/manager/instances/{{ instance.id }}/content" class="search-filter-form" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem; width:100%;">
@@ -106,14 +120,16 @@
               </div>
             </div>
 
-            <div style="display:flex; align-items:center; gap:0.5rem;">
-              <form method="POST" action="/manager/instances/{{ instance.id }}/remove-reference" onsubmit="return confirm('Remove category {{ cat.name }} and all its contents from this app?');" style="margin:0;">
-                <input type="hidden" name="content_type" value="category">
-                <input type="hidden" name="reference_id" value="{{ cat.id }}">
-                <button type="submit" class="btn btn-outlined btn-sm" style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);">
-                  Remove Category
-                </button>
-              </form>
+            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+              <a href="/manager/instances/{{ instance.id }}/picker?target_category_id={{ cat.sourceId or cat.id }}&tab=subcategories" class="btn btn-outlined" style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;" title="Import Central Items into this Folder">
+                📥 Import Central Data
+              </a>
+              <button type="button" class="btn btn-outlined" style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;" onclick="openCreateFolderModal('subcategory', '{{ cat.sourceId or cat.id }}')">
+                + Add Sub-folder
+              </button>
+              <button type="button" class="btn btn-destructive" style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;" onclick="detachCategoryFolder('{{ cat.id }}', '{{ cat.name }}')">
+                Detach Folder
+              </button>
             </div>
           </div>
 
@@ -155,20 +171,22 @@
                     </div>
 
                     <div style="display:flex; align-items:center; gap:0.35rem;">
-                      <form method="POST" action="/manager/instances/{{ instance.id }}/remove-reference" onsubmit="return confirm('Remove sub-folder {{ sub.name }} from this instance?');" style="margin:0;">
-                        <input type="hidden" name="content_type" value="subcategory">
-                        <input type="hidden" name="reference_id" value="{{ sub.id }}">
-                        <button type="submit" class="btn btn-outlined btn-sm" style="font-size:0.75rem; padding:0.2rem 0.45rem; color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);">
-                          ✕
-                        </button>
-                      </form>
+                      <a href="/manager/instances/{{ instance.id }}/picker?target_category_id={{ cat.sourceId or cat.id }}&target_sub_category_id={{ sub.sourceId or sub.id }}&tab=assets" class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;" title="Import into Sub-folder">
+                        📥 Import
+                      </a>
+                      <button type="button" class="btn btn-destructive" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;" onclick="detachSubcategoryFolder('{{ sub.id }}', '{{ sub.name }}')">
+                        Detach
+                      </button>
                     </div>
                   </div>
                 {% endfor %}
               </div>
             {% else %}
               <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); padding:0.35rem 0;">
-                No sub-folders in this category.
+                No sub-folders in this category yet.
+                <a href="javascript:void(0)" onclick="openCreateFolderModal('subcategory', '{{ cat.sourceId or cat.id }}')" style="color:var(--md-sys-color-primary); margin-left:0.25rem;">
+                  + Add a sub-folder
+                </a>
               </div>
             {% endif %}
           </div>
@@ -191,11 +209,17 @@
       <div style="font-size:2.5rem; margin-bottom:0.5rem;">📁</div>
       <div style="font-size:1.1rem; font-weight:600;">No folders referenced in this app yet</div>
       <div style="font-size:0.9rem; margin-top:0.25rem; margin-bottom:1rem;">
-        Import folders from the central library to populate this app instance.
+        Create folders or import folders from the central library to populate this app instance.
       </div>
-      <button type="button" class="btn btn-primary btn-sm" onclick="openImportModal()">
-        📥 Import Central Folders
-      </button>
+      <div style="display:flex; gap:0.5rem; justify-content:center; flex-wrap:wrap; margin-top:1rem;">
+        <button type="button" class="btn btn-outlined" onclick="openCreateFolderModal()">
+          📁 Create Folder
+        </button>
+        <a href="/manager/instances/{{ instance.id }}/picker" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:0.5rem;">
+          <span>📥</span>
+          <span>Import Central Folders</span>
+        </a>
+      </div>
     </div>
   {% endif %}
 </div>
@@ -395,6 +419,56 @@
   </div>
 </div>
 
+<!-- Create Folder Modal -->
+<div id="createFolderModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:9999; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+  <div class="card" style="width:100%; max-width:480px; margin:1rem; padding:1.5rem; box-shadow:0 12px 36px rgba(0,0,0,0.4); border:1px solid var(--md-sys-color-outline-variant);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem;">
+      <h3 style="margin:0; font-size:1.15rem;">📁 Create Folder in {{ instance.name }}</h3>
+      <button type="button" onclick="closeCreateFolderModal()" style="background:none; border:none; color:var(--md-sys-color-on-surface-variant); cursor:pointer; font-size:1.25rem;">✕</button>
+    </div>
+
+    <form id="createFolderForm" onsubmit="handleCreateFolderSubmit(event)">
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="label">Folder Level</label>
+        <div style="display:flex; gap:1.5rem; margin-top:0.35rem;">
+          <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer;">
+            <input type="radio" name="folder_type" value="category" checked onchange="onFolderTypeChange('category')">
+            <span>Category (Top-level)</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer;">
+            <input type="radio" name="folder_type" value="subcategory" onchange="onFolderTypeChange('subcategory')">
+            <span>Sub-folder (Subcategory)</span>
+          </label>
+        </div>
+      </div>
+
+      <div id="parentCategoryWrap" class="form-group" style="margin-bottom:1rem; display:none;">
+        <label class="label" for="parentCategorySelect">Parent Category *</label>
+        <select id="parentCategorySelect" class="select" style="width:100%;">
+          {% for cat in all_categories or categories %}
+            <option value="{{ cat.sourceId or cat.id }}">{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="label" for="folderNameInput">Folder Name *</label>
+        <input type="text" id="folderNameInput" class="input" required placeholder="e.g. Romantic Love Frames">
+      </div>
+
+      <div class="form-group" style="margin-bottom:1.5rem;">
+        <label class="label" for="folderThumbInput">Thumbnail URL (Optional)</label>
+        <input type="url" id="folderThumbInput" class="input" placeholder="https://example.com/thumb.png">
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:0.75rem; border-top:1px solid var(--md-sys-color-outline-variant); padding-top:1rem;">
+        <button type="button" class="btn btn-outlined" onclick="closeCreateFolderModal()">Cancel</button>
+        <button type="submit" id="submitFolderBtn" class="btn btn-primary">Create Folder</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Central Library Import Modal (Scoped Selection) -->
 <div id="importModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; padding:1.5rem;">
   <div class="card" style="width:100%; max-width:640px; max-height:85vh; display:flex; flex-direction:column; padding:0; overflow:hidden; box-shadow:var(--md-sys-elevation-4);">
@@ -512,6 +586,97 @@
       url.searchParams.set('tab', tab);
       window.history.replaceState({}, '', url.toString());
     } catch (e) {}
+  }
+
+  function openCreateFolderModal(folderType = 'category', parentCatId = '') {
+    const modal = document.getElementById('createFolderModal');
+    const typeRadios = document.getElementsByName('folder_type');
+    typeRadios.forEach(r => {
+      r.checked = r.value === folderType;
+    });
+    onFolderTypeChange(folderType);
+
+    if (parentCatId) {
+      const pSelect = document.getElementById('parentCategorySelect');
+      if (pSelect) pSelect.value = parentCatId;
+    }
+
+    document.getElementById('folderNameInput').value = '';
+    document.getElementById('folderThumbInput').value = '';
+    modal.style.display = 'flex';
+    document.getElementById('folderNameInput').focus();
+  }
+
+  function closeCreateFolderModal() {
+    document.getElementById('createFolderModal').style.display = 'none';
+  }
+
+  function onFolderTypeChange(type) {
+    const parentWrap = document.getElementById('parentCategoryWrap');
+    parentWrap.style.display = type === 'subcategory' ? 'block' : 'none';
+  }
+
+  async function handleCreateFolderSubmit(e) {
+    e.preventDefault();
+    const folderType = document.querySelector('input[name="folder_type"]:checked').value;
+    const name = document.getElementById('folderNameInput').value.trim();
+    const parentCategoryId = document.getElementById('parentCategorySelect').value;
+    const thumbnailUrl = document.getElementById('folderThumbInput').value.trim();
+
+    if (!name) return;
+
+    const btn = document.getElementById('submitFolderBtn');
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
+
+    try {
+      const payload = {
+        folder_type: folderType,
+        name: name,
+        parent_category_id: folderType === 'subcategory' ? parentCategoryId : '',
+        thumbnail_url: thumbnailUrl
+      };
+
+      const res = await fetch(`/manager/instances/${instanceId}/folders/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Failed to create folder');
+
+      window.location.reload();
+    } catch (err) {
+      alert('Error creating folder: ' + err.message);
+      btn.disabled = false;
+      btn.textContent = 'Create Folder';
+    }
+  }
+
+  async function detachCategoryFolder(catId, catName) {
+    if (!confirm(`Detach folder "${catName}" and all its referenced sub-folders and assets from this app instance? Central data remains untouched.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/manager/instances/${instanceId}/categories/${catId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to detach category folder');
+      window.location.reload();
+    } catch (err) {
+      alert('Error detaching folder: ' + err.message);
+    }
+  }
+
+  async function detachSubcategoryFolder(subId, subName) {
+    if (!confirm(`Detach sub-folder "${subName}" and its referenced assets from this app instance? Central data remains untouched.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/manager/instances/${instanceId}/subcategories/${subId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to detach sub-folder');
+      window.location.reload();
+    } catch (err) {
+      alert('Error detaching sub-folder: ' + err.message);
+    }
   }
 
   // --- Referenced Assets AJAX Filtering & Subcategory Dynamic Scoping (Manager) ---

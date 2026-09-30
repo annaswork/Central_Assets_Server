@@ -1,7 +1,9 @@
 """Manager portal App Instance routes and central library importing."""
 
+import re
 from urllib.parse import quote_plus
 
+from bson import ObjectId
 from fastapi import APIRouter, Depends, Form, Query, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -15,7 +17,7 @@ from controller.app_instance_controller import (
     list_app_instances,
     update_app_instance,
 )
-from controller.asset_controller import asset_has_type
+from controller.asset_controller import asset_has_type, list_assets
 from controller.base_controller import serialize_mongo_doc
 from controller.catalog_controller import (
     get_resolved_assets,
@@ -48,6 +50,7 @@ from router.deps import get_db
 from utils.datetimes import format_datetime_display, utc_now
 from utils.errors import ConflictError, ForbiddenError, NotFoundError, ValidationError
 from utils.ids import to_object_id
+from utils.sequencing import compute_next_sequence
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 templates.env.filters["format_datetime"] = format_datetime_display
@@ -445,6 +448,8 @@ async def manager_import_references(
     category_ids = body.get("category_ids") or []
     sub_category_ids = body.get("sub_category_ids") or []
     asset_ids = body.get("asset_ids") or []
+    target_category_id = body.get("target_category_id") or None
+    target_sub_category_id = body.get("target_sub_category_id") or None
 
     result = await add_references(
         db,
@@ -452,6 +457,8 @@ async def manager_import_references(
         category_ids=category_ids,
         sub_category_ids=sub_category_ids,
         asset_ids=asset_ids,
+        target_category_id=target_category_id,
+        target_sub_category_id=target_sub_category_id,
     )
 
     return JSONResponse(content={"success": True, "result": result})
@@ -741,3 +748,428 @@ async def manager_instance_reorder(
         ordered_ids=ordered_ids,
     )
     return JSONResponse(status_code=200, content={"success": True, "data": res})
+
+
+@router.get("/{instance_id}/picker")
+async def manager_instance_picker(
+    request: Request,
+    instance_id: str,
+    target_category_id: str | None = None,
+    target_sub_category_id: str | None = None,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Manager picker for selecting and importing central categories, subcategories, and assets."""
+    session = get_current_manager_session(request)
+    if not session:
+        return RedirectResponse(url="/manager/login", status_code=303)
+
+    user_id = session["user_id"]
+    try:
+        await verify_manager_instance_access(db, user_id, instance_id)
+    except (ForbiddenError, NotFoundError):
+        msg = quote_plus("Access to this app instance has been revoked or is not available.")
+        return RedirectResponse(url=f"/manager/instances?msg={msg}&msg_type=error", status_code=303)
+
+    instance = await get_app_instance(db, instance_id=instance_id)
+    manager = await get_manager_by_id(db, user_id)
+
+    central_cats = await list_categories(db, page=1, page_size=200)
+    for cat in central_cats.get("items", []):
+        c_oid = to_object_id(cat["id"])
+        cat["subcategory_count"] = await db[SUBCATEGORIES].count_documents(
+            {"category_id": c_oid, "deleted_at": None}
+        )
+        cat["asset_count"] = await db[ASSETS].count_documents(
+            {"category_id": c_oid, "deleted_at": None}
+        )
+
+    central_subs = await list_subcategories(db, page=1, page_size=500)
+    for sub in central_subs.get("items", []):
+        s_oid = to_object_id(sub["id"])
+        sub["asset_count"] = await db[ASSETS].count_documents(
+            {"sub_category_id": s_oid, "deleted_at": None}
+        )
+
+    initial_assets = await list_assets(db, page=1, page_size=100)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="manager/instances/picker.html",
+        context={
+            "session": session,
+            "manager": manager,
+            "instance": instance,
+            "categories": central_cats.get("items", []),
+            "subcategories": central_subs.get("items", []),
+            "initial_assets": initial_assets.get("items", []),
+            "target_category_id": target_category_id or "",
+            "target_sub_category_id": target_sub_category_id or "",
+            "active_tab": "instances",
+        },
+    )
+
+
+@router.get("/{instance_id}/picker/categories")
+async def manager_instance_picker_categories(
+    request: Request,
+    instance_id: str,
+    q: str | None = None,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    session = get_current_manager_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    user_id = session["user_id"]
+    await verify_manager_instance_access(db, user_id, instance_id)
+
+    clean_q = q.strip() if q and q.strip() else None
+    result = await list_categories(db, search=clean_q, page=1, page_size=200)
+    items = result.get("items", [])
+    for cat in items:
+        c_oid = to_object_id(cat["id"])
+        cat["subcategory_count"] = await db[SUBCATEGORIES].count_documents(
+            {"category_id": c_oid, "deleted_at": None}
+        )
+        cat["asset_count"] = await db[ASSETS].count_documents(
+            {"category_id": c_oid, "deleted_at": None}
+        )
+    return JSONResponse(status_code=200, content={"success": True, "items": items})
+
+
+@router.get("/{instance_id}/picker/subcategories")
+async def manager_instance_picker_subcategories(
+    request: Request,
+    instance_id: str,
+    categoryId: str | None = None,
+    q: str | None = None,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    session = get_current_manager_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    user_id = session["user_id"]
+    await verify_manager_instance_access(db, user_id, instance_id)
+
+    clean_cat = categoryId.strip() if categoryId and categoryId.strip() else None
+    clean_q = q.strip() if q and q.strip() else None
+    result = await list_subcategories(db, category_id=clean_cat, search=clean_q, page=1, page_size=500)
+    items = result.get("items", [])
+    for sub in items:
+        s_oid = to_object_id(sub["id"])
+        sub["asset_count"] = await db[ASSETS].count_documents(
+            {"sub_category_id": s_oid, "deleted_at": None}
+        )
+    return JSONResponse(status_code=200, content={"success": True, "items": items})
+
+
+@router.get("/{instance_id}/picker/assets")
+async def manager_instance_picker_assets(
+    request: Request,
+    instance_id: str,
+    categoryId: str | None = None,
+    subCategoryId: str | None = None,
+    q: str | None = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=100, ge=1, le=500),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    session = get_current_manager_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    user_id = session["user_id"]
+    await verify_manager_instance_access(db, user_id, instance_id)
+
+    clean_cat = categoryId.strip() if categoryId and categoryId.strip() else None
+    clean_sub = subCategoryId.strip() if subCategoryId and subCategoryId.strip() else None
+    clean_q = q.strip() if q and q.strip() else None
+
+    result = await list_assets(
+        db,
+        category_id=clean_cat,
+        sub_category_id=clean_sub,
+        search=clean_q,
+        page=page,
+        page_size=page_size,
+    )
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "items": result.get("items", []),
+            "total": result.get("total", 0),
+        },
+    )
+
+
+@router.post("/{instance_id}/references")
+async def manager_instance_add_references(
+    request: Request,
+    instance_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Add central category, subcategory, or asset references into an app instance."""
+    session = get_current_manager_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    user_id = session["user_id"]
+    await verify_manager_instance_access(db, user_id, instance_id)
+
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+
+    category_ids: list[str] = list(data.get("category_ids") or [])
+    sub_category_ids: list[str] = list(data.get("sub_category_ids") or [])
+    asset_ids: list[str] = list(data.get("asset_ids") or [])
+    target_category_id = data.get("target_category_id") or None
+    target_sub_category_id = data.get("target_sub_category_id") or None
+
+    for item in data.get("items", []):
+        t_type = item.get("target_type") or item.get("type")
+        t_id = item.get("target_id") or item.get("id")
+        if t_type == "asset" and t_id:
+            asset_ids.append(t_id)
+        elif t_type == "category" and t_id:
+            category_ids.append(t_id)
+        elif t_type in ("subcategory", "sub_category") and t_id:
+            sub_category_ids.append(t_id)
+
+    res = await add_references(
+        db,
+        app_instance_id=instance_id,
+        category_ids=list(dict.fromkeys(category_ids)),
+        sub_category_ids=list(dict.fromkeys(sub_category_ids)),
+        asset_ids=list(dict.fromkeys(asset_ids)),
+        target_category_id=target_category_id,
+        target_sub_category_id=target_sub_category_id,
+    )
+    return JSONResponse(status_code=200, content={"success": True, "result": res})
+
+
+@router.post("/{instance_id}/folders/create")
+async def manager_instance_create_folder(
+    request: Request,
+    instance_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Create a new category folder or subcategory folder directly inside this app instance."""
+    session = get_current_manager_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    user_id = session["user_id"]
+    await verify_manager_instance_access(db, user_id, instance_id)
+
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+
+    folder_type = str(data.get("folder_type", "category")).strip().lower()
+    name = (data.get("name") or "").strip()
+    parent_category_id = (data.get("parent_category_id") or "").strip()
+    thumbnail_url = (data.get("thumbnail_url") or "").strip() or None
+
+    if not name:
+        return JSONResponse(
+            status_code=400, content={"success": False, "message": "Folder name is required"}
+        )
+
+    inst_oid = to_object_id(instance_id)
+    now = utc_now()
+
+    if folder_type == "category":
+        # Check if Category folder already exists in this app instance
+        existing_cat = await db[INSTANCE_CATEGORIES].find_one(
+            {
+                "app_instance_id": inst_oid,
+                "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"},
+            }
+        )
+        if existing_cat:
+            if existing_cat.get("deleted_at") is not None:
+                await db[INSTANCE_CATEGORIES].update_one(
+                    {"_id": existing_cat["_id"]},
+                    {"$set": {"deleted_at": None, "is_enabled": True, "updated_at": now}},
+                )
+                cat_oid = existing_cat["_id"]
+            else:
+                return JSONResponse(
+                    status_code=400,
+                    content={"success": False, "message": f"Category folder '{name}' already exists in this app instance"},
+                )
+        else:
+            max_seq_doc = await db[INSTANCE_CATEGORIES].find_one(
+                {"app_instance_id": inst_oid, "deleted_at": None},
+                sort=[("sequence", -1)],
+            )
+            seq = compute_next_sequence(max_seq_doc.get("sequence") if max_seq_doc else None)
+            cat_oid = ObjectId()
+            await db[INSTANCE_CATEGORIES].insert_one(
+                {
+                    "_id": cat_oid,
+                    "app_instance_id": inst_oid,
+                    "source_id": None,
+                    "name": name,
+                    "thumbnail_url": thumbnail_url,
+                    "is_enabled": True,
+                    "sequence": seq,
+                    "overrides": {"name": name, "thumbnail_url": thumbnail_url},
+                    "created_at": now,
+                    "updated_at": now,
+                    "deleted_at": None,
+                }
+            )
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "folder_type": "category",
+                "id": str(cat_oid),
+                "name": name,
+            },
+        )
+
+    elif folder_type == "subcategory":
+        if not parent_category_id:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "message": "Parent category is required for sub-folder"},
+            )
+        p_oid = to_object_id(parent_category_id)
+        parent_cat = await db[INSTANCE_CATEGORIES].find_one(
+            {
+                "app_instance_id": inst_oid,
+                "$or": [{"_id": p_oid}, {"source_id": p_oid}],
+                "deleted_at": None,
+            }
+        )
+        if not parent_cat:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "message": "Parent category not found in this app instance"},
+            )
+
+        cat_link_id = parent_cat.get("source_id") or parent_cat["_id"]
+
+        existing_sub = await db[INSTANCE_SUBCATEGORIES].find_one(
+            {
+                "app_instance_id": inst_oid,
+                "category_id": cat_link_id,
+                "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"},
+            }
+        )
+        if existing_sub:
+            if existing_sub.get("deleted_at") is not None:
+                await db[INSTANCE_SUBCATEGORIES].update_one(
+                    {"_id": existing_sub["_id"]},
+                    {"$set": {"deleted_at": None, "is_enabled": True, "updated_at": now}},
+                )
+                sub_oid = existing_sub["_id"]
+            else:
+                return JSONResponse(
+                    status_code=400,
+                    content={"success": False, "message": f"Subcategory folder '{name}' already exists in this category"},
+                )
+        else:
+            max_seq_sub = await db[INSTANCE_SUBCATEGORIES].find_one(
+                {
+                    "app_instance_id": inst_oid,
+                    "category_id": cat_link_id,
+                    "deleted_at": None,
+                },
+                sort=[("sequence", -1)],
+            )
+            sub_seq = compute_next_sequence(max_seq_sub.get("sequence") if max_seq_sub else None)
+            sub_oid = ObjectId()
+            await db[INSTANCE_SUBCATEGORIES].insert_one(
+                {
+                    "_id": sub_oid,
+                    "app_instance_id": inst_oid,
+                    "source_id": None,
+                    "category_id": cat_link_id,
+                    "name": name,
+                    "thumbnail_url": thumbnail_url,
+                    "is_enabled": True,
+                    "sequence": sub_seq,
+                    "overrides": {"name": name, "thumbnail_url": thumbnail_url},
+                    "created_at": now,
+                    "updated_at": now,
+                    "deleted_at": None,
+                }
+            )
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "folder_type": "subcategory",
+                "id": str(sub_oid),
+                "name": name,
+            },
+        )
+
+    return JSONResponse(
+        status_code=400, content={"success": False, "message": f"Unknown folder type: {folder_type}"}
+    )
+
+
+@router.delete("/{instance_id}/categories/{cat_id}")
+async def manager_instance_delete_category_reference(
+    request: Request,
+    instance_id: str,
+    cat_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    session = get_current_manager_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    user_id = session["user_id"]
+    await verify_manager_instance_access(db, user_id, instance_id)
+
+    res = await remove_reference(db, app_instance_id=instance_id, item_type="category", item_id=cat_id)
+    return JSONResponse(status_code=200, content={"success": True, "data": res})
+
+
+@router.delete("/{instance_id}/subcategories/{sub_id}")
+async def manager_instance_delete_subcategory_reference(
+    request: Request,
+    instance_id: str,
+    sub_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    session = get_current_manager_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    user_id = session["user_id"]
+    await verify_manager_instance_access(db, user_id, instance_id)
+
+    res = await remove_reference(db, app_instance_id=instance_id, item_type="subcategory", item_id=sub_id)
+    return JSONResponse(status_code=200, content={"success": True, "data": res})
+
+
+@router.delete("/{instance_id}/assets/{assetId}")
+async def manager_instance_delete_asset_reference(
+    request: Request,
+    instance_id: str,
+    assetId: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    session = get_current_manager_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    user_id = session["user_id"]
+    await verify_manager_instance_access(db, user_id, instance_id)
+
+    res = await remove_reference(db, app_instance_id=instance_id, item_type="asset", item_id=assetId)
+    return JSONResponse(status_code=200, content={"success": True, "data": res})
+
