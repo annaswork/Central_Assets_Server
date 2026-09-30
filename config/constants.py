@@ -12,6 +12,8 @@ class BlockType(str, Enum):
     VIDEO_LIST = "video_list"
     JSON = "json"
     FRAMES = "frames"
+    HTML = "html"
+    HTML_LIST = "html_list"
 
 
 class Scope(str, Enum):
@@ -38,16 +40,19 @@ ALLOWED_IMAGE_EXTENSIONS: set[str] = {"png", "jpg", "jpeg", "webp", "gif"}
 ALLOWED_AUDIO_EXTENSIONS: set[str] = {"mp3", "aac", "wav", "m4a", "ogg"}
 ALLOWED_VIDEO_EXTENSIONS: set[str] = {"mp4", "webm", "mov"}
 ALLOWED_JSON_EXTENSIONS: set[str] = {"json"}
+ALLOWED_HTML_EXTENSIONS: set[str] = {"html", "htm"}
 
 ALLOWED_EXTENSIONS: set[str] = (
     ALLOWED_IMAGE_EXTENSIONS
     | ALLOWED_AUDIO_EXTENSIONS
     | ALLOWED_VIDEO_EXTENSIONS
     | ALLOWED_JSON_EXTENSIONS
+    | ALLOWED_HTML_EXTENSIONS
 )
 
 # Default asset thumbnails
 DEFAULT_AUDIO_THUMBNAIL_URL: str = "/static/thumbnail_default.png"
+DEFAULT_HTML_THUMBNAIL_URL: str = "/static/thumbnail_default.png"
 
 # Pagination limits
 DEFAULT_PAGE_SIZE: int = 20

@@ -49,6 +49,7 @@
         <option value="audios" {% if (selected_type == 'audios' or type == 'audios') %}selected{% endif %}>Audios</option>
         <option value="json" {% if (selected_type == 'json' or type == 'json') %}selected{% endif %}>JSON</option>
         <option value="frames" {% if (selected_type == 'frames' or type == 'frames') %}selected{% endif %}>Frames</option>
+        <option value="html" {% if (selected_type == 'html' or type == 'html') %}selected{% endif %}>HTML</option>
       </select>
 
       <select name="sort" id="assetSortSelect" class="select" style="min-width:160px; max-width:190px;" onchange="this.form.submit();">

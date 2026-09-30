@@ -57,27 +57,32 @@ def build_asset_type_filter(asset_type: str | None) -> dict[str, Any] | None:
         key_re = "image|img|photo|pic"
         ext_re = r"\.(png|jpe?g|webp|gif|svg|bmp|ico|tiff|avif|apng|heic)(\?|$)"
         mime_re = r"^image/"
-        excluded_types = ["frames", "video", "video_list", "audio", "audio_list", "json", "json_data"]
+        excluded_types = ["frames", "video", "video_list", "audio", "audio_list", "json", "json_data", "html", "html_list"]
     elif dt in ("video", "videos"):
         key_re = "video|vid|movie"
         ext_re = r"\.(mp4|webm|mov|mkv|avi|flv|wmv|m4v)(\?|$)"
         mime_re = r"^video/"
-        excluded_types = ["frames", "image", "image_list", "audio", "audio_list", "json", "json_data"]
+        excluded_types = ["frames", "image", "image_list", "audio", "audio_list", "json", "json_data", "html", "html_list"]
     elif dt in ("audio", "audios", "sound"):
         key_re = "audio|sound|voice|music"
         ext_re = r"\.(mp3|wav|aac|m4a|ogg|flac|opus|wma)(\?|$)"
         mime_re = r"^audio/"
-        excluded_types = ["frames", "image", "image_list", "video", "video_list", "json", "json_data"]
+        excluded_types = ["frames", "image", "image_list", "video", "video_list", "json", "json_data", "html", "html_list"]
     elif dt in ("json", "json_data"):
         key_re = "json"
         ext_re = r"\.json(\?|$)"
         mime_re = r"application/json"
-        excluded_types = ["frames", "image", "image_list", "video", "video_list", "audio", "audio_list"]
+        excluded_types = ["frames", "image", "image_list", "video", "video_list", "audio", "audio_list", "html", "html_list"]
     elif dt in ("frame", "frames"):
         key_re = "frame"
         ext_re = r"frame"
         mime_re = r"frame"
-        excluded_types = ["image", "image_list", "video", "video_list", "audio", "audio_list", "json", "json_data"]
+        excluded_types = ["image", "image_list", "video", "video_list", "audio", "audio_list", "json", "json_data", "html", "html_list"]
+    elif dt in ("html", "htm", "web"):
+        key_re = "html|htm|web"
+        ext_re = r"\.(html?|htm)(\?|$)"
+        mime_re = r"^text/html"
+        excluded_types = ["frames", "image", "image_list", "video", "video_list", "audio", "audio_list", "json", "json_data"]
     else:
         return None
 
@@ -215,17 +220,17 @@ def asset_has_type(
         key_pattern = re.compile(r"image|img|photo|pic", re.I)
         exts = {"png", "jpg", "jpeg", "webp", "gif", "svg", "bmp", "ico", "tiff", "avif", "apng", "heic"}
         mime_prefix = "image/"
-        excluded_types = {"frames", "video", "video_list", "audio", "audio_list", "json", "json_data"}
+        excluded_types = {"frames", "video", "video_list", "audio", "audio_list", "json", "json_data", "html", "html_list"}
     elif dt in ("video", "videos"):
         key_pattern = re.compile(r"video|vid|movie", re.I)
         exts = {"mp4", "webm", "mov", "mkv", "avi", "flv", "wmv", "m4v"}
         mime_prefix = "video/"
-        excluded_types = {"frames", "image", "image_list", "audio", "audio_list", "json", "json_data"}
+        excluded_types = {"frames", "image", "image_list", "audio", "audio_list", "json", "json_data", "html", "html_list"}
     elif dt in ("audio", "audios", "sound"):
         key_pattern = re.compile(r"audio|sound|voice|music", re.I)
         exts = set(ALLOWED_AUDIO_EXTENSIONS)
         mime_prefix = "audio/"
-        excluded_types = {"frames", "image", "image_list", "video", "video_list", "json", "json_data"}
+        excluded_types = {"frames", "image", "image_list", "video", "video_list", "json", "json_data", "html", "html_list"}
         if thumbnail_url:
             t_ext = Path(thumbnail_url.split("?")[0]).suffix.lower().lstrip(".")
             if t_ext in exts:
@@ -234,12 +239,17 @@ def asset_has_type(
         key_pattern = re.compile(r"json", re.I)
         exts = {"json"}
         mime_prefix = "application/json"
-        excluded_types = {"frames", "image", "image_list", "video", "video_list", "audio", "audio_list"}
+        excluded_types = {"frames", "image", "image_list", "video", "video_list", "audio", "audio_list", "html", "html_list"}
     elif dt in ("frame", "frames"):
         key_pattern = re.compile(r"frame", re.I)
         exts = set()
         mime_prefix = ""
-        excluded_types = {"image", "image_list", "video", "video_list", "audio", "audio_list", "json", "json_data"}
+        excluded_types = {"image", "image_list", "video", "video_list", "audio", "audio_list", "json", "json_data", "html", "html_list"}
+    elif dt in ("html", "htm", "web"):
+        key_pattern = re.compile(r"html|htm|web", re.I)
+        exts = {"html", "htm"}
+        mime_prefix = "text/html"
+        excluded_types = {"frames", "image", "image_list", "video", "video_list", "audio", "audio_list", "json", "json_data"}
     else:
         return False
 

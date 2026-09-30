@@ -9,7 +9,9 @@ import anyio
 from config.constants import (
     ALLOWED_AUDIO_EXTENSIONS,
     ALLOWED_EXTENSIONS,
+    ALLOWED_HTML_EXTENSIONS,
     DEFAULT_AUDIO_THUMBNAIL_URL,
+    DEFAULT_HTML_THUMBNAIL_URL,
     MAX_UPLOAD_FILE_BYTES,
 )
 from config.paths import (
@@ -134,9 +136,12 @@ async def handle_upload(
     is_video = mime_type.startswith("video/") or ext in ("mp4", "webm", "mov", "avi", "mkv")
     is_gif = mime_type == "image/gif" or ext == "gif"
     is_lottie = ext in ("json", "lottie") or (mime_type == "application/json" and b'"v"' in file_bytes[:300])
+    is_html = ext in ALLOWED_HTML_EXTENSIONS or mime_type == "text/html"
 
     if is_audio:
         thumb_url = DEFAULT_AUDIO_THUMBNAIL_URL
+    elif is_html:
+        thumb_url = DEFAULT_HTML_THUMBNAIL_URL
     elif is_video or is_gif or is_lottie:
         try:
             thumb_bytes, thumb_ext = await anyio.to_thread.run_sync(

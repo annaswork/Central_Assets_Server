@@ -53,6 +53,16 @@ def sniff_mime_type(content: bytes, filename: str = "") -> str:
         if content.startswith(b"\x1a\x45\xdf\xa3"):
             return "video/webm"
 
+    # Check for HTML content
+    stripped_head = content[:512].lstrip()
+    stripped_head_lower = stripped_head.lower()
+    if (
+        stripped_head_lower.startswith(b"<!doctype html")
+        or stripped_head_lower.startswith(b"<html")
+        or (stripped_head_lower.startswith(b"<!--") and b"<html" in stripped_head_lower)
+    ):
+        return "text/html"
+
     # Attempt JSON parsing
     try:
         decoded = content.decode("utf-8")
@@ -78,5 +88,7 @@ def sniff_mime_type(content: bytes, filename: str = "") -> str:
         "webm": "video/webm",
         "mov": "video/quicktime",
         "json": "application/json",
+        "html": "text/html",
+        "htm": "text/html",
     }
     return extension_map.get(ext, "application/octet-stream")

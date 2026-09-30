@@ -115,6 +115,15 @@
           <div style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant);">Frame Overlays (.png, .webp, .json)</div>
         </div>
       </label>
+
+      <!-- HTML Checkbox -->
+      <label class="data-type-card" id="card_type_html" style="display:flex; align-items:center; gap:0.6rem; padding:0.65rem 0.85rem; border:1.5px solid var(--md-sys-color-primary); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer; transition:all 0.15s ease;">
+        <input type="checkbox" name="bulk_data_type" value="html" checked onchange="onDataTypeChange()" style="accent-color:var(--md-sys-color-primary); width:16px; height:16px;">
+        <div>
+          <div style="font-weight:600; font-size:0.85rem; display:flex; align-items:center; gap:0.3rem;">🌐 HTML</div>
+          <div style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant);">Web Documents (.html, .htm)</div>
+        </div>
+      </label>
     </div>
     <div id="noTypeWarning" style="display:none; margin-top:0.45rem; font-size:0.82rem; color:var(--md-sys-color-error); font-weight:500;">
       ⚠️ Please select at least one data type above to enable file selection and ingestion.
@@ -252,6 +261,12 @@ const DATA_TYPE_CONFIG = {
     icon: '🖼️',
     extensions: ['.png', '.jpg', '.jpeg', '.webp', '.json'],
     mimes: ['image/png', 'image/jpeg', 'image/webp', 'application/json']
+  },
+  html: {
+    label: 'HTML',
+    icon: '🌐',
+    extensions: ['.html', '.htm'],
+    mimes: ['text/html']
   }
 };
 
@@ -334,7 +349,11 @@ function classifyFile(file, activeTypes) {
   const isVideo = DATA_TYPE_CONFIG.videos.extensions.includes(ext) || mime.startsWith('video/');
   const isJson = ext === '.json' || mime === 'application/json';
   const isImage = DATA_TYPE_CONFIG.image.extensions.includes(ext) || mime.startsWith('image/');
+  const isHtml = DATA_TYPE_CONFIG.html.extensions.includes(ext) || mime === 'text/html';
 
+  if (isHtml) {
+    return activeTypes.includes('html') ? 'html' : null;
+  }
   if (isAudio) {
     return activeTypes.includes('audio') ? 'audio' : null;
   }
@@ -801,7 +820,8 @@ function renderDataTypeCell(item, idx, activeTypes) {
     video: '<span class="badge" style="background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container); font-size:0.75rem;">🎬 Video</span>',
     audio: '<span class="badge" style="background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container); font-size:0.75rem;">🎵 Audio</span>',
     json: '<span class="badge" style="background:var(--md-sys-color-surface-variant); color:var(--md-sys-color-on-surface-variant); font-size:0.75rem;">📄 JSON</span>',
-    frames: '<span class="badge" style="background:#fef08a; color:#854d0e; font-size:0.75rem;">🖼️ Frame</span>'
+    frames: '<span class="badge" style="background:#fef08a; color:#854d0e; font-size:0.75rem;">🖼️ Frame</span>',
+    html: '<span class="badge" style="background:#e0e7ff; color:#3730a3; font-size:0.75rem;">🌐 HTML</span>'
   };
   return BADGES[item.detectedType] || `<span class="badge">${escapeHtml(item.detectedType)}</span>`;
 }
@@ -1019,6 +1039,17 @@ async function startBulkUpload() {
             coordinates: cleanCoordinates
           }
         };
+      } else if (detectedType === 'html') {
+        const blockMeta = {
+          url: mediaUrl,
+          filename: uploadData.filename || item.file.name,
+          mime: item.file.type || 'text/html',
+          filesize: uploadData.filesize || uploadData.size_bytes || item.file.size,
+          size_bytes: uploadData.size_bytes || uploadData.filesize || item.file.size
+        };
+        moreFieldsPayload = {
+          html: [blockMeta]
+        };
       } else {
         // Media types: image, video, audio
         const blockMeta = {
@@ -1028,7 +1059,7 @@ async function startBulkUpload() {
           filesize: uploadData.filesize || uploadData.size_bytes || item.file.size,
           size_bytes: uploadData.size_bytes || uploadData.filesize || item.file.size
         };
-        if (detectedType !== 'audio') {
+        if (detectedType !== 'audio' && detectedType !== 'html') {
           if (uploadData.width) blockMeta.width = uploadData.width;
           if (uploadData.height) blockMeta.height = uploadData.height;
           if (uploadData.dimensions) blockMeta.dimensions = uploadData.dimensions;
@@ -1071,7 +1102,7 @@ async function startBulkUpload() {
       if (!finalThumbUrl) {
         if (thumbMode === 'original' && detectedType === 'image') {
           finalThumbUrl = mediaUrl;
-        } else if (detectedType === 'audio' || detectedType === 'json') {
+        } else if (detectedType === 'audio' || detectedType === 'json' || detectedType === 'html') {
           finalThumbUrl = '/static/thumbnail_default.png';
         } else if (detectedType === 'frames') {
           finalThumbUrl = mediaUrl;

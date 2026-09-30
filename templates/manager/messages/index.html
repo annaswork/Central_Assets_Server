@@ -181,13 +181,13 @@
       <div id="propMediaFileGroup" class="form-group" style="display:none; margin-bottom:1rem;">
         <label class="form-label" for="propMediaFile">Upload Media Asset *</label>
         <div style="border:2px dashed var(--md-sys-color-outline-variant); border-radius:8px; padding:1.25rem 1rem; text-align:center; background:var(--md-sys-color-surface-container-low); transition:border-color 0.2s; cursor:pointer;" onclick="document.getElementById('propMediaFile').click()">
-          <input type="file" id="propMediaFile" name="media_file" accept="image/*,video/*,audio/*,.json" style="display:none;" onchange="handleProposalFileChange(this)">
+          <input type="file" id="propMediaFile" name="media_file" accept="image/*,video/*,audio/*,.json,.html,.htm" style="display:none;" onchange="handleProposalFileChange(this)">
           <div style="font-size:1.75rem; margin-bottom:0.25rem;">📁</div>
           <div id="propFilePrompt" style="font-weight:600; font-size:0.9rem; color:var(--md-sys-color-on-surface);">
             Click to browse or drop media file here
           </div>
           <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.25rem;">
-            Images (PNG, JPG, WebP, GIF), Videos (MP4, WebM, MOV), Audio (MP3, WAV), or JSON
+            Images (PNG, JPG, WebP, GIF), Videos (MP4, WebM, MOV), Audio (MP3, WAV), JSON, or HTML
           </div>
         </div>
         <div id="propMediaPreview" style="display:none; margin-top:0.75rem; padding:0.6rem 0.75rem; background:var(--md-sys-color-surface); border:1px solid var(--md-sys-color-outline-variant); border-radius:8px; align-items:center; gap:0.75rem;">
