@@ -82,7 +82,12 @@ def build_asset_type_filter(asset_type: str | None) -> dict[str, Any] | None:
         key_re = "html|htm|web"
         ext_re = r"\.(html?|htm)(\?|$)"
         mime_re = r"^text/html"
-        excluded_types = ["frames", "image", "image_list", "video", "video_list", "audio", "audio_list", "json", "json_data"]
+        excluded_types = ["frames", "image", "image_list", "video", "video_list", "audio", "audio_list", "json", "json_data", "file", "file_list"]
+    elif dt in ("file", "files", "document", "documents", "xml", "doc", "pdf"):
+        key_re = "file|doc|document|xml|pdf|sheet|attachment"
+        ext_re = r"\.(xml|pdf|docx?|xlsx?|txt|csv|zip|rar|7z|tar|gz)(\?|$)"
+        mime_re = r"^(application/(xml|pdf|msword|vnd\.|zip|x-)|text/(plain|csv|xml))"
+        excluded_types = ["frames", "image", "image_list", "video", "video_list", "audio", "audio_list", "json", "json_data", "html", "html_list"]
     else:
         return None
 
@@ -249,7 +254,12 @@ def asset_has_type(
         key_pattern = re.compile(r"html|htm|web", re.I)
         exts = {"html", "htm"}
         mime_prefix = "text/html"
-        excluded_types = {"frames", "image", "image_list", "video", "video_list", "audio", "audio_list", "json", "json_data"}
+        excluded_types = {"frames", "image", "image_list", "video", "video_list", "audio", "audio_list", "json", "json_data", "file", "file_list"}
+    elif dt in ("file", "files", "document", "documents", "xml", "doc", "pdf"):
+        key_pattern = re.compile(r"file|doc|document|xml|pdf|sheet|attachment", re.I)
+        exts = {"xml", "pdf", "docx", "doc", "xlsx", "xls", "txt", "csv", "zip", "rar", "7z", "tar", "gz"}
+        mime_prefix = ""
+        excluded_types = {"frames", "image", "image_list", "video", "video_list", "audio", "audio_list", "json", "json_data", "html", "html_list"}
     else:
         return False
 

@@ -63,6 +63,13 @@ def sniff_mime_type(content: bytes, filename: str = "") -> str:
     ):
         return "text/html"
 
+    # XML document sniffing
+    if (
+        stripped_head_lower.startswith(b"<?xml")
+        or (stripped_head_lower.startswith(b"<") and b"</" in stripped_head_lower and not stripped_head_lower.startswith(b"<html"))
+    ):
+        return "application/xml"
+
     # Attempt JSON parsing
     try:
         decoded = content.decode("utf-8")
@@ -90,5 +97,18 @@ def sniff_mime_type(content: bytes, filename: str = "") -> str:
         "json": "application/json",
         "html": "text/html",
         "htm": "text/html",
+        "xml": "application/xml",
+        "pdf": "application/pdf",
+        "txt": "text/plain",
+        "csv": "text/csv",
+        "doc": "application/msword",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xls": "application/vnd.ms-excel",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "zip": "application/zip",
+        "rar": "application/vnd.rar",
+        "7z": "application/x-7z-compressed",
+        "tar": "application/x-tar",
+        "gz": "application/gzip",
     }
     return extension_map.get(ext, "application/octet-stream")

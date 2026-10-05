@@ -184,6 +184,7 @@
           <option value="audio">Audio Block</option>
           <option value="video">Video Block</option>
           <option value="html">HTML Block</option>
+          <option value="file">File / Document Block</option>
           <option value="string_list">String List Block</option>
           <option value="frames">Frames Block</option>
           <option value="json">Custom JSON</option>
@@ -1175,7 +1176,7 @@
       block.items = block.items.map(it => String(it).trim()).filter(Boolean);
       return;
     }
-    if (['image', 'image_list', 'audio', 'audio_list', 'video', 'video_list', 'html', 'html_list'].includes(t)) {
+    if (['image', 'image_list', 'audio', 'audio_list', 'video', 'video_list', 'html', 'html_list', 'file', 'file_list', 'document', 'document_list'].includes(t)) {
       block._isDirectArray = true;
       if (!Array.isArray(block.items)) {
         block.items = [];
@@ -1264,6 +1265,12 @@
         typeIcon = '🌐';
         acceptTypes = 'text/html,.html,.htm';
         acceptHint = 'HTML, HTM';
+      } else if (bType === 'file' || bType === 'file_list' || bType === 'document' || bType === 'document_list') {
+        isMediaBlock = true;
+        typeBadgeLabel = 'File / Doc';
+        typeIcon = '📁';
+        acceptTypes = '.xml,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx,.zip,.rar,.7z,.tar,.gz,application/xml,text/xml,application/pdf,text/plain,text/csv,*/*';
+        acceptHint = 'XML, PDF, TXT, CSV, DOC, XLSX, ZIP, etc.';
       } else if (bType === 'string_list') {
         typeBadgeLabel = 'String List';
         typeIcon = '🏷️';
@@ -1299,6 +1306,7 @@
       let bodyHtml = '';
 
       if (isMediaBlock) {
+        const isNonCroppable = ['html', 'html_list', 'file', 'file_list', 'document', 'document_list'].includes(bType);
         const items = Array.isArray(block.items) ? block.items : [];
         let itemsListHtml = '';
         if (items.length > 0) {
@@ -1338,6 +1346,12 @@
                 🌐
               </div>
             `;
+            } else if (bType === 'file' || bType === 'file_list' || bType === 'document' || bType === 'document_list') {
+              previewHtml = `
+              <div style="display:flex; align-items:center; justify-content:center; width:52px; height:52px; background:var(--md-sys-color-surface-container); border-radius:var(--radius-sm); font-size:1.5rem;" title="Document File">
+                📁
+              </div>
+            `;
             }
 
             return `
@@ -1355,11 +1369,11 @@
                 ${metaParts.length > 0 ? `<div class="morefields-item-meta" style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">${metaParts.join(' • ')}</div>` : ''}
               </div>
               <div style="display:flex; flex-direction:column; gap:0.25rem; flex-shrink:0;">
-                ${(bType !== 'html' && bType !== 'html_list') ? `
+                ${!isNonCroppable ? `
                 <button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.75rem;" onclick="cropMediaBlockItem('${safeKey}', ${idx})" title="${bType.startsWith('audio') ? 'Crop Audio' : 'Crop Media'}">
                   ✂️ Crop
                 </button>` : `
-                <a href="${itemUrl}" target="_blank" rel="noopener" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.75rem; text-decoration:none; display:inline-flex; align-items:center;" title="Open HTML in new tab">
+                <a href="${itemUrl}" target="_blank" rel="noopener" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.75rem; text-decoration:none; display:inline-flex; align-items:center;" title="Download / View in new tab">
                   ↗ View
                 </a>`}
                 <button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.75rem; color:var(--md-sys-color-error); border-color:var(--md-sys-color-outline-variant);" onclick="removeMediaItem('${safeKey}', ${idx})" title="Remove this file">
@@ -1382,7 +1396,7 @@
           <div class="dropzone-icon">${typeIcon}</div>
           <div class="dropzone-text">Drag & drop ${typeBadgeLabel.toLowerCase()} file(s) here, or <span>browse</span></div>
           <div class="dropzone-hint">Supports single or multiple files (${acceptHint})</div>
-          ${(bType !== 'html' && bType !== 'html_list') ? `
+          ${!isNonCroppable ? `
           <div style="display:flex; justify-content:center; align-items:center; gap:0.75rem; margin-top:0.5rem;" onclick="event.stopPropagation()">
             <label class="crop-data-option-label" title="Automatically open the cropping popup when adding files to this block">
               <input type="checkbox" id="cropOption_${safeId}" ${window._cropOptions && window._cropOptions[key] ? 'checked' : ''} onchange="toggleBlockCropOption('${safeKey}', this.checked)">
@@ -2024,7 +2038,7 @@
           c = Math.max(0, c - 1);
         }
         count += c;
-      } else if (['image', 'image_list', 'audio', 'audio_list', 'video', 'video_list', 'html', 'html_list'].includes(bType) || Array.isArray(block.items)) {
+      } else if (['image', 'image_list', 'audio', 'audio_list', 'video', 'video_list', 'html', 'html_list', 'file', 'file_list', 'document', 'document_list'].includes(bType) || Array.isArray(block.items)) {
         const items = Array.isArray(block.items) ? block.items : [];
         let c = items.length;
         if (key === excludeKey && excludeIndex !== undefined && excludeIndex !== null) {
@@ -2192,6 +2206,8 @@
       initialData = { type: 'video', url: '', urls: [], items: [], _isDirectArray: true };
     } else if (type === 'html') {
       initialData = { type: 'html', url: '', urls: [], items: [], _isDirectArray: true };
+    } else if (type === 'file') {
+      initialData = { type: 'file', url: '', urls: [], items: [], _isDirectArray: true };
     } else if (type === 'string_list') {
       initialData = { type: 'string_list', items: [] };
     } else if (type === 'frames') {
@@ -3147,7 +3163,7 @@
       }
 
       // === STANDARDIZED OUTPUT: All media blocks → direct arrays of objects ===
-      const isMediaType = ['image', 'image_list', 'audio', 'audio_list', 'video', 'video_list', 'html', 'html_list'].includes(block.type);
+      const isMediaType = ['image', 'image_list', 'audio', 'audio_list', 'video', 'video_list', 'html', 'html_list', 'file', 'file_list', 'document', 'document_list'].includes(block.type);
       if (isMediaType && Array.isArray(block.items)) {
         finalPayload[key] = block.items.map(it => {
           const itemObj = {
@@ -3156,7 +3172,8 @@
           };
           const isAudioItem = String(it.mime || '').startsWith('audio/') || key.toLowerCase().includes('audio');
           const isHtmlItem = String(it.mime || '').startsWith('text/html') || key.toLowerCase().includes('html');
-          if (!isAudioItem && !isHtmlItem) {
+          const isFileItem = ['file', 'file_list', 'document', 'document_list'].includes(block.type) || key.toLowerCase().includes('file') || key.toLowerCase().includes('doc');
+          if (!isAudioItem && !isHtmlItem && !isFileItem) {
             if (it.width !== undefined && it.width !== null) itemObj.width = it.width;
             if (it.height !== undefined && it.height !== null) itemObj.height = it.height;
             if (it.dimensions) itemObj.dimensions = it.dimensions;

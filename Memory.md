@@ -174,11 +174,12 @@ Database Name: `admin_assets_db` (configured via `MONGODB_DB_NAME`).
 ## 5. Asset Pipeline & Supported Media Formats
 
 ### 5.1 Supported Formats
-The platform supports four primary categories of assets:
+The platform supports five primary categories of assets:
 1. **Static Images:** `PNG`, `JPG`, `JPEG`, `WEBP`.
 2. **Videos:** `MP4`, `WEBM`, `MOV` (with automatic FFmpeg duration, dimensions, and poster frame extraction).
 3. **Animations:** `GIF`, `APNG`, Animated `WEBP`, and Lottie `JSON` animations.
 4. **Interactive HTML:** `.html` / `text/html` rich widgets, mini-games, and custom web components.
+5. **Documents & Generic Files:** `.xml`, `.pdf`, `.txt`, `.csv`, `.doc`, `.docx`, `.xls`, `.xlsx`, `.zip`, `.rar`, `.7z`, `.tar`, `.gz`, and arbitrary documents with automatic MIME classification, default document thumbnail assignment, download/preview links, and dedicated filter tags.
 
 ### 5.2 Alpha Transparency & Non-Destructive Cropping
 - **Zero Background Contamination:** The media cropper (`media-cropper-upload`) strictly preserves transparent PNG/WEBP alpha channels. Cropping operations do not apply black or white letterbox fills.
@@ -357,6 +358,27 @@ Requires `manager_session` cookie.
   - Added "📥 Import Central Data", "+ Add Sub-folder", and "Detach Folder" to category cards.
   - Added "📥 Import" and "Detach" to subcategory cards.
   - Added `createFolderModal` markup and JavaScript AJAX handlers.
+
+### Update 5: XML and Generic Document File Support in Asset Blocks
+- **Allowed Document Extensions:** Added `.xml`, `.pdf`, `.txt`, `.csv`, `.doc`, `.docx`, `.xls`, `.xlsx`, `.zip`, `.rar`, `.7z`, `.tar`, `.gz` to `ALLOWED_DOCUMENT_EXTENSIONS` and `ALLOWED_EXTENSIONS` in `config/constants.py`.
+- **MIME Sniffing & XML Detection:** Enhanced `utils/file_utils.py` to identify XML magic headers (`<?xml` and arbitrary `<...></...>`) as `application/xml` alongside document MIME mappings.
+- **Pydantic Validation Models:** Added `FileItem`, `FileBlock`, and `FileListBlock` to `database/models/more_fields.py` and included in the `TypedBlock` discriminated union.
+- **Upload Processing:** Updated `controller/media_controller.py` to recognize documents and assign `DEFAULT_DOCUMENT_THUMBNAIL_URL` (`/static/thumbnail_default.png`) without attempting video/image rasterization.
+- **Filtering & Search:** Updated `controller/asset_controller.py` (`build_asset_type_filter` and `asset_has_type`) to query and filter `file`, `files`, `document`, `xml`, and `doc` assets across MongoDB polymorphic blocks.
+- **Multi-Asset Form (`templates/assets/form_multi.html`):**
+  - Added "File / Document Block" option to block type selector.
+  - Added document icon 📁, file size & filename display, and "↗ View" direct link.
+  - Excluded documents from image/video cropping tools.
+- **Single-Asset Form (`templates/assets/form_single.html`):**
+  - Added "📁 Files / Documents" bulk ingest checkbox card.
+  - Updated `classifyFile` to identify document files and automatically package them as a `file` block.
+- **Asset List Views:** Added "Files / Docs" filter option to Admin and Manager asset catalog views.
+
+### Update 6: Fix "Add Block" Button in Multi-Asset Form
+- **Scoping Fix in `renderPayloadBlocks()` (`templates/assets/form_multi.html`):**
+  - The variable `isNonCroppable` was previously declared inside the `items.map(...)` callback. When adding any new payload block, `items` is initially empty (`[]`), causing `items.map` not to execute.
+  - As a result, the subsequent dropzone HTML template evaluation of `${!isNonCroppable ? ... : ''}` threw a fatal JavaScript `ReferenceError: isNonCroppable is not defined`.
+  - Moved `const isNonCroppable` to the parent `if (isMediaBlock)` block level so it is properly defined even when a block has zero items, restoring the `+ Add Block` rendering behavior for all block types.
 
 ---
 

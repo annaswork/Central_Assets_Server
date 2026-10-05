@@ -124,6 +124,15 @@
           <div style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant);">Web Documents (.html, .htm)</div>
         </div>
       </label>
+
+      <!-- Files / Documents Checkbox -->
+      <label class="data-type-card" id="card_type_file" style="display:flex; align-items:center; gap:0.6rem; padding:0.65rem 0.85rem; border:1.5px solid var(--md-sys-color-primary); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer; transition:all 0.15s ease;">
+        <input type="checkbox" name="bulk_data_type" value="file" checked onchange="onDataTypeChange()" style="accent-color:var(--md-sys-color-primary); width:16px; height:16px;">
+        <div>
+          <div style="font-weight:600; font-size:0.85rem; display:flex; align-items:center; gap:0.3rem;">📁 Files / Documents</div>
+          <div style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant);">Documents (.xml, .pdf, .txt, etc.)</div>
+        </div>
+      </label>
     </div>
     <div id="noTypeWarning" style="display:none; margin-top:0.45rem; font-size:0.82rem; color:var(--md-sys-color-error); font-weight:500;">
       ⚠️ Please select at least one data type above to enable file selection and ingestion.
@@ -267,6 +276,12 @@ const DATA_TYPE_CONFIG = {
     icon: '🌐',
     extensions: ['.html', '.htm'],
     mimes: ['text/html']
+  },
+  file: {
+    label: 'Files / Documents',
+    icon: '📁',
+    extensions: ['.xml', '.pdf', '.txt', '.csv', '.doc', '.docx', '.xls', '.xlsx', '.zip', '.rar', '.7z', '.tar', '.gz'],
+    mimes: ['application/xml', 'text/xml', 'application/pdf', 'text/plain', 'text/csv', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/zip', 'application/x-zip-compressed']
   }
 };
 
@@ -350,6 +365,7 @@ function classifyFile(file, activeTypes) {
   const isJson = ext === '.json' || mime === 'application/json';
   const isImage = DATA_TYPE_CONFIG.image.extensions.includes(ext) || mime.startsWith('image/');
   const isHtml = DATA_TYPE_CONFIG.html.extensions.includes(ext) || mime === 'text/html';
+  const isDoc = DATA_TYPE_CONFIG.file.extensions.includes(ext) || DATA_TYPE_CONFIG.file.mimes.includes(mime);
 
   if (isHtml) {
     return activeTypes.includes('html') ? 'html' : null;
@@ -375,6 +391,13 @@ function classifyFile(file, activeTypes) {
     if (activeTypes.includes('frames')) return 'frames';
     if (activeTypes.includes('image')) return 'image';
     return null;
+  }
+  if (isDoc) {
+    return activeTypes.includes('file') ? 'file' : null;
+  }
+  // Fallback: If 'file' data type is checked, any document/file can be accepted as 'file'
+  if (activeTypes.includes('file')) {
+    return 'file';
   }
   return null;
 }
@@ -1050,6 +1073,17 @@ async function startBulkUpload() {
         moreFieldsPayload = {
           html: [blockMeta]
         };
+      } else if (detectedType === 'file') {
+        const blockMeta = {
+          url: mediaUrl,
+          filename: uploadData.filename || item.file.name,
+          mime: item.file.type || uploadData.mime || 'application/octet-stream',
+          filesize: uploadData.filesize || uploadData.size_bytes || item.file.size,
+          size_bytes: uploadData.size_bytes || uploadData.filesize || item.file.size
+        };
+        moreFieldsPayload = {
+          file: [blockMeta]
+        };
       } else {
         // Media types: image, video, audio
         const blockMeta = {
@@ -1102,7 +1136,7 @@ async function startBulkUpload() {
       if (!finalThumbUrl) {
         if (thumbMode === 'original' && detectedType === 'image') {
           finalThumbUrl = mediaUrl;
-        } else if (detectedType === 'audio' || detectedType === 'json' || detectedType === 'html') {
+        } else if (detectedType === 'audio' || detectedType === 'json' || detectedType === 'html' || detectedType === 'file') {
           finalThumbUrl = '/static/thumbnail_default.png';
         } else if (detectedType === 'frames') {
           finalThumbUrl = mediaUrl;

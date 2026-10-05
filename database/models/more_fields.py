@@ -498,6 +498,93 @@ class HtmlListBlock(BaseModel):
         return self
 
 
+class FileItem(BaseModel):
+    url: str
+    mime: str | None = None
+    filename: str | None = None
+    size_bytes: int | None = None
+    filesize: int | None = None
+    title: str | None = None
+
+    @model_validator(mode="after")
+    def sync_file_metadata(self) -> "FileItem":
+        if self.filesize is not None and self.size_bytes is None:
+            self.size_bytes = self.filesize
+        elif self.size_bytes is not None and self.filesize is None:
+            self.filesize = self.size_bytes
+        return self
+
+
+class FileBlock(BaseModel):
+    type: Literal["file", "document"] = "file"
+    url: str = ""
+    urls: list[str] = Field(default_factory=list)
+    items: list[FileItem] = Field(default_factory=list)
+    mime: str | None = None
+    size_bytes: int | None = None
+    filesize: int | None = None
+    filename: str | None = None
+    title: str | None = None
+
+    @model_validator(mode="after")
+    def sync_urls_and_items(self) -> "FileBlock":
+        if self.filesize is not None and self.size_bytes is None:
+            self.size_bytes = self.filesize
+        elif self.size_bytes is not None and self.filesize is None:
+            self.filesize = self.size_bytes
+
+        if self.items and not self.urls:
+            self.urls = [item.url for item in self.items if item.url]
+        if self.urls and not self.url:
+            self.url = self.urls[0]
+        elif self.url and not self.urls:
+            self.urls = [self.url]
+        if not self.items and self.urls:
+            self.items = [
+                FileItem(
+                    url=u,
+                    mime=self.mime if idx == 0 else None,
+                    size_bytes=self.size_bytes if idx == 0 else None,
+                    filesize=self.filesize if idx == 0 else None,
+                    filename=self.filename if idx == 0 else None,
+                    title=self.title if idx == 0 else None,
+                )
+                for idx, u in enumerate(self.urls)
+                if u
+            ]
+        elif self.items:
+            first = self.items[0]
+            if self.size_bytes is None:
+                self.size_bytes = first.size_bytes
+            if self.filesize is None:
+                self.filesize = first.filesize
+            if self.filename is None:
+                self.filename = first.filename
+            elif first.filename is None:
+                first.filename = self.filename
+            if self.mime is None:
+                self.mime = first.mime
+            elif first.mime is None:
+                first.mime = self.mime
+            if self.title is None:
+                self.title = first.title
+            elif first.title is None:
+                first.title = self.title
+        return self
+
+
+class FileListBlock(BaseModel):
+    type: Literal["file_list", "document_list"] = "file_list"
+    items: list[FileItem] = Field(default_factory=list)
+    urls: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def sync_urls(self) -> "FileListBlock":
+        if self.items and not self.urls:
+            self.urls = [item.url for item in self.items if item.url]
+        return self
+
+
 TypedBlock = Annotated[
     AudioBlock
     | AudioListBlock
@@ -509,6 +596,8 @@ TypedBlock = Annotated[
     | FramesBlock
     | StringListBlock
     | HtmlBlock
-    | HtmlListBlock,
+    | HtmlListBlock
+    | FileBlock
+    | FileListBlock,
     Field(discriminator="type"),
 ]

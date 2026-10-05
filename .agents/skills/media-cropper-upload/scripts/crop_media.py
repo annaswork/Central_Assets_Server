@@ -246,9 +246,21 @@ def crop_animated_gif(
         disposals = []
 
         for frame in ImageSequence.Iterator(im):
-            # Convert frame to RGBA to preserve transparency mask during crop
-            f_rgba = frame.convert("RGBA")
-            cropped_frame = f_rgba.crop(crop_box)
+            f_copy = frame.copy()
+            cropped_frame = f_copy.crop(crop_box)
+            if cropped_frame.mode == "P":
+                palette = cropped_frame.getpalette()
+                if palette:
+                    new_palette = []
+                    for i in range(0, len(palette), 3):
+                        r, g, b = palette[i:i+3]
+                        if r <= 15 and g <= 15 and b <= 15:
+                            new_palette.extend([0, 0, 0])
+                        else:
+                            new_palette.extend([r, g, b])
+                    cropped_frame.putpalette(new_palette)
+            elif cropped_frame.mode in ("RGBA", "RGB"):
+                cropped_frame = cropped_frame.quantize(colors=256, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE)
             frames.append(cropped_frame)
             durations.append(frame.info.get("duration", 100))
             # disposal=2 restores background, essential for clean transparency between frames
@@ -263,6 +275,7 @@ def crop_animated_gif(
             "loop": loop,
             "disposal": disposals,
             "optimize": False,
+            "dither": Image.Dither.NONE,
         }
 
         frames[0].save(output_path, format="GIF", **save_kwargs)

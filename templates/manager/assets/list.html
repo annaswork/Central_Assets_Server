@@ -50,6 +50,7 @@
         <option value="json" {% if (selected_type == 'json' or type == 'json') %}selected{% endif %}>JSON</option>
         <option value="frames" {% if (selected_type == 'frames' or type == 'frames') %}selected{% endif %}>Frames</option>
         <option value="html" {% if (selected_type == 'html' or type == 'html') %}selected{% endif %}>HTML</option>
+        <option value="file" {% if (selected_type == 'file' or selected_type == 'files' or type == 'file' or type == 'files') %}selected{% endif %}>Files / Docs</option>
       </select>
 
       <select name="sort" id="assetSortSelect" class="select" style="min-width:160px; max-width:190px;" onchange="this.form.submit();">
