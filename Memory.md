@@ -3,7 +3,7 @@
 > **Single Source of Truth** for the Creative Asset Library & App Instance Management Platform.  
 > **Purpose:** This document provides an exhaustive, authoritative reference for the architecture, data models, business logic, endpoints, asset processing pipelines, and chronological changelog of the entire codebase. Future modifications should reference this file directly without needing to re-analyze the entire codebase.
 >
-> **Last Updated:** September 30, 2026
+> **Last Updated:** October 5, 2026
 
 ---
 
@@ -22,7 +22,7 @@
 4. [Database Collections & Schemas (MongoDB / Motor)](#4-database-collections--schemas-mongodb--motor)
 5. [Asset Pipeline & Supported Media Formats](#5-asset-pipeline--supported-media-formats)
    - [Supported Formats (Images, Videos, Animations, HTML)](#51-supported-formats)
-   - [Alpha Transparency & Non-Destructive Cropping](#52-alpha-transparency--non-destructive-cropping)
+   - [Alpha Transparency, Non-Destructive Cropping & GIF Dither Suppression](#52-alpha-transparency-non-destructive-cropping--gif-dither-suppression)
    - [OpenCV Transparent Frame Placeholder Detection](#53-opencv-transparent-frame-placeholder-detection)
    - [HTML Asset Support & Iframe Sandboxing](#54-html-asset-support--iframe-sandboxing)
 6. [App Instance Hierarchy & Import Workflow](#6-app-instance-hierarchy--import-workflow)
@@ -181,9 +181,18 @@ The platform supports five primary categories of assets:
 4. **Interactive HTML:** `.html` / `text/html` rich widgets, mini-games, and custom web components.
 5. **Documents & Generic Files:** `.xml`, `.pdf`, `.txt`, `.csv`, `.doc`, `.docx`, `.xls`, `.xlsx`, `.zip`, `.rar`, `.7z`, `.tar`, `.gz`, and arbitrary documents with automatic MIME classification, default document thumbnail assignment, download/preview links, and dedicated filter tags.
 
-### 5.2 Alpha Transparency & Non-Destructive Cropping
-- **Zero Background Contamination:** The media cropper (`media-cropper-upload`) strictly preserves transparent PNG/WEBP alpha channels. Cropping operations do not apply black or white letterbox fills.
-- **Aspect Ratio Locking:** Common presets (1:1, 4:5, 9:16, 16:9, Freeform) are supported during single and bulk upload.
+### 5.2 Alpha Transparency, Non-Destructive Cropping & GIF Dither Suppression
+- **Zero Background Contamination:** The media cropper strictly preserves transparent PNG/WEBP alpha channels. Cropping operations never apply black or white letterbox fills.
+- **Animated GIF Dither Suppression & Clean Transparency:**
+  - Standard quantization dithering can introduce speckles, banding, and dirty grayish edges around transparent pixels in animated GIFs.
+  - Implemented `clean_frame_dither(frame)` in `controller/crop_controller.py` and `scripts/crop_media.py`:
+    - **Palette Mode (`P`):** Inspects the frame's color palette and maps all near-black color entries ($R, G, B \le 15$) to true black $(0, 0, 0)$, eliminating dark fringe noise.
+    - **RGBA / RGB Mode:** Quantizes using `Image.Quantize.FASTOCTREE` with `dither=Image.Dither.NONE`.
+  - GIF export enforces `dither=Image.Dither.NONE`, `optimize=False`, and frame disposal `disposal=2` (restore background) across all frames. This completely prevents frame ghosting, dirty pixel trails, or re-dithering across animated cycles.
+- **Aspect Ratio Locking & Video Codec Alignment:**
+  - Common presets (`1:1`, `4:5`, `9:16`, `16:9`, Freeform) are supported in both UI modal croppers and CLI tools.
+  - Video cropping via FFmpeg automatically forces even dimensions ($w \% 2 == 0, h \% 2 == 0$) required by `libx264` (`yuv420p`), preserves AAC audio tracks (or strips audio via `-an` if silent), and attaches `+faststart` metadata for instant progressive streaming.
+- **Unified Standalone CLI Tool:** `scripts/crop_media.py` provides an offline/batch CLI command mirroring the full cropper pipeline for images, animated GIFs, and videos.
 
 ### 5.3 OpenCV Transparent Frame Placeholder Detection
 - Located in `controller/frame_controller.py` and `utils/frame_extractor.py`.
@@ -280,9 +289,9 @@ Requires `admin_session` cookie.
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/admin/dashboard` | Main system dashboard with KPI metrics and recent activity |
-| `GET/POST` | `/admin/categories` | Manage central categories (list, create, edit, delete) |
-| `GET/POST` | `/admin/subcategories`| Manage central subcategories (list, create, edit, delete) |
-| `GET/POST` | `/admin/assets` | Central asset library (single upload, bulk upload, delete) |
+| `GET/POST` | `/admin/categories` | Manage central categories (list, create, edit, delete; accepts `page_size`, `pageSize`, `limit`: 20-200, default 20) |
+| `GET/POST` | `/admin/subcategories`| Manage central subcategories (list, create, edit, delete; accepts `categoryId`, `page_size`: 20-200, default 20) |
+| `GET/POST` | `/admin/assets` | Central asset library (upload, filter, delete; accepts `page_size`: 20, 40, 60, 100, 200 up to 500) |
 | `GET` | `/admin/instances` | List and create App Instances |
 | `GET` | `/admin/instances/{id}/content` | App instance working set management (folders & assets) |
 | `GET` | `/admin/instances/{id}/picker` | Central content picker with auto-tab switching |
@@ -303,6 +312,9 @@ Requires `manager_session` cookie.
 | `GET` | `/manager/dashboard` | Manager overview of assigned instances and aggregate traffic |
 | `GET` | `/manager/instances` | List accessible instances and request access to others |
 | `GET` | `/manager/instances/{id}/content` | Manage working set, custom folders, and asset overrides |
+| `GET` | `/manager/categories` | Manager view of central categories (supports `page_size`, `pageSize`, `limit`: 20-200) |
+| `GET` | `/manager/subcategories` | Manager view of central subcategories (supports `categoryId`, `page_size`: 20-200) |
+| `GET` | `/manager/assets` | Manager central asset catalog (filter by cat/sub/type/search; supports `page_size`: 20-200) |
 | `GET` | `/manager/instances/{id}/picker` | Manager central content picker (with auto-tab routing) |
 | `GET` | `/manager/instances/{id}/picker/categories` | JSON search for central categories |
 | `GET` | `/manager/instances/{id}/picker/subcategories` | JSON search for central subcategories |
@@ -380,6 +392,29 @@ Requires `manager_session` cookie.
   - As a result, the subsequent dropzone HTML template evaluation of `${!isNonCroppable ? ... : ''}` threw a fatal JavaScript `ReferenceError: isNonCroppable is not defined`.
   - Moved `const isNonCroppable` to the parent `if (isMediaBlock)` block level so it is properly defined even when a block has zero items, restoring the `+ Add Block` rendering behavior for all block types.
 
+### Update 7: GIF Dithering Artifact Suppression & Media Cropper Overhaul
+- **Problem:** When cropping animated GIFs with transparency or gradients, Pillow's default palette quantization created visible dithering speckles, grayish fringing, and background ghosting where prior animation frames bled into subsequent cycles.
+- **Root Cause & Resolution:**
+  - Added `clean_frame_dither(frame)` in `controller/crop_controller.py`:
+    - Palette mode (`P`): Clamps near-black RGB color values ($R, G, B \le 15$) in the frame palette to true black $(0, 0, 0)$, eliminating speckle artifacts around transparent contours.
+    - RGBA/RGB mode: Quantizes frames with `Image.Quantize.FASTOCTREE` and explicit `dither=Image.Dither.NONE`.
+  - Exported GIF frames using `dither=Image.Dither.NONE`, `optimize=False`, and frame disposal `disposal=2` (restore background), preventing transparent backgrounds from retaining ghosted pixels across frames.
+- **Standalone Media Cropper CLI (`scripts/crop_media.py`):**
+  - Added standalone CLI utility supporting images (`PNG`, `WEBP`, `JPEG`), animated GIFs (`GIF`), and videos (`MP4`, `WEBM`, `MOV`, `AVI`, `MKV`).
+  - Implements ratio crops (`--ratio`) with alignment (`center`, `top`, `bottom`) and manual rectangles (`--crop x,y,w,h`).
+  - Enforces even dimensions ($w \% 2 == 0, h \% 2 == 0$) with H.264 / AAC and `+faststart` metadata for video output.
+
+### Update 8: Dynamic Pagination & Per-Page Item Size Selector
+- **Configurable `page_size` in Admin & Manager Routes:**
+  - Updated `router/admin/category_routes.py`, `router/admin/subcategory_routes.py`, `router/admin/asset_routes.py`, and `router/manager/central_data_routes.py` (`manager_categories`, `manager_subcategories`, `manager_assets`).
+  - Accepts query parameters `page_size`, `pageSize`, or `limit` with safe bounds: $\min=1, \max=500$ (standard options: `20`, `40`, `60`, `100`, `200`, default: `20`).
+- **Reusable Pagination Component (`templates/partials/pagination.html`):**
+  - Added "Show: [20 / 40 / 60 / 100 / 200] per page" selector dropdown.
+  - Added inline client-side handler `changePaginationPageSize(size)` that preserves existing query parameters while updating `page_size` and resetting `page=1`.
+- **Integrated Filter Bar Selectors:**
+  - Added per-page selector dropdowns to asset list filter headers in both Admin (`templates/assets/list.html`) and Manager (`templates/manager/assets/list.html`).
+  - Preserves selected `page_size` across category/subcategory filtering, type selections, search queries, and "Clear" resets.
+
 ---
 
 ## 9. Project Directory Tree & Key File Map
@@ -402,7 +437,7 @@ Requires `manager_session` cookie.
 │   ├── override_controller.py       # Sparse field overrides, tags, monetization
 │   ├── manager_controller.py        # Manager auth, access verification, 2FA
 │   ├── frame_controller.py          # Frame placeholder coordinate detection
-│   └── crop_controller.py           # Alpha-preserving image/video cropper
+│   └── crop_controller.py           # Alpha-preserving image, GIF (dither-free) & video cropper
 ├── database/
 │   ├── collections.py               # MongoDB collection string constants
 │   ├── connection.py                # Async Motor client singleton & get_database()
@@ -410,9 +445,11 @@ Requires `manager_session` cookie.
 ├── router/
 │   ├── admin/                       # Super Admin web routes (/admin/...)
 │   │   ├── instance_routes.py       # Admin instance management & picker
-│   │   ├── asset_routes.py          # Central asset routes
-│   │   └── category_routes.py       # Central category routes
+│   │   ├── asset_routes.py          # Central asset routes (dynamic pagination)
+│   │   ├── category_routes.py       # Central category routes (dynamic pagination)
+│   │   └── subcategory_routes.py    # Central subcategory routes (dynamic pagination)
 │   ├── manager/                     # Manager web routes (/manager/...)
+│   │   ├── central_data_routes.py   # Manager central data browse (dynamic pagination)
 │   │   ├── instance_routes.py       # Manager instance management, picker & folders
 │   │   └── key_routes.py            # Manager API key issuance
 │   └── v1/                          # Client REST API (/api/v1/...)
@@ -423,17 +460,26 @@ Requires `manager_session` cookie.
 │   └── central_data/                # Uploaded physical images, videos, frames
 ├── templates/
 │   ├── base.html                    # Admin base layout (MD3 theme)
+│   ├── partials/
+│   │   └── pagination.html          # Shared pagination bar with dynamic page_size selector
+│   ├── assets/
+│   │   ├── list.html                # Admin asset catalog with page-size filter
+│   │   ├── form_single.html         # Single asset upload modal/form
+│   │   └── form_multi.html          # Multi-asset & polymorphic block upload form
 │   ├── instances/
 │   │   ├── content.html             # Admin instance working set UI
 │   │   └── picker.html              # Admin central picker UI
 │   └── manager/
 │       ├── base.html                # Manager base layout
+│       ├── assets/
+│       │   └── list.html            # Manager asset catalog with page-size filter
 │       └── instances/
 │           ├── content.html         # Manager instance working set UI
 │           └── picker.html          # Manager central picker UI
 ├── scripts/
 │   ├── create_admin.py              # CLI: Bootstrap admin operator
 │   ├── issue_key.py                 # CLI: Issue client API key
+│   ├── crop_media.py                # CLI: Standalone image, GIF & video cropper
 │   └── reap_orphan_media.py         # CLI: Clean unreferenced media files
 └── main.py                          # ASGI application entrypoint
 ```
@@ -460,5 +506,8 @@ Requires `manager_session` cookie.
 1. **Never mutate Central Data during Instance Operations:** Creating, modifying, detaching, or reordering folders and assets in an App Instance must never touch the `categories`, `subcategories`, or `assets` collections.
 2. **Access Control Verification:** Every manager endpoint under `/manager/instances/{id}` must call `await verify_manager_instance_access(db, user_id, instance_id)` before reading or mutating instance data.
 3. **Preserve Alpha Transparency:** Any image cropping or resizing operation must maintain RGBA / alpha channels without introducing black or white background fills.
-4. **Duplicate Name Guards:** Folder creation must verify case-insensitive uniqueness within that instance and parent category to prevent user confusion.
-5. **Cascading Detach:** Detaching a category folder must soft-delete its child subcategories and referenced assets within that specific app instance.
+4. **GIF Dither Suppression & Clean Disposal:** Always use `clean_frame_dither(frame)`, `dither=Image.Dither.NONE`, and `disposal=2` (restore background) when saving multi-frame animated GIFs to avoid animation ghosting and quantization noise.
+5. **Video Encoding Dimensions:** All video crops must enforce even dimensions ($w \% 2 == 0, h \% 2 == 0$) for H.264 compatibility, and attach `+faststart` metadata for streaming.
+6. **Dynamic Pagination Limits:** All catalog listing endpoints must constrain `page_size` to $1 \le \text{page\_size} \le 500$ and support standard steps (20, 40, 60, 100, 200).
+7. **Duplicate Name Guards:** Folder creation must verify case-insensitive uniqueness within that instance and parent category to prevent user confusion.
+8. **Cascading Detach:** Detaching a category folder must soft-delete its child subcategories and referenced assets within that specific app instance.
