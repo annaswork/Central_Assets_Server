@@ -166,6 +166,33 @@ def crop_image_bytes(
         return out_bytes, final_filename, mime, w, h
 
 
+def clean_frame_dither(frame: Image.Image) -> Image.Image:
+    """
+    Suppresses GIF dithering noise and near-black artifacts.
+    Preserves palette mode for 'P' images and zeros out near-black colors (<= 15).
+    For RGBA/RGB, quantizes with FASTOCTREE and dither=NONE.
+    """
+    if frame.mode == "P":
+        palette = frame.getpalette()
+        if palette:
+            new_palette = []
+            for i in range(0, len(palette), 3):
+                r, g, b = palette[i : i + 3]
+                if r <= 15 and g <= 15 and b <= 15:
+                    new_palette.extend([0, 0, 0])
+                else:
+                    new_palette.extend([r, g, b])
+            frame.putpalette(new_palette)
+        return frame
+    elif frame.mode in ("RGBA", "RGB"):
+        return frame.quantize(
+            colors=256,
+            method=Image.Quantize.FASTOCTREE,
+            dither=Image.Dither.NONE,
+        )
+    return frame
+
+
 def crop_gif_bytes(
     gif_bytes: bytes,
     filename: str,
@@ -174,7 +201,8 @@ def crop_gif_bytes(
 ) -> Tuple[bytes, str, str, int, int]:
     """
     Crops an animated GIF while strictly preserving multi-frame animation,
-    transparent backgrounds (disposal=2), loop count, and frame durations.
+    transparent backgrounds (disposal=2), loop count, frame durations, and
+    suppressing dither noise according to media-cropper-upload skill.
     Note: Lottie JSON animations are vector formats and are not processed here.
     """
     with Image.open(BytesIO(gif_bytes)) as im:
@@ -191,10 +219,10 @@ def crop_gif_bytes(
         disposals = []
 
         for frame in ImageSequence.Iterator(im):
-            # Convert frame to RGBA to preserve transparency during crop
-            f_rgba = frame.convert("RGBA")
-            c_frame = f_rgba.crop(crop_rect)
-            frames.append(c_frame)
+            f_copy = frame.copy()
+            cropped_frame = f_copy.crop(crop_rect)
+            cleaned_frame = clean_frame_dither(cropped_frame)
+            frames.append(cleaned_frame)
             durations.append(frame.info.get("duration", 100))
             # disposal=2 restores background, preventing ghosting on transparent GIFs
             disposals.append(frame.info.get("disposal", 2))
@@ -208,6 +236,7 @@ def crop_gif_bytes(
                 "loop": loop,
                 "disposal": disposals,
                 "optimize": False,
+                "dither": Image.Dither.NONE,
             }
             frames[0].save(out_buf, format="GIF", **save_kwargs)
         else:

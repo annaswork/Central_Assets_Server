@@ -36,6 +36,9 @@ router = APIRouter(prefix="/categories", tags=["Admin Categories"])
 async def admin_list_categories(
     request: Request,
     page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=500, alias="page_size"),
+    limit: int | None = Query(default=None, ge=1, le=500),
+    pageSize: int | None = Query(default=None, ge=1, le=500),
     search: str | None = None,
     sort: str = Query(default="sequence"),
     order: str = Query(default="asc"),
@@ -46,6 +49,9 @@ async def admin_list_categories(
     session = get_current_admin_session(request)
     if not session:
         return RedirectResponse(url="/admin/login", status_code=303)
+
+    effective_page_size = pageSize or limit or page_size or 20
+    effective_page_size = max(1, min(effective_page_size, 500))
 
     s_clean = (sort or "sequence").lower()
     o_clean = (order or "asc").lower()
@@ -67,7 +73,7 @@ async def admin_list_categories(
         current_sort = "sequence"
 
     data = await list_categories(
-        db, page=page, page_size=20, search=search, sort_by=sort_by, sort_order=sort_order
+        db, page=page, page_size=effective_page_size, search=search, sort_by=sort_by, sort_order=sort_order
     )
 
     # Attach live subcategory & asset counts for critical warning checks

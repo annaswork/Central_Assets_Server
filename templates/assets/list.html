@@ -105,8 +105,17 @@
         <option value="oldest" {% if current_sort == 'oldest' %}selected{% endif %}>Oldest First</option>
       </select>
 
+      {% set cur_ps = data.page_size if (data and data.page_size) else (page_size or 20) %}
+      <select name="page_size" id="pageSizeFilter" class="select" style="min-width:115px; max-width:140px;" onchange="this.form.submit();" title="Number of assets shown per page">
+        <option value="20" {% if cur_ps == 20 %}selected{% endif %}>20 / page</option>
+        <option value="40" {% if cur_ps == 40 %}selected{% endif %}>40 / page</option>
+        <option value="60" {% if cur_ps == 60 %}selected{% endif %}>60 / page</option>
+        <option value="100" {% if cur_ps == 100 %}selected{% endif %}>100 / page</option>
+        <option value="200" {% if cur_ps == 200 %}selected{% endif %}>200 / page</option>
+      </select>
+
       {% if selected_cat or selected_sub or selected_type or (current_sort and current_sort not in ('sequence', '')) %}
-        <a href="/admin/assets{% if search %}?q={{ search }}{% endif %}" class="btn btn-outlined btn-filter" onclick="sessionStorage.removeItem('admin_assets_filter_url')">Clear</a>
+        <a href="/admin/assets?{% if cur_ps != 20 %}page_size={{ cur_ps }}&{% endif %}{% if search %}q={{ search }}{% endif %}" class="btn btn-outlined btn-filter" onclick="sessionStorage.removeItem('admin_assets_filter_url')">Clear</a>
       {% endif %}
     </div>
 
@@ -114,7 +123,7 @@
       <input type="text" name="q" class="input" placeholder="Search asset name..." value="{{ search }}" style="max-width:260px;">
       <button type="submit" class="btn btn-outlined btn-filter">Search</button>
       {% if search %}
-        <a href="/admin/assets?{% if selected_cat %}categoryId={{ selected_cat }}&{% endif %}{% if selected_sub %}subCategoryId={{ selected_sub }}&{% endif %}{% if selected_type %}type={{ selected_type }}&{% endif %}{% if current_sort and current_sort not in ('sequence', '') %}sort={{ current_sort }}&{% endif %}" class="btn btn-outlined btn-filter" onclick="sessionStorage.removeItem('admin_assets_filter_url')">Clear</a>
+        <a href="/admin/assets?{% if selected_cat %}categoryId={{ selected_cat }}&{% endif %}{% if selected_sub %}subCategoryId={{ selected_sub }}&{% endif %}{% if selected_type %}type={{ selected_type }}&{% endif %}{% if current_sort and current_sort not in ('sequence', '') %}sort={{ current_sort }}&{% endif %}{% if cur_ps != 20 %}page_size={{ cur_ps }}&{% endif %}" class="btn btn-outlined btn-filter" onclick="sessionStorage.removeItem('admin_assets_filter_url')">Clear</a>
       {% endif %}
     </div>
   </form>

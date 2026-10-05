@@ -4,11 +4,27 @@
   {% set total_pages = ((pdata.total + pdata.page_size - 1) // pdata.page_size) %}
   
   <div class="pagination-wrapper">
-    <div style="font-size:0.875rem; color:var(--md-sys-color-on-surface-variant);">
-      Showing <strong>{{ ((current_page - 1) * pdata.page_size) + 1 }}</strong> - <strong>{{ [current_page * pdata.page_size, pdata.total]|min }}</strong> of <strong>{{ pdata.total }}</strong> items
-      {% if total_pages > 1 %}
-        <span style="opacity:0.75; margin-left:0.35rem;">· Page {{ current_page }} of {{ total_pages }}</span>
-      {% endif %}
+    <div style="font-size:0.875rem; color:var(--md-sys-color-on-surface-variant); display:flex; align-items:center; gap:1.25rem; flex-wrap:wrap;">
+      <div>
+        Showing <strong>{{ ((current_page - 1) * pdata.page_size) + 1 }}</strong> - <strong>{{ [current_page * pdata.page_size, pdata.total]|min }}</strong> of <strong>{{ pdata.total }}</strong> items
+        {% if total_pages > 1 %}
+          <span style="opacity:0.75; margin-left:0.35rem;">· Page {{ current_page }} of {{ total_pages }}</span>
+        {% endif %}
+      </div>
+
+      <div class="pagination-pagesize-group" style="display:inline-flex; align-items:center; gap:0.4rem; font-size:0.82rem; color:var(--md-sys-color-on-surface-variant);">
+        <span>Show:</span>
+        <select class="select select-sm pagination-pagesize-select" onchange="changePaginationPageSize(this.value)" style="height:30px; padding:0 1.6rem 0 0.55rem; font-size:0.82rem; min-width:75px; border-radius:var(--md-shape-corner-small, 6px); background-color:var(--md-sys-color-surface-container, #1e293b); color:var(--md-sys-color-on-surface, #f8fafc); border:1px solid var(--md-sys-color-outline-variant, #334155);" title="Change number of items shown per page">
+          {% set standard_sizes = [20, 40, 60, 100, 200] %}
+          {% for size in standard_sizes %}
+            <option value="{{ size }}" {% if pdata.page_size == size %}selected{% endif %}>{{ size }}</option>
+          {% endfor %}
+          {% if pdata.page_size not in standard_sizes %}
+            <option value="{{ pdata.page_size }}" selected>{{ pdata.page_size }}</option>
+          {% endif %}
+        </select>
+        <span>per page</span>
+      </div>
     </div>
 
     {% if total_pages > 1 %}
@@ -50,4 +66,17 @@
       </nav>
     {% endif %}
   </div>
+
+  <script>
+  if (typeof changePaginationPageSize !== 'function') {
+    function changePaginationPageSize(size) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('page_size', size);
+      url.searchParams.delete('pageSize');
+      url.searchParams.delete('limit');
+      url.searchParams.set('page', '1');
+      window.location.href = url.toString();
+    }
+  }
+  </script>
 {% endif %}

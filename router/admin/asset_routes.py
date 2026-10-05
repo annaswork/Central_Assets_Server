@@ -68,6 +68,9 @@ async def admin_list_assets(
     categoryId: str | None = None,
     subCategoryId: str | None = None,
     page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=500, alias="page_size"),
+    limit: int | None = Query(default=None, ge=1, le=500),
+    pageSize: int | None = Query(default=None, ge=1, le=500),
     q: str | None = None,
     type: str | None = Query(default=None),
     sort: str = Query(default="sequence"),
@@ -79,6 +82,9 @@ async def admin_list_assets(
     session = get_current_admin_session(request)
     if not session:
         return RedirectResponse(url="/admin/login", status_code=303)
+
+    effective_page_size = pageSize or limit or page_size or 20
+    effective_page_size = max(1, min(effective_page_size, 500))
 
     # Normalize data type filter (images, videos, audios, json, frames)
     clean_type = (type or "").strip().lower()
@@ -150,7 +156,7 @@ async def admin_list_assets(
         sub_category_id=subCategoryId,
         search=q,
         page=page,
-        page_size=20,
+        page_size=effective_page_size,
         sort_by=effective_sort_by,
         sort_order=effective_sort_order,
         asset_type=selected_type,
@@ -178,6 +184,7 @@ async def admin_list_assets(
         context={
             "session": session,
             "data": data,
+            "page_size": effective_page_size,
             "categories": all_cats.get("items", []),
             "subcategories": all_subs.get("items", []),
             "category_map": category_map,

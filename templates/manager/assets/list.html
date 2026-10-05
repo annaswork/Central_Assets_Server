@@ -62,8 +62,17 @@
         <option value="oldest" {% if current_sort == 'oldest' %}selected{% endif %}>Oldest First</option>
       </select>
 
+      {% set cur_ps = data.page_size if (data and data.page_size) else (page_size or 20) %}
+      <select name="page_size" id="pageSizeFilterManager" class="select" style="min-width:115px; max-width:140px;" onchange="this.form.submit();" title="Number of assets shown per page">
+        <option value="20" {% if cur_ps == 20 %}selected{% endif %}>20 / page</option>
+        <option value="40" {% if cur_ps == 40 %}selected{% endif %}>40 / page</option>
+        <option value="60" {% if cur_ps == 60 %}selected{% endif %}>60 / page</option>
+        <option value="100" {% if cur_ps == 100 %}selected{% endif %}>100 / page</option>
+        <option value="200" {% if cur_ps == 200 %}selected{% endif %}>200 / page</option>
+      </select>
+
       {% if (selected_cat or category_id or categoryId) or (selected_sub or sub_category_id or subCategoryId) or (selected_type or type) or (current_sort and current_sort not in ('sequence', '')) %}
-        <a href="/manager/assets{% if search or q %}?q={{ search or q }}{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
+        <a href="/manager/assets?{% if cur_ps != 20 %}page_size={{ cur_ps }}&{% endif %}{% if search or q %}q={{ search or q }}{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
       {% endif %}
     </div>
 
@@ -78,7 +87,7 @@
       >
       <button type="submit" class="btn btn-outlined btn-filter">Search</button>
       {% if search or q %}
-        <a href="/manager/assets?{% if selected_cat or category_id or categoryId %}categoryId={{ selected_cat or category_id or categoryId }}&{% endif %}{% if selected_sub or sub_category_id or subCategoryId %}subCategoryId={{ selected_sub or sub_category_id or subCategoryId }}&{% endif %}{% if selected_type or type %}type={{ selected_type or type }}&{% endif %}{% if current_sort and current_sort not in ('sequence', '') %}sort={{ current_sort }}&{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
+        <a href="/manager/assets?{% if selected_cat or category_id or categoryId %}categoryId={{ selected_cat or category_id or categoryId }}&{% endif %}{% if selected_sub or sub_category_id or subCategoryId %}subCategoryId={{ selected_sub or sub_category_id or subCategoryId }}&{% endif %}{% if selected_type or type %}type={{ selected_type or type }}&{% endif %}{% if current_sort and current_sort not in ('sequence', '') %}sort={{ current_sort }}&{% endif %}{% if cur_ps != 20 %}page_size={{ cur_ps }}&{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
       {% endif %}
     </div>
   </form>

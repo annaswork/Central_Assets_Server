@@ -26,6 +26,9 @@ router = APIRouter(tags=["Manager Central Data"])
 async def manager_categories(
     request: Request,
     page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=500, alias="page_size"),
+    limit: int | None = Query(default=None, ge=1, le=500),
+    pageSize: int | None = Query(default=None, ge=1, le=500),
     search: str | None = None,
     sort: str = Query(default="sequence"),
     order: str = Query(default="asc"),
@@ -35,6 +38,9 @@ async def manager_categories(
     session = get_current_manager_session(request)
     if not session:
         return RedirectResponse(url="/manager/login", status_code=303)
+
+    effective_page_size = pageSize or limit or page_size or 20
+    effective_page_size = max(1, min(effective_page_size, 500))
 
     manager = await get_manager_by_id(db, session["user_id"])
 
@@ -58,7 +64,7 @@ async def manager_categories(
         current_sort = "sequence"
 
     categories_page = await list_categories(
-        db, page=page, page_size=20, search=search, sort_by=sort_by, sort_order=sort_order
+        db, page=page, page_size=effective_page_size, search=search, sort_by=sort_by, sort_order=sort_order
     )
 
     items = categories_page.get("items", [])
@@ -99,6 +105,9 @@ async def manager_categories(
 async def manager_subcategories(
     request: Request,
     page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=500, alias="page_size"),
+    limit: int | None = Query(default=None, ge=1, le=500),
+    pageSize: int | None = Query(default=None, ge=1, le=500),
     categoryId: str | None = None,
     category_id: str | None = None,
     search: str | None = None,
@@ -110,6 +119,9 @@ async def manager_subcategories(
     session = get_current_manager_session(request)
     if not session:
         return RedirectResponse(url="/manager/login", status_code=303)
+
+    effective_page_size = pageSize or limit or page_size or 20
+    effective_page_size = max(1, min(effective_page_size, 500))
 
     effective_cat_id = categoryId or category_id
 
@@ -137,7 +149,7 @@ async def manager_subcategories(
         db,
         category_id=effective_cat_id,
         page=page,
-        page_size=20,
+        page_size=effective_page_size,
         search=search,
         sort_by=sort_by,
         sort_order=sort_order,
@@ -195,6 +207,9 @@ async def manager_subcategories(
 async def manager_assets(
     request: Request,
     page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=500, alias="page_size"),
+    limit: int | None = Query(default=None, ge=1, le=500),
+    pageSize: int | None = Query(default=None, ge=1, le=500),
     categoryId: str | None = None,
     category_id: str | None = None,
     subCategoryId: str | None = None,
@@ -210,6 +225,9 @@ async def manager_assets(
     session = get_current_manager_session(request)
     if not session:
         return RedirectResponse(url="/manager/login", status_code=303)
+
+    effective_page_size = pageSize or limit or page_size or 20
+    effective_page_size = max(1, min(effective_page_size, 500))
 
     manager = await get_manager_by_id(db, session["user_id"])
 
@@ -286,7 +304,7 @@ async def manager_assets(
         sub_category_id=effective_sub,
         search=search_query,
         page=page,
-        page_size=20,
+        page_size=effective_page_size,
         sort_by=effective_sort_by,
         sort_order=effective_sort_order,
         asset_type=selected_type,
@@ -318,6 +336,7 @@ async def manager_assets(
             "assets": items,
             "data": assets_page,
             "pagination": assets_page,
+            "page_size": effective_page_size,
             "categories": all_categories.get("items", []),
             "subcategories": all_subs.get("items", []),
             "selected_cat": effective_cat or "",
