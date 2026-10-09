@@ -26,13 +26,7 @@ def get_instance_filter(request: Request, target_instance_id: str | None = None)
     if bound_instance:
         bound_str = str(bound_instance)
         if target_instance_id and target_instance_id != bound_str:
-            raise ForbiddenError(
-                "This API key is bound to a specific app instance and cannot access others",
-                details={
-                    "bound_instance_id": bound_str,
-                    "requested_instance_id": target_instance_id,
-                },
-            )
+            raise ForbiddenError("API key not matching with the instance, verify again.")
         return {"app_instance_id": to_object_id(bound_str)}
 
     # Unbound key

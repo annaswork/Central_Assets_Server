@@ -64,6 +64,7 @@ async def add_references(
             }
         )
         if existing:
+            cat_inst_id = existing["_id"]
             if existing.get("deleted_at") is not None:
                 await db[INSTANCE_CATEGORIES].update_one(
                     {"_id": existing["_id"]},
@@ -79,7 +80,7 @@ async def add_references(
             )
             seq = compute_next_sequence(max_seq_doc.get("sequence") if max_seq_doc else None)
             try:
-                await cat_repo.insert_one(
+                res_cat = await cat_repo.insert_one(
                     {
                         "app_instance_id": inst_oid,
                         "source_id": c_oid,
@@ -91,22 +92,29 @@ async def add_references(
                         "deleted_at": None,
                     }
                 )
+                cat_inst_id = res_cat.inserted_id
                 added_cats += 1
             except DuplicateKeyError:
+                dup_cat = await db[INSTANCE_CATEGORIES].find_one(
+                    {"app_instance_id": inst_oid, "source_id": c_oid}
+                )
+                cat_inst_id = dup_cat["_id"]
                 await db[INSTANCE_CATEGORIES].update_one(
-                    {"app_instance_id": inst_oid, "source_id": c_oid},
+                    {"_id": dup_cat["_id"]},
                     {"$set": {"deleted_at": None, "is_enabled": True, "updated_at": now}},
                 )
                 already_present += 1
 
         # Query all central subcategories under this category and reference them
         central_subs = await db[SUBCATEGORIES].find({"category_id": c_oid, "deleted_at": None}).to_list(length=2000)
+        sub_id_map: dict[Any, Any] = {}
         for sub in central_subs:
             s_oid = sub["_id"]
             sub_exists = await db[INSTANCE_SUBCATEGORIES].find_one(
                 {"app_instance_id": inst_oid, "source_id": s_oid}
             )
             if sub_exists:
+                sub_id_map[s_oid] = sub_exists["_id"]
                 if sub_exists.get("deleted_at") is not None:
                     await db[INSTANCE_SUBCATEGORIES].update_one(
                         {"_id": sub_exists["_id"]},
@@ -114,24 +122,29 @@ async def add_references(
                             "$set": {
                                 "deleted_at": None,
                                 "is_enabled": True,
-                                "category_id": c_oid,
+                                "category_id": cat_inst_id,
                                 "updated_at": now,
                             }
                         },
                     )
                     added_subs += 1
+                else:
+                    await db[INSTANCE_SUBCATEGORIES].update_one(
+                        {"_id": sub_exists["_id"]},
+                        {"$set": {"category_id": cat_inst_id, "updated_at": now}},
+                    )
             else:
                 max_seq_sub = await db[INSTANCE_SUBCATEGORIES].find_one(
-                    {"app_instance_id": inst_oid, "category_id": c_oid, "deleted_at": None},
+                    {"app_instance_id": inst_oid, "category_id": cat_inst_id, "deleted_at": None},
                     sort=[("sequence", -1)],
                 )
                 sub_seq = compute_next_sequence(max_seq_sub.get("sequence") if max_seq_sub else None)
                 try:
-                    await sub_repo.insert_one(
+                    res_sub = await sub_repo.insert_one(
                         {
                             "app_instance_id": inst_oid,
                             "source_id": s_oid,
-                            "category_id": c_oid,
+                            "category_id": cat_inst_id,
                             "is_enabled": True,
                             "sequence": sub_seq,
                             "overrides": {},
@@ -140,15 +153,20 @@ async def add_references(
                             "deleted_at": None,
                         }
                     )
+                    sub_id_map[s_oid] = res_sub.inserted_id
                     added_subs += 1
                 except DuplicateKeyError:
+                    dup_sub = await db[INSTANCE_SUBCATEGORIES].find_one(
+                        {"app_instance_id": inst_oid, "source_id": s_oid}
+                    )
+                    sub_id_map[s_oid] = dup_sub["_id"]
                     await db[INSTANCE_SUBCATEGORIES].update_one(
-                        {"app_instance_id": inst_oid, "source_id": s_oid},
+                        {"_id": dup_sub["_id"]},
                         {
                             "$set": {
                                 "deleted_at": None,
                                 "is_enabled": True,
-                                "category_id": c_oid,
+                                "category_id": cat_inst_id,
                                 "updated_at": now,
                             }
                         },
@@ -158,6 +176,7 @@ async def add_references(
         central_assets = await db[ASSETS].find({"category_id": c_oid, "deleted_at": None}).to_list(length=10000)
         for a in central_assets:
             a_oid = a["_id"]
+            sub_link_id = sub_id_map.get(a["sub_category_id"], a["sub_category_id"])
             asset_exists = await db[INSTANCE_ASSETS].find_one(
                 {"app_instance_id": inst_oid, "source_id": a_oid}
             )
@@ -169,19 +188,30 @@ async def add_references(
                             "$set": {
                                 "deleted_at": None,
                                 "is_enabled": True,
-                                "category_id": c_oid,
-                                "sub_category_id": a["sub_category_id"],
+                                "category_id": cat_inst_id,
+                                "sub_category_id": sub_link_id,
                                 "updated_at": now,
                             }
                         },
                     )
                     added_assets += 1
+                else:
+                    await db[INSTANCE_ASSETS].update_one(
+                        {"_id": asset_exists["_id"]},
+                        {
+                            "$set": {
+                                "category_id": cat_inst_id,
+                                "sub_category_id": sub_link_id,
+                                "updated_at": now,
+                            }
+                        },
+                    )
             else:
                 max_seq_asset = await db[INSTANCE_ASSETS].find_one(
                     {
                         "app_instance_id": inst_oid,
-                        "category_id": c_oid,
-                        "sub_category_id": a["sub_category_id"],
+                        "category_id": cat_inst_id,
+                        "sub_category_id": sub_link_id,
                         "deleted_at": None,
                     },
                     sort=[("sequence", -1)],
@@ -192,8 +222,8 @@ async def add_references(
                         {
                             "app_instance_id": inst_oid,
                             "source_id": a_oid,
-                            "category_id": c_oid,
-                            "sub_category_id": a["sub_category_id"],
+                            "category_id": cat_inst_id,
+                            "sub_category_id": sub_link_id,
                             "is_enabled": True,
                             "sequence": asset_seq,
                             "is_premium": False,
@@ -215,8 +245,8 @@ async def add_references(
                             "$set": {
                                 "deleted_at": None,
                                 "is_enabled": True,
-                                "category_id": c_oid,
-                                "sub_category_id": a["sub_category_id"],
+                                "category_id": cat_inst_id,
+                                "sub_category_id": sub_link_id,
                                 "updated_at": now,
                             }
                         },
@@ -246,11 +276,9 @@ async def add_references(
                     {"$set": {"deleted_at": None, "is_enabled": True, "updated_at": now}},
                 )
                 added_cats += 1
-            cat_link_id = target_inst_cat.get("source_id") or target_inst_cat["_id"]
+            cat_link_id = target_inst_cat["_id"]
         else:
             parent_cat_oid = central_sub["category_id"]
-            cat_link_id = parent_cat_oid
-
             # Ensure parent category reference exists in this instance
             parent_inst_cat = await db[INSTANCE_CATEGORIES].find_one(
                 {
@@ -265,13 +293,14 @@ async def add_references(
                         {"$set": {"deleted_at": None, "is_enabled": True, "updated_at": now}},
                     )
                     added_cats += 1
+                cat_link_id = parent_inst_cat["_id"]
             else:
                 max_seq = await db[INSTANCE_CATEGORIES].find_one(
                     {"app_instance_id": inst_oid, "deleted_at": None}, sort=[("sequence", -1)]
                 )
                 cat_seq = compute_next_sequence(max_seq.get("sequence") if max_seq else None)
                 try:
-                    await cat_repo.insert_one(
+                    res_c = await cat_repo.insert_one(
                         {
                             "app_instance_id": inst_oid,
                             "source_id": parent_cat_oid,
@@ -283,10 +312,15 @@ async def add_references(
                             "deleted_at": None,
                         }
                     )
+                    cat_link_id = res_c.inserted_id
                     added_cats += 1
                 except DuplicateKeyError:
+                    dup_c = await db[INSTANCE_CATEGORIES].find_one(
+                        {"app_instance_id": inst_oid, "source_id": parent_cat_oid}
+                    )
+                    cat_link_id = dup_c["_id"]
                     await db[INSTANCE_CATEGORIES].update_one(
-                        {"app_instance_id": inst_oid, "source_id": parent_cat_oid},
+                        {"_id": dup_c["_id"]},
                         {"$set": {"deleted_at": None, "is_enabled": True, "updated_at": now}},
                     )
 
@@ -297,6 +331,7 @@ async def add_references(
             }
         )
         if existing:
+            sub_inst_id = existing["_id"]
             if existing.get("deleted_at") is not None:
                 await db[INSTANCE_SUBCATEGORIES].update_one(
                     {"_id": existing["_id"]},
@@ -329,7 +364,7 @@ async def add_references(
             )
             sub_seq = compute_next_sequence(max_seq_sub.get("sequence") if max_seq_sub else None)
             try:
-                await sub_repo.insert_one(
+                res_s = await sub_repo.insert_one(
                     {
                         "app_instance_id": inst_oid,
                         "source_id": s_oid,
@@ -342,10 +377,15 @@ async def add_references(
                         "deleted_at": None,
                     }
                 )
+                sub_inst_id = res_s.inserted_id
                 added_subs += 1
             except DuplicateKeyError:
+                dup_s = await db[INSTANCE_SUBCATEGORIES].find_one(
+                    {"app_instance_id": inst_oid, "source_id": s_oid}
+                )
+                sub_inst_id = dup_s["_id"]
                 await db[INSTANCE_SUBCATEGORIES].update_one(
-                    {"app_instance_id": inst_oid, "source_id": s_oid},
+                    {"_id": dup_s["_id"]},
                     {
                         "$set": {
                             "deleted_at": None,
@@ -373,7 +413,7 @@ async def add_references(
                                 "deleted_at": None,
                                 "is_enabled": True,
                                 "category_id": cat_link_id,
-                                "sub_category_id": s_oid,
+                                "sub_category_id": sub_inst_id,
                                 "updated_at": now,
                             }
                         },
@@ -386,7 +426,7 @@ async def add_references(
                             {
                                 "$set": {
                                     "category_id": cat_link_id,
-                                    "sub_category_id": s_oid,
+                                    "sub_category_id": sub_inst_id,
                                     "updated_at": now,
                                 }
                             },
@@ -396,7 +436,7 @@ async def add_references(
                     {
                         "app_instance_id": inst_oid,
                         "category_id": cat_link_id,
-                        "sub_category_id": s_oid,
+                        "sub_category_id": sub_inst_id,
                         "deleted_at": None,
                     },
                     sort=[("sequence", -1)],
@@ -408,7 +448,7 @@ async def add_references(
                             "app_instance_id": inst_oid,
                             "source_id": a_oid,
                             "category_id": cat_link_id,
-                            "sub_category_id": s_oid,
+                            "sub_category_id": sub_inst_id,
                             "is_enabled": True,
                             "sequence": asset_seq,
                             "is_premium": False,
@@ -431,7 +471,7 @@ async def add_references(
                                 "deleted_at": None,
                                 "is_enabled": True,
                                 "category_id": cat_link_id,
-                                "sub_category_id": s_oid,
+                                "sub_category_id": sub_inst_id,
                                 "updated_at": now,
                             }
                         },
@@ -471,10 +511,9 @@ async def add_references(
                     {"$set": {"deleted_at": None, "is_enabled": True, "updated_at": now}},
                 )
                 added_cats += 1
-            cat_link_id = target_inst_cat.get("source_id") or target_inst_cat["_id"]
+            cat_link_id = target_inst_cat["_id"]
         else:
             cat_oid = central_asset["category_id"]
-            cat_link_id = cat_oid
             # Ensure parent category reference exists
             parent_inst_cat = await db[INSTANCE_CATEGORIES].find_one(
                 {
@@ -489,13 +528,14 @@ async def add_references(
                         {"$set": {"deleted_at": None, "is_enabled": True, "updated_at": now}},
                     )
                     added_cats += 1
+                cat_link_id = parent_inst_cat["_id"]
             else:
                 max_seq = await db[INSTANCE_CATEGORIES].find_one(
                     {"app_instance_id": inst_oid, "deleted_at": None}, sort=[("sequence", -1)]
                 )
                 cat_seq = compute_next_sequence(max_seq.get("sequence") if max_seq else None)
                 try:
-                    await cat_repo.insert_one(
+                    cat_link_id = await cat_repo.insert_one(
                         {
                             "app_instance_id": inst_oid,
                             "source_id": cat_oid,
@@ -513,6 +553,10 @@ async def add_references(
                         {"app_instance_id": inst_oid, "source_id": cat_oid},
                         {"$set": {"deleted_at": None, "is_enabled": True, "updated_at": now}},
                     )
+                    existing_cat = await db[INSTANCE_CATEGORIES].find_one(
+                        {"app_instance_id": inst_oid, "source_id": cat_oid}
+                    )
+                    cat_link_id = existing_cat["_id"]
 
         target_inst_sub = None
         if target_sub_category_id:
@@ -538,10 +582,9 @@ async def add_references(
                     },
                 )
                 added_subs += 1
-            sub_link_id = target_inst_sub.get("source_id") or target_inst_sub["_id"]
+            sub_link_id = target_inst_sub["_id"]
         else:
             sub_oid = central_asset["sub_category_id"]
-            sub_link_id = sub_oid
             # Ensure parent subcategory reference exists
             parent_inst_sub = await db[INSTANCE_SUBCATEGORIES].find_one(
                 {
@@ -563,6 +606,7 @@ async def add_references(
                         },
                     )
                     added_subs += 1
+                sub_link_id = parent_inst_sub["_id"]
             else:
                 max_seq_sub = await db[INSTANCE_SUBCATEGORIES].find_one(
                     {"app_instance_id": inst_oid, "category_id": cat_link_id, "deleted_at": None},
@@ -570,7 +614,7 @@ async def add_references(
                 )
                 sub_seq = compute_next_sequence(max_seq_sub.get("sequence") if max_seq_sub else None)
                 try:
-                    await sub_repo.insert_one(
+                    sub_link_id = await sub_repo.insert_one(
                         {
                             "app_instance_id": inst_oid,
                             "source_id": sub_oid,
@@ -596,6 +640,10 @@ async def add_references(
                             }
                         },
                     )
+                    existing_sub = await db[INSTANCE_SUBCATEGORIES].find_one(
+                        {"app_instance_id": inst_oid, "source_id": sub_oid}
+                    )
+                    sub_link_id = existing_sub["_id"]
 
         if existing:
             if existing.get("deleted_at") is not None:

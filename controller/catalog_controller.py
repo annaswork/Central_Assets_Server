@@ -58,13 +58,6 @@ async def get_resolved_categories(
         {
             "$project": {
                 "id": {"$toString": "$_id"},
-                "sourceId": {
-                    "$cond": [
-                        {"$ifNull": ["$source_id", False]},
-                        {"$toString": "$source_id"},
-                        {"$toString": "$_id"},
-                    ]
-                },
                 "is_enabled": "$is_enabled",
                 "sequence": "$sequence",
                 "overrides": {"$ifNull": ["$overrides", {}]},
@@ -84,7 +77,6 @@ async def get_resolved_categories(
             "$project": {
                 "_id": 0,
                 "id": 1,
-                "sourceId": 1,
                 "is_enabled": 1,
                 "sequence": 1,
                 "overrides": 1,
@@ -145,17 +137,53 @@ async def get_resolved_subcategories(
                 ]
             }
         },
+        # Lookup parent category from INSTANCE_CATEGORIES to ensure assigned instance category ID is returned
+        {
+            "$lookup": {
+                "from": INSTANCE_CATEGORIES,
+                "let": {
+                    "sub_cat_id": "$category_id",
+                    "central_cat_id": "$central.category_id",
+                    "inst_id": "$app_instance_id",
+                },
+                "pipeline": [
+                    {
+                        "$match": {
+                            "$expr": {
+                                "$and": [
+                                    {"$eq": ["$app_instance_id", "$$inst_id"]},
+                                    {"$eq": ["$deleted_at", None]},
+                                    {
+                                        "$or": [
+                                            {"$eq": ["$_id", "$$sub_cat_id"]},
+                                            {"$eq": ["$source_id", "$$sub_cat_id"]},
+                                            {
+                                                "$and": [
+                                                    {"$ne": ["$$central_cat_id", None]},
+                                                    {"$eq": ["$source_id", "$$central_cat_id"]},
+                                                ]
+                                            },
+                                        ]
+                                    },
+                                ]
+                            }
+                        }
+                    }
+                ],
+                "as": "parent_inst_cat",
+            }
+        },
+        {"$unwind": {"path": "$parent_inst_cat", "preserveNullAndEmptyArrays": True}},
         {
             "$project": {
                 "id": {"$toString": "$_id"},
-                "sourceId": {
+                "categoryId": {
                     "$cond": [
-                        {"$ifNull": ["$source_id", False]},
-                        {"$toString": "$source_id"},
-                        {"$toString": "$_id"},
+                        {"$ifNull": ["$parent_inst_cat._id", False]},
+                        {"$toString": "$parent_inst_cat._id"},
+                        {"$toString": "$category_id"},
                     ]
                 },
-                "categoryId": {"$toString": "$category_id"},
                 "is_enabled": "$is_enabled",
                 "sequence": "$sequence",
                 "overrides": {"$ifNull": ["$overrides", {}]},
@@ -175,7 +203,6 @@ async def get_resolved_subcategories(
             "$project": {
                 "_id": 0,
                 "id": 1,
-                "sourceId": 1,
                 "categoryId": 1,
                 "is_enabled": 1,
                 "sequence": 1,
@@ -260,38 +287,76 @@ async def get_resolved_assets(
                 "as": "central",
             }
         },
-        # Lookup Category name from central CATEGORIES or INSTANCE_CATEGORIES
-        {
-            "$lookup": {
-                "from": CATEGORIES,
-                "localField": "category_id",
-                "foreignField": "_id",
-                "as": "cat_central",
-            }
-        },
+        # Lookup parent category from INSTANCE_CATEGORIES to ensure assigned instance category ID is returned
         {
             "$lookup": {
                 "from": INSTANCE_CATEGORIES,
-                "localField": "category_id",
-                "foreignField": "_id",
-                "as": "cat_inst",
+                "let": {
+                    "asset_cat_id": "$category_id",
+                    "central_cat_id": "$central.category_id",
+                    "inst_id": "$app_instance_id",
+                },
+                "pipeline": [
+                    {
+                        "$match": {
+                            "$expr": {
+                                "$and": [
+                                    {"$eq": ["$app_instance_id", "$$inst_id"]},
+                                    {"$eq": ["$deleted_at", None]},
+                                    {
+                                        "$or": [
+                                            {"$eq": ["$_id", "$$asset_cat_id"]},
+                                            {"$eq": ["$source_id", "$$asset_cat_id"]},
+                                            {
+                                                "$and": [
+                                                    {"$ne": ["$$central_cat_id", None]},
+                                                    {"$eq": ["$source_id", "$$central_cat_id"]},
+                                                ]
+                                            },
+                                        ]
+                                    },
+                                ]
+                            }
+                        }
+                    }
+                ],
+                "as": "parent_inst_cat",
             }
         },
-        # Lookup Subcategory name from central SUBCATEGORIES or INSTANCE_SUBCATEGORIES
-        {
-            "$lookup": {
-                "from": SUBCATEGORIES,
-                "localField": "sub_category_id",
-                "foreignField": "_id",
-                "as": "sub_central",
-            }
-        },
+        # Lookup parent subcategory from INSTANCE_SUBCATEGORIES to ensure assigned instance subcategory ID is returned
         {
             "$lookup": {
                 "from": INSTANCE_SUBCATEGORIES,
-                "localField": "sub_category_id",
-                "foreignField": "_id",
-                "as": "sub_inst",
+                "let": {
+                    "asset_sub_id": "$sub_category_id",
+                    "central_sub_id": "$central.sub_category_id",
+                    "inst_id": "$app_instance_id",
+                },
+                "pipeline": [
+                    {
+                        "$match": {
+                            "$expr": {
+                                "$and": [
+                                    {"$eq": ["$app_instance_id", "$$inst_id"]},
+                                    {"$eq": ["$deleted_at", None]},
+                                    {
+                                        "$or": [
+                                            {"$eq": ["$_id", "$$asset_sub_id"]},
+                                            {"$eq": ["$source_id", "$$asset_sub_id"]},
+                                            {
+                                                "$and": [
+                                                    {"$ne": ["$$central_sub_id", None]},
+                                                    {"$eq": ["$source_id", "$$central_sub_id"]},
+                                                ]
+                                            },
+                                        ]
+                                    },
+                                ]
+                            }
+                        }
+                    }
+                ],
+                "as": "parent_inst_sub",
             }
         },
         # Lookup category and subcategory via central asset as fallback
@@ -313,10 +378,8 @@ async def get_resolved_assets(
         },
         # Preserve assets created directly in instance without a central link
         {"$unwind": {"path": "$central", "preserveNullAndEmptyArrays": True}},
-        {"$unwind": {"path": "$cat_central", "preserveNullAndEmptyArrays": True}},
-        {"$unwind": {"path": "$cat_inst", "preserveNullAndEmptyArrays": True}},
-        {"$unwind": {"path": "$sub_central", "preserveNullAndEmptyArrays": True}},
-        {"$unwind": {"path": "$sub_inst", "preserveNullAndEmptyArrays": True}},
+        {"$unwind": {"path": "$parent_inst_cat", "preserveNullAndEmptyArrays": True}},
+        {"$unwind": {"path": "$parent_inst_sub", "preserveNullAndEmptyArrays": True}},
         {"$unwind": {"path": "$cat_via_central", "preserveNullAndEmptyArrays": True}},
         {"$unwind": {"path": "$sub_via_central", "preserveNullAndEmptyArrays": True}},
         {
@@ -330,45 +393,30 @@ async def get_resolved_assets(
         {
             "$project": {
                 "id": {"$toString": "$_id"},
-                "sourceId": {
-                    "$cond": [
-                        {"$ifNull": ["$source_id", False]},
-                        {"$toString": "$source_id"},
-                        {"$toString": "$_id"},
-                    ]
-                },
                 "categoryId": {
-                    "$ifNull": [
-                        {"$toString": "$category_id"},
-                        {"$toString": "$central.category_id"}
+                    "$cond": [
+                        {"$ifNull": ["$parent_inst_cat._id", False]},
+                        {"$toString": "$parent_inst_cat._id"},
+                        {"$toString": {"$ifNull": ["$category_id", "$central.category_id"]}},
                     ]
                 },
                 "subCategoryId": {
-                    "$ifNull": [
-                        {"$toString": "$sub_category_id"},
-                        {"$toString": "$central.sub_category_id"}
+                    "$cond": [
+                        {"$ifNull": ["$parent_inst_sub._id", False]},
+                        {"$toString": "$parent_inst_sub._id"},
+                        {"$toString": {"$ifNull": ["$sub_category_id", "$central.sub_category_id"]}},
                     ]
                 },
                 "category_name": {
                     "$ifNull": [
-                        "$cat_inst.name",
-                        {
-                            "$ifNull": [
-                                "$cat_central.name",
-                                {"$ifNull": ["$cat_via_central.name", "—"]}
-                            ]
-                        }
+                        "$parent_inst_cat.name",
+                        {"$ifNull": ["$cat_via_central.name", "—"]}
                     ]
                 },
                 "subcategory_name": {
                     "$ifNull": [
-                        "$sub_inst.name",
-                        {
-                            "$ifNull": [
-                                "$sub_central.name",
-                                {"$ifNull": ["$sub_via_central.name", "—"]}
-                            ]
-                        }
+                        "$parent_inst_sub.name",
+                        {"$ifNull": ["$sub_via_central.name", "—"]}
                     ]
                 },
                 "is_enabled": {
@@ -412,13 +460,10 @@ async def get_resolved_assets(
             "$project": {
                 "_id": 0,
                 "id": 1,
-                "sourceId": 1,
                 "categoryId": 1,
                 "subCategoryId": 1,
                 "category_name": 1,
-                "categoryName": "$category_name",
                 "subcategory_name": 1,
-                "subCategoryName": "$subcategory_name",
                 "is_enabled": 1,
                 "is_premium": 1,
                 "is_rewarded": 1,
@@ -434,8 +479,6 @@ async def get_resolved_assets(
                 "name": "$merged.name",
                 "description": "$merged.description",
                 "thumbnail_url": "$merged.thumbnail_url",
-                "thumbnailUrl": "$merged.thumbnail_url",
-                "moreFields": "$merged.more_fields",
                 "more_fields": "$merged.more_fields",
                 "tags": {"$ifNull": ["$overrides.tags", {"$ifNull": ["$tags", {"$ifNull": ["$central.tags", []]}]}]},
             }
@@ -495,66 +538,126 @@ async def get_resolved_single_asset(
         },
         {"$unwind": "$central"},
         {"$match": {"central.deleted_at": None}},
-        {
-            "$lookup": {
-                "from": CATEGORIES,
-                "localField": "category_id",
-                "foreignField": "_id",
-                "as": "central_cat",
-            }
-        },
+        # Lookup parent category from INSTANCE_CATEGORIES to ensure assigned instance category ID is returned
         {
             "$lookup": {
                 "from": INSTANCE_CATEGORIES,
-                "localField": "category_id",
+                "let": {
+                    "asset_cat_id": "$category_id",
+                    "central_cat_id": "$central.category_id",
+                    "inst_id": "$app_instance_id",
+                },
+                "pipeline": [
+                    {
+                        "$match": {
+                            "$expr": {
+                                "$and": [
+                                    {"$eq": ["$app_instance_id", "$$inst_id"]},
+                                    {"$eq": ["$deleted_at", None]},
+                                    {
+                                        "$or": [
+                                            {"$eq": ["$_id", "$$asset_cat_id"]},
+                                            {"$eq": ["$source_id", "$$asset_cat_id"]},
+                                            {
+                                                "$and": [
+                                                    {"$ne": ["$$central_cat_id", None]},
+                                                    {"$eq": ["$source_id", "$$central_cat_id"]},
+                                                ]
+                                            },
+                                        ]
+                                    },
+                                ]
+                            }
+                        }
+                    }
+                ],
+                "as": "parent_inst_cat",
+            }
+        },
+        # Lookup parent subcategory from INSTANCE_SUBCATEGORIES to ensure assigned instance subcategory ID is returned
+        {
+            "$lookup": {
+                "from": INSTANCE_SUBCATEGORIES,
+                "let": {
+                    "asset_sub_id": "$sub_category_id",
+                    "central_sub_id": "$central.sub_category_id",
+                    "inst_id": "$app_instance_id",
+                },
+                "pipeline": [
+                    {
+                        "$match": {
+                            "$expr": {
+                                "$and": [
+                                    {"$eq": ["$app_instance_id", "$$inst_id"]},
+                                    {"$eq": ["$deleted_at", None]},
+                                    {
+                                        "$or": [
+                                            {"$eq": ["$_id", "$$asset_sub_id"]},
+                                            {"$eq": ["$source_id", "$$asset_sub_id"]},
+                                            {
+                                                "$and": [
+                                                    {"$ne": ["$$central_sub_id", None]},
+                                                    {"$eq": ["$source_id", "$$central_sub_id"]},
+                                                ]
+                                            },
+                                        ]
+                                    },
+                                ]
+                            }
+                        }
+                    }
+                ],
+                "as": "parent_inst_sub",
+            }
+        },
+        # Fallback lookups for category/subcategory names
+        {
+            "$lookup": {
+                "from": CATEGORIES,
+                "localField": "central.category_id",
                 "foreignField": "_id",
-                "as": "inst_cat",
+                "as": "cat_via_central",
             }
         },
         {
             "$lookup": {
                 "from": SUBCATEGORIES,
-                "localField": "sub_category_id",
+                "localField": "central.sub_category_id",
                 "foreignField": "_id",
-                "as": "central_sub",
+                "as": "sub_via_central",
             }
         },
-        {
-            "$lookup": {
-                "from": INSTANCE_SUBCATEGORIES,
-                "localField": "sub_category_id",
-                "foreignField": "_id",
-                "as": "inst_sub",
-            }
-        },
+        {"$unwind": {"path": "$parent_inst_cat", "preserveNullAndEmptyArrays": True}},
+        {"$unwind": {"path": "$parent_inst_sub", "preserveNullAndEmptyArrays": True}},
+        {"$unwind": {"path": "$cat_via_central", "preserveNullAndEmptyArrays": True}},
+        {"$unwind": {"path": "$sub_via_central", "preserveNullAndEmptyArrays": True}},
         {
             "$project": {
                 "id": {"$toString": "$_id"},
-                "sourceId": {"$toString": "$source_id"},
                 "categoryId": {
                     "$cond": [
-                        {"$ifNull": ["$category_id", False]},
-                        {"$toString": "$category_id"},
-                        {"$toString": "$central.category_id"},
+                        {"$ifNull": ["$parent_inst_cat._id", False]},
+                        {"$toString": "$parent_inst_cat._id"},
+                        {"$toString": {"$ifNull": ["$category_id", "$central.category_id"]}},
                     ]
                 },
                 "subCategoryId": {
                     "$cond": [
-                        {"$ifNull": ["$sub_category_id", False]},
-                        {"$toString": "$sub_category_id"},
-                        {"$toString": "$central.sub_category_id"},
+                        {"$ifNull": ["$parent_inst_sub._id", False]},
+                        {"$toString": "$parent_inst_sub._id"},
+                        {"$toString": {"$ifNull": ["$sub_category_id", "$central.sub_category_id"]}},
                     ]
                 },
                 "category_name": {
                     "$ifNull": [
-                        {"$first": "$inst_cat.name"},
-                        {"$ifNull": [{"$first": "$central_cat.name"}, "—"]},
+                        "$parent_inst_cat.name",
+                        {"$ifNull": ["$cat_via_central.name", "—"]}
                     ]
                 },
                 "subcategory_name": {
                     "$ifNull": [
-                        {"$first": "$inst_sub.name"},
-                        {"$ifNull": [{"$first": "$central_sub.name"}, "—"]},
+                        "$parent_inst_sub.name",
+                        {"$ifNull": ["$sub_via_central.name", "—"]}
                     ]
                 },
                 "is_enabled": {
@@ -598,13 +701,10 @@ async def get_resolved_single_asset(
             "$project": {
                 "_id": 0,
                 "id": 1,
-                "sourceId": 1,
                 "categoryId": 1,
                 "subCategoryId": 1,
                 "category_name": 1,
-                "categoryName": "$category_name",
                 "subcategory_name": 1,
-                "subCategoryName": "$subcategory_name",
                 "is_enabled": 1,
                 "is_premium": 1,
                 "is_rewarded": 1,
@@ -620,8 +720,6 @@ async def get_resolved_single_asset(
                 "name": "$merged.name",
                 "description": "$merged.description",
                 "thumbnail_url": "$merged.thumbnail_url",
-                "thumbnailUrl": "$merged.thumbnail_url",
-                "moreFields": "$merged.more_fields",
                 "more_fields": "$merged.more_fields",
                 "tags": {"$ifNull": ["$overrides.tags", {"$ifNull": ["$tags", {"$ifNull": ["$central.tags", []]}]}]},
             }

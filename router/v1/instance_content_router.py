@@ -5,6 +5,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel, Field
 
 from analytics.counters import increment_asset_counter
+from authorization.instance_guard import get_instance_filter
 from authorization.scopes import require_scope
 from controller.catalog_controller import (
     get_resolved_assets,
@@ -38,19 +39,23 @@ router = APIRouter(prefix="/app-instances/{id}", tags=["Instance Content"])
 @router.get("/categories", dependencies=[Depends(require_scope("categories:read"))])
 async def get_instance_categories_endpoint(
     id: str,
+    request: Request,
     only_enabled: bool = Query(default=False),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> list[dict[str, Any]]:
+    get_instance_filter(request, target_instance_id=id)
     return await get_resolved_categories(db, app_instance_id=id, only_enabled=only_enabled)
 
 
 @router.get("/subcategories", dependencies=[Depends(require_scope("categories:read"))])
 async def get_instance_subcategories_endpoint(
     id: str,
+    request: Request,
     categoryId: str | None = Query(default=None),
     only_enabled: bool = Query(default=False),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> list[dict[str, Any]]:
+    get_instance_filter(request, target_instance_id=id)
     return await get_resolved_subcategories(
         db, app_instance_id=id, category_id=categoryId, only_enabled=only_enabled
     )
@@ -59,11 +64,13 @@ async def get_instance_subcategories_endpoint(
 @router.get("/assets", dependencies=[Depends(require_scope("assets:read"))])
 async def get_instance_assets_endpoint(
     id: str,
+    request: Request,
     categoryId: str | None = Query(default=None),
     subCategoryId: str | None = Query(default=None),
     only_enabled: bool = Query(default=False),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> list[dict[str, Any]]:
+    get_instance_filter(request, target_instance_id=id)
     return await get_resolved_assets(
         db,
         app_instance_id=id,
@@ -77,8 +84,10 @@ async def get_instance_assets_endpoint(
 async def get_instance_single_asset_endpoint(
     id: str,
     assetId: str,
+    request: Request,
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> dict[str, Any]:
+    get_instance_filter(request, target_instance_id=id)
     doc = await get_resolved_single_asset(db, app_instance_id=id, asset_id=assetId)
     if not doc:
         raise NotFoundError("Referenced asset not found in this app instance")

@@ -415,6 +415,29 @@ Requires `manager_session` cookie.
   - Added per-page selector dropdowns to asset list filter headers in both Admin (`templates/assets/list.html`) and Manager (`templates/manager/assets/list.html`).
   - Preserves selected `page_size` across category/subcategory filtering, type selections, search queries, and "Clear" resets.
 
+### Update 9: Instance Isolation Sanitization & Assigned Instance ID Resolution
+- **Issue 1: Instance Mismatch Error Sanitization:**
+  - Updated `authorization/instance_guard.py` (`get_instance_filter`): When an API key bound to an app instance is used against a mismatched instance ID, the error response no longer leaks the original bound instance ID or requested instance ID in error messages or details.
+  - Standardized the exception to `ForbiddenError("API key not matching with the instance, verify again.")` with empty details.
+  - Added instance filter guard validation to `/app-instances/{id}` endpoints in `router/v1/instance_content_router.py`.
+- **Issue 2: Uniform Invalid API Key Message:**
+  - Updated `authorization/api_key.py` (`verify_api_key`): When secret hash verification fails, replaced the error message `"Invalid API key secret"` with `"Invalid API key"` to prevent disclosing internal key validation stages to callers.
+- **Issue 3: Assigned App Instance ID Resolution & Central ID Stripping:**
+  - **Resolution Pipeline (`controller/catalog_controller.py`):**
+    - Removed `sourceId` and central IDs from client-facing responses across `get_resolved_categories`, `get_resolved_subcategories`, `get_resolved_assets`, `get_resolved_single_asset`, and `get_instance_catalog`.
+    - Added MongoDB `$lookup` joins on `INSTANCE_CATEGORIES` and `INSTANCE_SUBCATEGORIES` to dynamically resolve assigned parent `_id` values (`categoryId`, `subCategoryId`) so client apps can query hierarchy trees seamlessly using only assigned instance IDs.
+    - Updated query filter matching (`match_filter`) to transparently match both assigned `_id`s and `source_id`s.
+  - **Reference Ingestion (`controller/reference_controller.py`):**
+    - Updated `add_category_reference`, `add_subcategory_references`, and `import_assets_to_instance` so imported subcategories and assets store their parents' assigned `instance_categories._id` and `instance_subcategories._id`.
+  - **Custom Folder Creation (`router/admin/instance_routes.py` & `router/manager/instance_routes.py`):**
+    - Enforced `cat_link_id = parent_cat["_id"]` for newly created subfolder items.
+  - **Pydantic Response Schemas (`database/models/instance_content.py`):**
+    - Removed `source_id` / `sourceId` fields from `ResolvedCategoryOut`, `ResolvedSubcategoryOut`, and `ResolvedAssetOut`.
+  - **Database Migration (`scripts/migrate_instance_ids.py`):**
+    - Backfilled existing `instance_subcategories` and `instance_assets` documents to reference assigned instance category and subcategory `_id`s.
+  - **Asset Response Field Deduplication (`controller/catalog_controller.py` & `database/models/instance_content.py`):**
+    - Removed duplicate camelCase keys (`categoryName`, `subCategoryName`, `thumbnailUrl`, `moreFields`), retaining canonical snake_case fields (`category_name`, `subcategory_name`, `thumbnail_url`, `more_fields`).
+
 ---
 
 ## 9. Project Directory Tree & Key File Map

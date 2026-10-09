@@ -92,7 +92,6 @@ class InstanceAssetInDB(MongoInDBModel, TimestampMixin, SoftDeleteMixin):
 # API response representations (Resolved with central data)
 class ResolvedCategoryOut(MongoModel):
     id: str
-    source_id: str = Field(..., serialization_alias="sourceId")
     name: str
     thumbnail_url: str | None = None
     image_url: str | None = None
@@ -103,7 +102,6 @@ class ResolvedCategoryOut(MongoModel):
 
 class ResolvedSubcategoryOut(MongoModel):
     id: str
-    source_id: str = Field(..., serialization_alias="sourceId")
     category_id: str = Field(..., serialization_alias="categoryId")
     name: str
     thumbnail_url: str | None = None
@@ -115,13 +113,14 @@ class ResolvedSubcategoryOut(MongoModel):
 
 class ResolvedAssetOut(MongoModel):
     id: str
-    source_id: str = Field(..., serialization_alias="sourceId")
     category_id: str = Field(..., serialization_alias="categoryId")
     sub_category_id: str = Field(..., serialization_alias="subCategoryId")
+    category_name: str | None = None
+    subcategory_name: str | None = None
     name: str
     description: str = ""
     thumbnail_url: str | None = None
-    more_fields: dict[str, Any] = Field(default_factory=dict, serialization_alias="moreFields")
+    more_fields: dict[str, Any] = Field(default_factory=dict)
     is_enabled: bool = True
     is_premium: bool = False
     is_rewarded: bool = Field(default=False, serialization_alias="isRewarded")

@@ -88,7 +88,7 @@ async def verify_api_key(db: AsyncIOMotorDatabase, raw_key: str) -> ApiKeyInDB:
             raise UnauthorizedError("API key has expired")
 
     if not verify_secret(secret, doc["secret_hash"]):
-        raise UnauthorizedError("Invalid API key secret")
+        raise UnauthorizedError("Invalid API key")
 
     # Update last_used_at non-blockingly
     await db[API_KEYS].update_one({"_id": doc["_id"]}, {"$set": {"last_used_at": utc_now()}})

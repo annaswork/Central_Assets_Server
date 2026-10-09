@@ -689,7 +689,7 @@ async def admin_instance_create_folder(
                 content={"success": False, "message": "Parent category not found in this app instance"},
             )
 
-        cat_link_id = parent_cat.get("source_id") or parent_cat["_id"]
+        cat_link_id = parent_cat["_id"]
 
         existing_sub = await db[INSTANCE_SUBCATEGORIES].find_one(
             {
