@@ -73,7 +73,8 @@ async def admin_get_event_detail(
 
     try:
         event = await get_analytics_event_by_id(db, event_id=id)
-        return JSONResponse({"success": True, "event": event})
+        from controller.base_controller import serialize_mongo_doc
+        return JSONResponse({"success": True, "event": serialize_mongo_doc(event)})
     except Exception as exc:
         return JSONResponse(status_code=404, content={"success": False, "error": str(exc)})
 

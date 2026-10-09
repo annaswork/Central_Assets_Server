@@ -134,7 +134,7 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th style="width:160px;">Timestamp</th>
+          <th style="width:160px;">Timestamp (PKT)</th>
           <th style="width:85px; text-align:center;">Status</th>
           <th style="width:90px;">Method</th>
           <th>Endpoint Route</th>
@@ -275,7 +275,7 @@
     <div style="padding:1.5rem; flex:1; overflow-y:auto;">
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.25rem; background:rgba(0,0,0,0.03); padding:1rem; border-radius:8px;">
         <div>
-          <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">Timestamp:</div>
+          <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">Timestamp (PKT):</div>
           <div id="modalTimestamp" style="font-weight:600; font-size:0.85rem;">-</div>
         </div>
         <div>
@@ -324,39 +324,69 @@
   </div>
 </div>
 
+<script id="recentErrorsJson" type="application/json">
+{{ (summary.error_analytics.recent_errors if (summary.error_analytics and summary.error_analytics.recent_errors) else []) | tojson }}
+</script>
+
 <script>
+let recentErrorsMap = {};
+try {
+  const rawErrors = JSON.parse(document.getElementById("recentErrorsJson")?.textContent || "[]");
+  for (const item of rawErrors) {
+    if (item && item.id) {
+      recentErrorsMap[String(item.id)] = item;
+    }
+  }
+} catch (e) {
+  console.error("Error parsing recent errors cache:", e);
+}
+
+function populateAndShowModal(ev) {
+  document.getElementById("modalStatusCodeBadge").innerText = ev.status_code;
+  document.getElementById("modalStatusCodeBadge").className = "badge " + (ev.status_code >= 500 ? "badge-error" : "badge-warning");
+  document.getElementById("modalTitle").innerText = (ev.error_code || "HTTP Error") + " Details";
+  document.getElementById("modalTimestamp").innerText = ev.ts || "-";
+  document.getElementById("modalEndpoint").innerText = (ev.method || "GET") + " " + (ev.path_template || "");
+  document.getElementById("modalLatency").innerText = (ev.duration_ms || 0) + " ms";
+  document.getElementById("modalAppInstance").innerText = ev.app_instance_id || "Global / Core";
+  document.getElementById("modalClientInfo").innerText = (ev.platform || "Unknown") + " / " + (ev.app_version || "N/A");
+  document.getElementById("modalCountry").innerText = ev.country || "N/A";
+  document.getElementById("modalErrorReason").innerText = ev.error_reason || "No explicit reason string captured.";
+
+  const detailsEl = document.getElementById("modalErrorDetails");
+  const detailsSec = document.getElementById("modalDetailsSection");
+  if (ev.error_details) {
+    detailsSec.style.display = "block";
+    detailsEl.innerText = typeof ev.error_details === "object" ? JSON.stringify(ev.error_details, null, 2) : String(ev.error_details);
+  } else {
+    detailsSec.style.display = "none";
+  }
+
+  document.getElementById("modalDeleteForm").action = `/admin/analytics/events/${encodeURIComponent(ev.id)}/delete`;
+  const modal = document.getElementById("errorDetailsModal");
+  modal.style.display = "flex";
+}
+
 async function viewErrorDetails(eventId) {
+  const cached = recentErrorsMap[String(eventId)];
+  if (cached) {
+    populateAndShowModal(cached);
+    return;
+  }
+
   try {
-    const res = await fetch(`/admin/analytics/events/${eventId}`);
+    const res = await fetch(`/admin/analytics/events/${encodeURIComponent(eventId)}`, {
+      headers: { "Accept": "application/json" }
+    });
+    if (!res.ok) {
+      throw new Error(`Server returned status ${res.status}`);
+    }
     const data = await res.json();
     if (!data.success || !data.event) {
       alert("Unable to fetch error details: " + (data.error || "Record not found"));
       return;
     }
-    const ev = data.event;
-    document.getElementById("modalStatusCodeBadge").innerText = ev.status_code;
-    document.getElementById("modalStatusCodeBadge").className = "badge " + (ev.status_code >= 500 ? "badge-error" : "badge-warning");
-    document.getElementById("modalTitle").innerText = (ev.error_code || "HTTP Error") + " Details";
-    document.getElementById("modalTimestamp").innerText = ev.ts || "-";
-    document.getElementById("modalEndpoint").innerText = (ev.method || "GET") + " " + (ev.path_template || "");
-    document.getElementById("modalLatency").innerText = (ev.duration_ms || 0) + " ms";
-    document.getElementById("modalAppInstance").innerText = ev.app_instance_id || "Global / Core";
-    document.getElementById("modalClientInfo").innerText = (ev.platform || "Unknown") + " / " + (ev.app_version || "N/A");
-    document.getElementById("modalCountry").innerText = ev.country || "N/A";
-    document.getElementById("modalErrorReason").innerText = ev.error_reason || "No explicit reason string captured.";
-
-    const detailsEl = document.getElementById("modalErrorDetails");
-    const detailsSec = document.getElementById("modalDetailsSection");
-    if (ev.error_details) {
-      detailsSec.style.display = "block";
-      detailsEl.innerText = typeof ev.error_details === "object" ? JSON.stringify(ev.error_details, null, 2) : String(ev.error_details);
-    } else {
-      detailsSec.style.display = "none";
-    }
-
-    document.getElementById("modalDeleteForm").action = `/admin/analytics/events/${ev.id}/delete`;
-    const modal = document.getElementById("errorDetailsModal");
-    modal.style.display = "flex";
+    populateAndShowModal(data.event);
   } catch (err) {
     alert("Error fetching details: " + err);
   }

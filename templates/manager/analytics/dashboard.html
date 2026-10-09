@@ -148,7 +148,7 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th style="width:160px;">Timestamp</th>
+          <th style="width:160px;">Timestamp (PKT)</th>
           <th style="width:85px; text-align:center;">Status</th>
           <th style="width:90px;">Method</th>
           <th>Endpoint Route</th>
@@ -303,7 +303,7 @@
     <div style="padding:1.5rem; flex:1; overflow-y:auto;">
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.25rem; background:rgba(0,0,0,0.03); padding:1rem; border-radius:8px;">
         <div>
-          <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">Timestamp:</div>
+          <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">Timestamp (PKT):</div>
           <div id="mgrModalTimestamp" style="font-weight:600; font-size:0.85rem;">-</div>
         </div>
         <div>
@@ -354,39 +354,69 @@
   </div>
 </div>
 
+<script id="mgrRecentErrorsJson" type="application/json">
+{{ (error_analytics.recent_errors if (error_analytics and error_analytics.recent_errors) else []) | tojson }}
+</script>
+
 <script>
+let mgrRecentErrorsMap = {};
+try {
+  const rawErrors = JSON.parse(document.getElementById("mgrRecentErrorsJson")?.textContent || "[]");
+  for (const item of rawErrors) {
+    if (item && item.id) {
+      mgrRecentErrorsMap[String(item.id)] = item;
+    }
+  }
+} catch (e) {
+  console.error("Error parsing manager recent errors cache:", e);
+}
+
+function populateAndShowManagerModal(ev) {
+  document.getElementById("mgrModalStatusCodeBadge").innerText = ev.status_code;
+  document.getElementById("mgrModalStatusCodeBadge").className = "badge " + (ev.status_code >= 500 ? "badge-error" : "badge-warning");
+  document.getElementById("mgrModalTitle").innerText = (ev.error_code || "HTTP Error") + " Diagnostic Detail";
+  document.getElementById("mgrModalTimestamp").innerText = ev.ts || "-";
+  document.getElementById("mgrModalEndpoint").innerText = (ev.method || "GET") + " " + (ev.path_template || "");
+  document.getElementById("mgrModalLatency").innerText = (ev.duration_ms || 0) + " ms";
+  document.getElementById("mgrModalAppInstance").innerText = ev.app_instance_id || "Accessible App";
+  document.getElementById("mgrModalClientInfo").innerText = (ev.platform || "Unknown") + " / " + (ev.app_version || "N/A");
+  document.getElementById("mgrModalCountry").innerText = ev.country || "N/A";
+  document.getElementById("mgrModalErrorReason").innerText = ev.error_reason || "No explicit reason string captured.";
+
+  const detailsEl = document.getElementById("mgrModalErrorDetails");
+  const detailsSec = document.getElementById("mgrModalDetailsSection");
+  if (ev.error_details) {
+    detailsSec.style.display = "block";
+    detailsEl.innerText = typeof ev.error_details === "object" ? JSON.stringify(ev.error_details, null, 2) : String(ev.error_details);
+  } else {
+    detailsSec.style.display = "none";
+  }
+
+  document.getElementById("mgrModalDeleteForm").action = `/manager/analytics/events/${encodeURIComponent(ev.id)}/delete`;
+  const modal = document.getElementById("managerErrorModal");
+  modal.style.display = "flex";
+}
+
 async function viewManagerErrorDetails(eventId) {
+  const cached = mgrRecentErrorsMap[String(eventId)];
+  if (cached) {
+    populateAndShowManagerModal(cached);
+    return;
+  }
+
   try {
-    const res = await fetch(`/manager/analytics/events/${eventId}`);
+    const res = await fetch(`/manager/analytics/events/${encodeURIComponent(eventId)}`, {
+      headers: { "Accept": "application/json" }
+    });
+    if (!res.ok) {
+      throw new Error(`Server returned status ${res.status}`);
+    }
     const data = await res.json();
     if (!data.success || !data.event) {
       alert("Unable to fetch error details: " + (data.error || "Permission denied or record not found"));
       return;
     }
-    const ev = data.event;
-    document.getElementById("mgrModalStatusCodeBadge").innerText = ev.status_code;
-    document.getElementById("mgrModalStatusCodeBadge").className = "badge " + (ev.status_code >= 500 ? "badge-error" : "badge-warning");
-    document.getElementById("mgrModalTitle").innerText = (ev.error_code || "HTTP Error") + " Diagnostic Detail";
-    document.getElementById("mgrModalTimestamp").innerText = ev.ts || "-";
-    document.getElementById("mgrModalEndpoint").innerText = (ev.method || "GET") + " " + (ev.path_template || "");
-    document.getElementById("mgrModalLatency").innerText = (ev.duration_ms || 0) + " ms";
-    document.getElementById("mgrModalAppInstance").innerText = ev.app_instance_id || "Accessible App";
-    document.getElementById("mgrModalClientInfo").innerText = (ev.platform || "Unknown") + " / " + (ev.app_version || "N/A");
-    document.getElementById("mgrModalCountry").innerText = ev.country || "N/A";
-    document.getElementById("mgrModalErrorReason").innerText = ev.error_reason || "No explicit reason string captured.";
-
-    const detailsEl = document.getElementById("mgrModalErrorDetails");
-    const detailsSec = document.getElementById("mgrModalDetailsSection");
-    if (ev.error_details) {
-      detailsSec.style.display = "block";
-      detailsEl.innerText = typeof ev.error_details === "object" ? JSON.stringify(ev.error_details, null, 2) : String(ev.error_details);
-    } else {
-      detailsSec.style.display = "none";
-    }
-
-    document.getElementById("mgrModalDeleteForm").action = `/manager/analytics/events/${ev.id}/delete`;
-    const modal = document.getElementById("managerErrorModal");
-    modal.style.display = "flex";
+    populateAndShowManagerModal(data.event);
   } catch (err) {
     alert("Error fetching details: " + err);
   }

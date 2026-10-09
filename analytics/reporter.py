@@ -8,6 +8,7 @@ from typing import Any
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from database.collections import ANALYTICS_EVENTS, ANALYTICS_HOURLY
+from utils.datetimes import format_pkt_datetime
 
 
 async def get_analytics_summary(
@@ -185,9 +186,7 @@ async def get_error_analytics(
             "error_code": doc["_id"].get("error_code") or f"HTTP_{doc['_id'].get('status_code', 500)}",
             "error_reason": doc["_id"].get("error_reason") or "No description recorded",
             "count": doc.get("count", 0),
-            "latest_ts": doc["latest_ts"].strftime("%Y-%m-%d %H:%M:%S UTC")
-            if isinstance(doc.get("latest_ts"), datetime)
-            else str(doc.get("latest_ts", "")),
+            "latest_ts": format_pkt_datetime(doc.get("latest_ts")),
         }
         for doc in reasons_docs
     ]
@@ -204,12 +203,7 @@ async def get_error_analytics(
 
     recent_errors = []
     for doc in error_docs:
-        ts_val = doc.get("ts")
-        ts_display = (
-            ts_val.strftime("%Y-%m-%d %H:%M:%S UTC")
-            if isinstance(ts_val, datetime)
-            else str(ts_val or "")
-        )
+        ts_display = format_pkt_datetime(doc.get("ts"))
         recent_errors.append(
             {
                 "id": str(doc["_id"]),
@@ -259,12 +253,7 @@ async def get_analytics_event_details(
         if not inst_id or inst_id not in allowed_instance_ids:
             raise ForbiddenError("You do not have permission to view this analytics record")
 
-    ts_val = doc.get("ts")
-    ts_display = (
-        ts_val.strftime("%Y-%m-%d %H:%M:%S UTC")
-        if isinstance(ts_val, datetime)
-        else str(ts_val or "")
-    )
+    ts_display = format_pkt_datetime(doc.get("ts"))
 
     return {
         "id": str(doc["_id"]),

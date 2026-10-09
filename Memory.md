@@ -438,6 +438,16 @@ Requires `manager_session` cookie.
   - **Asset Response Field Deduplication (`controller/catalog_controller.py` & `database/models/instance_content.py`):**
     - Removed duplicate camelCase keys (`categoryName`, `subCategoryName`, `thumbnailUrl`, `moreFields`), retaining canonical snake_case fields (`category_name`, `subcategory_name`, `thumbnail_url`, `more_fields`).
 
+### Update 10: Error Telemetry Detail Modal & PKT Timezone Formatting
+- **Error Details Modal Client-Side Cache & Serialization:**
+  - In `templates/analytics/dashboard.html` and `templates/manager/analytics/dashboard.html`, embedded preloaded `recent_errors` datasets into client-side templates (`recentErrorsJson` / `mgrRecentErrorsJson`).
+  - Updated `viewErrorDetails` and `viewManagerErrorDetails` to look up error details directly from the in-memory cache first, eliminating `TypeError: Failed to fetch` errors while retaining network fetch as a fallback.
+  - In `router/admin/analytics_routes.py` and `router/manager/analytics_routes.py`, wrapped event detail responses with `serialize_mongo_doc()` to prevent JSON serialization errors on MongoDB `ObjectId` or nested structures.
+- **Pakistan Standard Time (PKT) Formatting:**
+  - Added `format_pkt_datetime(val)` and `PKT_TIMEZONE = timezone(timedelta(hours=5))` in `utils/datetimes.py`.
+  - Converted UTC timestamps across `analytics/reporter.py` (`recent_errors`, `reasons_breakdown`, `get_analytics_event_details`) to PKT (`%Y-%m-%d %H:%M:%S PKT`).
+  - Updated table column headers and modal labels in Admin and Manager analytics dashboards to indicate `Timestamp (PKT)`.
+
 ---
 
 ## 9. Project Directory Tree & Key File Map

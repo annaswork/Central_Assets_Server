@@ -1,6 +1,28 @@
-"""Timezone-aware UTC datetime utilities and ISO 8601 formatting."""
+from datetime import datetime, timedelta, timezone
 
-from datetime import datetime, timezone
+PKT_TIMEZONE = timezone(timedelta(hours=5))
+
+
+def format_pkt_datetime(val: object, fmt: str = "%Y-%m-%d %H:%M:%S PKT") -> str:
+    """Convert UTC datetime or ISO string to PKT (Pakistan Standard Time, UTC+5)."""
+    if not val:
+        return "—"
+    dt = None
+    if isinstance(val, datetime):
+        dt = val
+    elif isinstance(val, str):
+        try:
+            clean_str = val.replace("Z", "+00:00") if val.endswith("Z") else val
+            dt = datetime.fromisoformat(clean_str)
+        except Exception:
+            return str(val)
+    if dt:
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        pkt_dt = dt.astimezone(PKT_TIMEZONE)
+        return pkt_dt.strftime(fmt)
+    return str(val)
+
 
 
 def utc_now() -> datetime:
