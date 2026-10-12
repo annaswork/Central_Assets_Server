@@ -92,7 +92,7 @@ async def add_references(
                         "deleted_at": None,
                     }
                 )
-                cat_inst_id = res_cat.inserted_id
+                cat_inst_id = res_cat.inserted_id if hasattr(res_cat, "inserted_id") else res_cat
                 added_cats += 1
             except DuplicateKeyError:
                 dup_cat = await db[INSTANCE_CATEGORIES].find_one(
@@ -153,7 +153,7 @@ async def add_references(
                             "deleted_at": None,
                         }
                     )
-                    sub_id_map[s_oid] = res_sub.inserted_id
+                    sub_id_map[s_oid] = res_sub.inserted_id if hasattr(res_sub, "inserted_id") else res_sub
                     added_subs += 1
                 except DuplicateKeyError:
                     dup_sub = await db[INSTANCE_SUBCATEGORIES].find_one(
@@ -312,7 +312,7 @@ async def add_references(
                             "deleted_at": None,
                         }
                     )
-                    cat_link_id = res_c.inserted_id
+                    cat_link_id = res_c.inserted_id if hasattr(res_c, "inserted_id") else res_c
                     added_cats += 1
                 except DuplicateKeyError:
                     dup_c = await db[INSTANCE_CATEGORIES].find_one(
@@ -377,7 +377,7 @@ async def add_references(
                         "deleted_at": None,
                     }
                 )
-                sub_inst_id = res_s.inserted_id
+                sub_inst_id = res_s.inserted_id if hasattr(res_s, "inserted_id") else res_s
                 added_subs += 1
             except DuplicateKeyError:
                 dup_s = await db[INSTANCE_SUBCATEGORIES].find_one(

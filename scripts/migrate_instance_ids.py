@@ -13,8 +13,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def migrate_instance_links():
-    db = get_database()
+async def reconcile_instance_links(db=None):
+    should_close = False
+    if db is None:
+        db = get_database()
+        should_close = True
+
     instances = await db[APP_INSTANCES].find().to_list(100)
     total_subs_fixed = 0
     total_assets_fixed = 0
@@ -22,14 +26,23 @@ async def migrate_instance_links():
     for inst in instances:
         inst_id = inst["_id"]
         cats = await db[INSTANCE_CATEGORIES].find({"app_instance_id": inst_id}).to_list(1000)
-        cat_src_to_id = {c["source_id"]: c["_id"] for c in cats if c.get("source_id")}
+        cat_src_to_id = {}
+        for c in cats:
+            if c.get("source_id"):
+                cat_src_to_id[c["source_id"]] = c["_id"]
+                cat_src_to_id[str(c["source_id"])] = c["_id"]
 
         subs = await db[INSTANCE_SUBCATEGORIES].find({"app_instance_id": inst_id}).to_list(1000)
-        sub_src_to_id = {s["source_id"]: s["_id"] for s in subs if s.get("source_id")}
+        sub_src_to_id = {}
+        for s in subs:
+            if s.get("source_id"):
+                sub_src_to_id[s["source_id"]] = s["_id"]
+                sub_src_to_id[str(s["source_id"])] = s["_id"]
 
         for s in subs:
-            if s.get("category_id") in cat_src_to_id:
-                new_cat_id = cat_src_to_id[s["category_id"]]
+            cur_cat = s.get("category_id")
+            if cur_cat in cat_src_to_id:
+                new_cat_id = cat_src_to_id[cur_cat]
                 await db[INSTANCE_SUBCATEGORIES].update_one(
                     {"_id": s["_id"]},
                     {"$set": {"category_id": new_cat_id}}
@@ -39,10 +52,12 @@ async def migrate_instance_links():
         assets = await db[INSTANCE_ASSETS].find({"app_instance_id": inst_id}).to_list(10000)
         for a in assets:
             updates = {}
-            if a.get("category_id") in cat_src_to_id:
-                updates["category_id"] = cat_src_to_id[a["category_id"]]
-            if a.get("sub_category_id") in sub_src_to_id:
-                updates["sub_category_id"] = sub_src_to_id[a["sub_category_id"]]
+            cur_cat = a.get("category_id")
+            cur_sub = a.get("sub_category_id")
+            if cur_cat in cat_src_to_id:
+                updates["category_id"] = cat_src_to_id[cur_cat]
+            if cur_sub in sub_src_to_id:
+                updates["sub_category_id"] = sub_src_to_id[cur_sub]
             if updates:
                 await db[INSTANCE_ASSETS].update_one(
                     {"_id": a["_id"]},
@@ -50,11 +65,13 @@ async def migrate_instance_links():
                 )
                 total_assets_fixed += 1
 
-        logger.info(f"Instance '{inst.get('name')}' migrated successfully.")
+    if total_subs_fixed > 0 or total_assets_fixed > 0:
+        logger.info(f"Reconciled {total_subs_fixed} subcategories and {total_assets_fixed} assets.")
+    if should_close:
+        await close_database()
 
-    logger.info(f"Done! Fixed {total_subs_fixed} subcategories and {total_assets_fixed} assets.")
-    await close_database()
 
+migrate_instance_links = reconcile_instance_links
 
 if __name__ == "__main__":
-    asyncio.run(migrate_instance_links())
+    asyncio.run(reconcile_instance_links())

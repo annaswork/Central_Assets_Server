@@ -40,6 +40,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             await create_indexes(db)
             await seed_database(db)
             await sync_central_storage_directories(db)
+            from scripts.migrate_instance_ids import reconcile_instance_links
+            await reconcile_instance_links(db)
         except Exception as exc:
             logger.error(f"Error initializing indexes or seeds: {exc}")
 

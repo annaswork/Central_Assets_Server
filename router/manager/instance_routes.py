@@ -1,5 +1,6 @@
 """Manager portal App Instance routes and central library importing."""
 
+from collections import defaultdict
 import re
 from urllib.parse import quote_plus
 
@@ -217,30 +218,133 @@ async def manager_instance_content(
     m_oid = to_object_id(user_id)
     is_owner = instance.get("owner_id") in [m_oid, str(m_oid)]
 
-    # Resolve categories and calculate live child counts in this instance
+    # Resolve categories and subcategories in this instance
     all_categories = await get_resolved_categories(db, app_instance_id=instance_id)
-    for cat in all_categories:
-        c_src_oid = to_object_id(cat.get("sourceId") or cat.get("id"))
-        cat["subcategories_count"] = await db[INSTANCE_SUBCATEGORIES].count_documents(
-            {"app_instance_id": inst_oid, "category_id": c_src_oid, "deleted_at": None}
+    all_subcategories = await get_resolved_subcategories(db, app_instance_id=instance_id)
+
+    cat_id = category_id or categoryId
+    sub_id = sub_category_id or subCategoryId
+    search_query = (q or search or "").strip()
+    clean_type = (type or "").strip().lower()
+    s_order = sort or "sequence"
+
+    # Fetch all instance assets so folder asset badges reflect true counts across all folders
+    if not cat_id and not sub_id:
+        resolved_assets = await get_resolved_assets(
+            db,
+            app_instance_id=instance_id,
+            category_id=None,
+            sub_category_id=None,
+            sort=s_order,
         )
-        cat["assets_count"] = await db[INSTANCE_ASSETS].count_documents(
-            {"app_instance_id": inst_oid, "category_id": c_src_oid, "deleted_at": None}
+        all_instance_assets = resolved_assets
+    else:
+        all_instance_assets = await get_resolved_assets(db, app_instance_id=instance_id)
+        resolved_assets = await get_resolved_assets(
+            db,
+            app_instance_id=instance_id,
+            category_id=cat_id,
+            sub_category_id=sub_id,
+            sort=s_order,
         )
 
-    # Resolve all subcategories and calculate live child assets in this instance
-    all_subcategories = await get_resolved_subcategories(db, app_instance_id=instance_id)
+    # Map subcategory IDs and category IDs to live asset counts
+    sub_asset_counts = defaultdict(int)
+    cat_asset_counts = defaultdict(int)
+    for a in all_instance_assets:
+        s_i = str(a.get("subCategoryId") or "")
+        c_i = str(a.get("categoryId") or "")
+        if s_i:
+            sub_asset_counts[s_i] += 1
+        if c_i:
+            cat_asset_counts[c_i] += 1
+
+    # Map category IDs to subcategory counts
+    cat_sub_counts = defaultdict(int)
+    for s in all_subcategories:
+        c_i = str(s.get("categoryId") or "")
+        if c_i:
+            cat_sub_counts[c_i] += 1
+
+    # Calculate live subcategory and asset counts for each category in this instance
+    for cat in all_categories:
+        cid = str(cat.get("id") or "")
+        c_src = str(cat.get("sourceId") or cat.get("source_id") or "")
+        sub_cnt = cat_sub_counts.get(cid, 0)
+        if sub_cnt == 0 and c_src:
+            sub_cnt = cat_sub_counts.get(c_src, 0)
+
+        # Fallback to direct DB query matching all possible IDs (instance _id and source_id)
+        if sub_cnt == 0:
+            cat_possible_oids = [to_object_id(cid)]
+            if c_src:
+                cat_possible_oids.append(to_object_id(c_src))
+            cat_possible_oids = [oid for oid in cat_possible_oids if oid]
+            cat_doc = await db[INSTANCE_CATEGORIES].find_one(
+                {"app_instance_id": inst_oid, "$or": [{"_id": {"$in": cat_possible_oids}}, {"source_id": {"$in": cat_possible_oids}}]}
+            )
+            if cat_doc:
+                cat_match_ids = [cat_doc["_id"]]
+                if cat_doc.get("source_id"):
+                    cat_match_ids.append(cat_doc["source_id"])
+                cat_match_all = list(cat_match_ids) + [str(x) for x in cat_match_ids]
+                sub_cnt = await db[INSTANCE_SUBCATEGORIES].count_documents(
+                    {"app_instance_id": inst_oid, "category_id": {"$in": cat_match_all}, "deleted_at": None}
+                )
+        cat["subcategories_count"] = sub_cnt
+
+        asset_cnt = cat_asset_counts.get(cid, 0)
+        if asset_cnt == 0 and c_src:
+            asset_cnt = cat_asset_counts.get(c_src, 0)
+        if asset_cnt == 0:
+            cat_possible_oids = [to_object_id(cid)]
+            if c_src:
+                cat_possible_oids.append(to_object_id(c_src))
+            cat_possible_oids = [oid for oid in cat_possible_oids if oid]
+            cat_doc = await db[INSTANCE_CATEGORIES].find_one(
+                {"app_instance_id": inst_oid, "$or": [{"_id": {"$in": cat_possible_oids}}, {"source_id": {"$in": cat_possible_oids}}]}
+            )
+            if cat_doc:
+                cat_match_ids = [cat_doc["_id"]]
+                if cat_doc.get("source_id"):
+                    cat_match_ids.append(cat_doc["source_id"])
+                cat_match_all = list(cat_match_ids) + [str(x) for x in cat_match_ids]
+                asset_cnt = await db[INSTANCE_ASSETS].count_documents(
+                    {"app_instance_id": inst_oid, "category_id": {"$in": cat_match_all}, "deleted_at": None}
+                )
+        cat["assets_count"] = asset_cnt
+
     for sub in all_subcategories:
-        s_src_oid = to_object_id(sub.get("sourceId") or sub.get("id"))
-        sub["assets_count"] = await db[INSTANCE_ASSETS].count_documents(
-            {"app_instance_id": inst_oid, "sub_category_id": s_src_oid, "deleted_at": None}
-        )
+        sid = str(sub.get("id") or "")
+        s_src = str(sub.get("sourceId") or sub.get("source_id") or "")
+        sub_assets = sub_asset_counts.get(sid, 0)
+        if sub_assets == 0 and s_src:
+            sub_assets = sub_asset_counts.get(s_src, 0)
+
+        # Fallback to direct DB query matching all possible IDs (instance _id and source_id)
+        if sub_assets == 0:
+            sub_possible_oids = [to_object_id(sid)]
+            if s_src:
+                sub_possible_oids.append(to_object_id(s_src))
+            sub_possible_oids = [oid for oid in sub_possible_oids if oid]
+            sub_doc = await db[INSTANCE_SUBCATEGORIES].find_one(
+                {"app_instance_id": inst_oid, "$or": [{"_id": {"$in": sub_possible_oids}}, {"source_id": {"$in": sub_possible_oids}}]}
+            )
+            if sub_doc:
+                sub_match_ids = [sub_doc["_id"]]
+                if sub_doc.get("source_id"):
+                    sub_match_ids.append(sub_doc["source_id"])
+                sub_match_all = list(sub_match_ids) + [str(x) for x in sub_match_ids]
+                sub_assets = await db[INSTANCE_ASSETS].count_documents(
+                    {"app_instance_id": inst_oid, "sub_category_id": {"$in": sub_match_all}, "deleted_at": None}
+                )
+        sub["assets_count"] = sub_assets
 
     # Build category ID alias map: maps both cat["id"] and cat["sourceId"] to cat["id"]
     cat_alias_map = {}
     for c in all_categories:
         cid = str(c.get("id") or "")
-        csrc = str(c.get("sourceId") or "")
+        csrc = str(c.get("sourceId") or c.get("source_id") or "")
         if cid:
             cat_alias_map[cid] = cid
         if csrc:
@@ -251,12 +355,6 @@ async def manager_instance_content(
         s["canonicalCategoryId"] = cat_alias_map.get(raw_cat_id, raw_cat_id)
         s["categoryId"] = s["canonicalCategoryId"]
         s["category_id"] = s["canonicalCategoryId"]
-
-    cat_id = category_id or categoryId
-    sub_id = sub_category_id or subCategoryId
-    search_query = (q or search or "").strip()
-    clean_type = (type or "").strip().lower()
-    s_order = sort or "sequence"
 
     # Identify all valid identifier forms for the selected category (id and sourceId)
     valid_cat_ids: set[str] = set()
@@ -288,14 +386,6 @@ async def manager_instance_content(
                 break
         if not selected_subcat_val:
             selected_subcat_val = str(sub_id)
-
-    resolved_assets = await get_resolved_assets(
-        db,
-        app_instance_id=instance_id,
-        category_id=cat_id,
-        sub_category_id=sub_id,
-        sort=s_order,
-    )
 
     # Filter assets by media type if requested
     if clean_type:

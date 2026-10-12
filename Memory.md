@@ -3,7 +3,7 @@
 > **Single Source of Truth** for the Creative Asset Library & App Instance Management Platform.  
 > **Purpose:** This document provides an exhaustive, authoritative reference for the architecture, data models, business logic, endpoints, asset processing pipelines, and chronological changelog of the entire codebase. Future modifications should reference this file directly without needing to re-analyze the entire codebase.
 >
-> **Last Updated:** October 5, 2026
+> **Last Updated:** October 12, 2026
 
 ---
 
@@ -136,9 +136,15 @@ The platform strictly separates content authoring from content delivery through 
   - Direct 2-way messaging with Admin operators.
 - **Session:** Signed HTTP-only cookie `manager_session` verified via `authorization/manager_session.py`.
 
-### 3.3 Client Mobile/Web API (`/api/v1`)
+### 3.3 Client Mobile/Web API (`/api/v1`) & Protected Media
 - **Audience:** iOS, Android, Flutter, React Native, Unity, and Web client apps.
-- **Authentication:** `X-API-Key` header with scopes `categories:read` and `assets:read`.
+- **Authentication Channels:**
+  1. `X-API-Key` HTTP Header (standard for mobile apps and programmatic REST clients).
+  2. Query Parameter `api_key`, `apiKey`, or `key` (e.g. `?api_key=ak_...` — required for Chrome URL bar navigation, browser image tabs, and standard HTML `<img src="...">` / `<video>` / `<audio>` tags).
+  3. `Authorization: Bearer <key>` or `Authorization: ApiKey <key>`.
+- **Protected Static Media Security (`/static/central_data/...`):**
+  - All creative assets in `/static/central_data/` (thumbnails, images, videos, audios, animations, documents, and interactive HTML widgets) strictly require API key authentication or an active `admin_session`/`manager_session` cookie. Direct unauthenticated access without an API key returns `401 Unauthorized`.
+  - Public static assets are strictly limited to the default fallback thumbnail (`/static/thumbnail_default.png`), user profile avatars (`/static/profiles/`), and app icons (`/static/app_data/`).
 - **Dual-Layer Rate Limiting:**
   1. *Per-Client IP Limit (`user_ip_limit`):* Default 60 requests/minute per client IP.
   2. *App-Wide Surge Ceiling (`app_surge_ceiling`):* Default 10,000 requests/minute across all users of the app.
@@ -446,7 +452,53 @@ Requires `manager_session` cookie.
 - **Pakistan Standard Time (PKT) Formatting:**
   - Added `format_pkt_datetime(val)` and `PKT_TIMEZONE = timezone(timedelta(hours=5))` in `utils/datetimes.py`.
   - Converted UTC timestamps across `analytics/reporter.py` (`recent_errors`, `reasons_breakdown`, `get_analytics_event_details`) to PKT (`%Y-%m-%d %H:%M:%S PKT`).
-  - Updated table column headers and modal labels in Admin and Manager analytics dashboards to indicate `Timestamp (PKT)`.
+### Update 11: Accurate Live Asset and Sub-folder Counts for App Instances
+- **Root Cause Diagnosis:**
+  - In `router/admin/instance_routes.py` and `router/manager/instance_routes.py`, `cat["subcategories_count"]`, `cat["assets_count"]`, and `sub["assets_count"]` were computed via isolated `count_documents` queries with a single `ObjectId`.
+  - Because `sourceId` was intentionally projected out of client-facing resolved schemas, queries only looked up `cat["id"]` or `sub["id"]`, missing database documents where `category_id` or `sub_category_id` held central `source_id` references or string representations. This caused folder badges to report `0 Assets` and `0 Sub-folders` even when items were present.
+- **Unified Live Aggregation:**
+  - Updated both `admin_instance_content_view` and `manager_instance_content` to compute counts directly from the resolved `all_subcategories` and `all_instance_assets` hierarchies (`sub_asset_counts`, `cat_asset_counts`, `cat_sub_counts`).
+  - Added robust database fallbacks searching all candidate IDs (`_id` and `source_id`, both `ObjectId` and string formats) if any folder reports zero counts.
+- **Automated Startup Reconciliation:**
+  - Integrated `reconcile_instance_links(db)` into application startup in `inits/lifespan.py`, automatically linking any unmigrated instance subcategory or asset references to their assigned instance `_id`s.
+- **Ingestion ID Safety:**
+  - Fixed `inserted_id` attribute access in `controller/reference_controller.py` (lines 95, 156, 315, 380) to safely handle `ObjectId` returns from `InstanceRepository.insert_one`.
+
+### Update 12: Media Security & Multi-Channel API Key Protection for Thumbnails and Media Files
+- **Problem:**
+  - Thumbnails (`thumb_*`, `thumbnail_*`) and shallow media paths (`len(rel_parts) <= 3`) were previously marked as public in `is_public_static_path()`, allowing unauthenticated users to view images, covers, and thumbnails by entering direct `/static/central_data/...` URLs in Chrome without any API key or session.
+  - Media requests only checked the HTTP header `X-API-Key`, which prevented users from viewing media directly in Chrome URL address bars or standard HTML media tags where custom request headers cannot be set.
+- **Root Cause & Resolution:**
+  - **Closed Static Media Bypass (`middlewares/authorization_middleware.py`):**
+    - Removed public whitelist exceptions for `thumb_`, `thumbnail_`, and category/subcategory depth rules in `is_public_static_path()`.
+    - Protected all media files under `/static/central_data/` (thumbnails, images, videos, audios, animations, documents, HTML widgets).
+    - Public access is strictly restricted to `/static/thumbnail_default.png`, `/static/profiles/`, and `/static/app_data/`.
+  - **Multi-Channel API Key Extraction (`extract_api_key`):**
+    - Supports API key authentication across three complementary channels:
+      1. `X-API-Key` or `x-api-key` HTTP Header (used by Android, iOS, Flutter, and REST client libraries).
+      2. Query Parameters `api_key`, `apiKey`, or `key` (e.g., `?api_key=ak_...` — allows direct access in Chrome address bar, browser tabs, `<img src="...">`, `<video>`, `<audio>` tags, and media downloads).
+      3. `Authorization: Bearer <key>` or `Authorization: ApiKey <key>`.
+  - **Session-Aware Web Portal Rendering:**
+    - Preserved automatic access for active `admin_session` and `manager_session` cookies, ensuring Admin (`/admin`) and Manager (`/manager`) dashboards render media and thumbnails without requiring explicit API keys in template URLs.
+  - **Uniform API Route Support:**
+    - Applied `extract_api_key` to `/api/v1` routes as well, enabling developers to test API endpoints via query parameters in browsers alongside standard header authentication.
+
+### Update 13: Admin & Manager Portal Anti-Inspection Protection
+- **Requirement:** Prevent inspection of web dashboard pages via mouse right-click or developer keyboard shortcuts.
+- **Implementation:**
+  - Created client-side security controller in `templates/js/security.js` mounted at `/admin-assets/js/security.js`.
+  - Included `<script src="/admin-assets/js/security.js"></script>` in `<head>` across all base layouts (`templates/base.html` and `templates/manager/base.html`).
+  - **Right-Click Suppression:** Intercepts and cancels `contextmenu` events globally (`e.preventDefault()`, `e.stopPropagation()`), blocking browser context menu options ("Inspect", "Inspect Element", "View Page Source").
+  - **Keyboard Shortcut Interception:** Captures and suppresses:
+    - `F12` (DevTools shortcut across browsers)
+    - `Ctrl + Shift + I` / `Cmd + Option + I` (Inspect Elements)
+    - `Ctrl + Shift + J` / `Cmd + Option + J` (DevTools Console)
+    - `Ctrl + Shift + C` / `Cmd + Option + C` (Element Picker)
+    - `Ctrl + Shift + K` / `Ctrl + Shift + E` (Firefox Console & Network Monitor)
+    - `Ctrl + U` / `Cmd + Option + U` (View Page Source)
+    - `Ctrl + S` (Save Page HTML)
+  - **Element Dragging Prevention:** Prevents dragging sensitive images and link elements outside the viewport.
+  - **Anti-Debugging Protection:** Integrates a periodic debugger trap (`Function('debugger')()`) that halts script execution if DevTools is forced open via browser application menus.
 
 ---
 
