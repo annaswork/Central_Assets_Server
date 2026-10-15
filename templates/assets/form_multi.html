@@ -1085,7 +1085,16 @@
   // Normalize media and string list block structure
   function normalizeBlock(key) {
     let block = existingMoreFields[key];
-    if (!block) return;
+    if (typeof block === 'string') {
+      const isTagOrStringKey = /tag|keyword|label|string|badge|bubble/i.test(key);
+      if (isTagOrStringKey) {
+        existingMoreFields[key] = {
+          type: 'string_list',
+          items: block.split(/[,;|]/).map(s => s.trim()).filter(Boolean)
+        };
+        return;
+      }
+    }
 
     if (Array.isArray(block)) {
       const isTagOrStringKey = /tag|keyword|label|string|badge|bubble/i.test(key);

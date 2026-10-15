@@ -41,10 +41,11 @@ async def update_item_settings_and_overrides(
     sequence: int | None = None,
     is_premium: bool | None = None,
     is_rewarded: bool | None = None,
+    is_priced: bool | None = None,
     rewarded_credits: int | None = None,
     overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Update reference settings (is_enabled, sequence, is_premium, is_rewarded, rewarded_credits) and sparse field overrides."""
+    """Update reference settings (is_enabled, sequence, is_premium, is_rewarded, is_priced, rewarded_credits) and sparse field overrides."""
     inst_oid = to_object_id(app_instance_id)
     ref_oid = to_object_id(item_id)
 
@@ -80,7 +81,9 @@ async def update_item_settings_and_overrides(
         set_fields["is_premium"] = bool(is_premium)
     if is_rewarded is not None and item_type == "asset":
         set_fields["is_rewarded"] = bool(is_rewarded)
-        if is_rewarded and rewarded_credits is None and not doc.get("rewarded_credits"):
+    if is_priced is not None and item_type == "asset":
+        set_fields["is_priced"] = bool(is_priced)
+        if is_priced and rewarded_credits is None and not doc.get("rewarded_credits"):
             set_fields["rewarded_credits"] = 5
     if rewarded_credits is not None and item_type == "asset":
         try:

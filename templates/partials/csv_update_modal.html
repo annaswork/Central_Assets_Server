@@ -48,6 +48,8 @@
         <strong style="color:var(--md-sys-color-on-surface, #f8fafc);">How it works:</strong>
         <ul style="margin:0.35rem 0 0 1.1rem; padding:0;">
           <li>Your CSV must contain a <code style="color:var(--md-sys-color-primary, #60a5fa); background:rgba(255,255,255,0.08); padding:1px 4px; border-radius:4px;">name</code> column to match existing records.</li>
+          <li>If an asset <code style="color:var(--md-sys-color-primary, #60a5fa); background:rgba(255,255,255,0.08); padding:1px 4px; border-radius:4px;">name</code> contains commas, wrap it in double quotes: <code style="color:var(--md-sys-color-primary, #60a5fa); background:rgba(255,255,255,0.08); padding:1px 4px; border-radius:4px;">"Art Nouveau, Bedroom Edition"</code>.</li>
+          <li>For multiple <code style="color:var(--md-sys-color-primary, #60a5fa); background:rgba(255,255,255,0.08); padding:1px 4px; border-radius:4px;">tags</code> or list fields, wrap in quotes: <code style="color:var(--md-sys-color-primary, #60a5fa); background:rgba(255,255,255,0.08); padding:1px 4px; border-radius:4px;">"Vintage, Stylish, Retro"</code> or separate with semicolons.</li>
           <li>All other columns will update the matching item's data attributes.</li>
           <li>If an active filter is applied on this page, only items matching the filter will be updated.</li>
         </ul>

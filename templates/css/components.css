@@ -2585,7 +2585,7 @@ body.is-swipe-selecting {
   border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: 16px;
   width: 100%;
-  max-width: 520px;
+  max-width: 780px;
   max-height: 92vh;
   display: flex;
   flex-direction: column;

@@ -60,13 +60,18 @@
 
   <div id="categoriesGrid" class="grid grid-3" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:1.25rem;">
     {% for cat in categories %}
-      <div class="card cat-card-item" data-cat-id="{{ cat.id }}" data-cat-name="{{ cat.name | lower }}" style="padding:1rem; display:flex; flex-direction:column; border:1px solid var(--md-sys-color-outline-variant); transition:border-color 0.15s, box-shadow 0.15s;">
+      <div class="card cat-card-item" data-cat-id="{{ cat.id }}" data-cat-name="{{ cat.name | lower }}" style="padding:1rem; display:flex; flex-direction:column; border:1px solid {% if cat.already_added %}rgba(34, 197, 94, 0.45){% else %}var(--md-sys-color-outline-variant){% endif %}; background:{% if cat.already_added %}rgba(34, 197, 94, 0.02){% else %}var(--md-sys-color-surface){% endif %}; transition:border-color 0.15s, box-shadow 0.15s;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
           <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer; font-weight:600; font-size:0.85rem;">
             <input type="checkbox" class="cat-checkbox" value="{{ cat.id }}" onchange="toggleCategorySelect('{{ cat.id }}')">
             <span>Select Folder</span>
           </label>
-          <span class="badge badge-secondary" style="font-size:0.75rem;">Category</span>
+          <div style="display:flex; align-items:center; gap:0.35rem;">
+            {% if cat.already_added %}
+              <span class="badge" style="font-size:0.72rem; background:rgba(34, 197, 94, 0.15); color:#16a34a; font-weight:600; border:1px solid rgba(34, 197, 94, 0.35);">✓ Already Added</span>
+            {% endif %}
+            <span class="badge badge-secondary" style="font-size:0.75rem;">Category</span>
+          </div>
         </div>
 
         <div style="display:flex; gap:0.75rem; align-items:center; margin-bottom:0.75rem;">
@@ -88,7 +93,11 @@
 
         <div style="margin-top:auto; padding-top:0.75rem; border-top:1px solid var(--md-sys-color-outline-variant);">
           <button type="button" class="btn btn-outlined" style="width:100%; font-size:0.85rem; font-weight:600;" onclick="quickImportCategory('{{ cat.id }}', '{{ cat.name }}', {{ cat.asset_count | default(0) }})">
-            ⚡ Import Entire Category ({{ cat.asset_count | default(0) }} Assets)
+            {% if cat.already_added %}
+              ⚡ Re-import Category ({{ cat.asset_count | default(0) }} Assets)
+            {% else %}
+              ⚡ Import Entire Category ({{ cat.asset_count | default(0) }} Assets)
+            {% endif %}
           </button>
         </div>
       </div>
@@ -122,13 +131,21 @@
 
   <div id="subcategoriesGrid" class="grid grid-3" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:1.25rem;">
     {% for sub in subcategories %}
-      <div class="card sub-card-item" data-sub-id="{{ sub.id }}" data-cat-id="{{ sub.category_id }}" data-sub-name="{{ sub.name | lower }}" style="padding:1rem; display:flex; flex-direction:column; border:1px solid var(--md-sys-color-outline-variant); transition:border-color 0.15s, box-shadow 0.15s;">
+      {% set is_sub_marked = (sub.already_in_target if target_category_id else sub.already_added) %}
+      <div class="card sub-card-item" data-sub-id="{{ sub.id }}" data-cat-id="{{ sub.category_id }}" data-sub-name="{{ sub.name | lower }}" style="padding:1rem; display:flex; flex-direction:column; border:1px solid {% if is_sub_marked %}rgba(34, 197, 94, 0.45){% else %}var(--md-sys-color-outline-variant){% endif %}; background:{% if is_sub_marked %}rgba(34, 197, 94, 0.02){% else %}var(--md-sys-color-surface){% endif %}; transition:border-color 0.15s, box-shadow 0.15s;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
           <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer; font-weight:600; font-size:0.85rem;">
             <input type="checkbox" class="sub-checkbox" value="{{ sub.id }}" onchange="toggleSubcategorySelect('{{ sub.id }}')">
             <span>Select Sub-folder</span>
           </label>
-          <span class="badge badge-secondary" style="font-size:0.75rem;">Subcategory</span>
+          <div style="display:flex; align-items:center; gap:0.35rem;">
+            {% if target_category_id and sub.already_in_target %}
+              <span class="badge" style="font-size:0.72rem; background:rgba(34, 197, 94, 0.15); color:#16a34a; font-weight:600; border:1px solid rgba(34, 197, 94, 0.35);">✓ Added in folder</span>
+            {% elif not target_category_id and sub.already_added %}
+              <span class="badge" style="font-size:0.72rem; background:rgba(34, 197, 94, 0.15); color:#16a34a; font-weight:600; border:1px solid rgba(34, 197, 94, 0.35);">✓ Already Added</span>
+            {% endif %}
+            <span class="badge badge-secondary" style="font-size:0.75rem;">Subcategory</span>
+          </div>
         </div>
 
         <div style="display:flex; gap:0.75rem; align-items:center; margin-bottom:0.75rem;">
@@ -152,7 +169,11 @@
 
         <div style="margin-top:auto; padding-top:0.75rem; border-top:1px solid var(--md-sys-color-outline-variant);">
           <button type="button" class="btn btn-outlined" style="width:100%; font-size:0.85rem; font-weight:600;" onclick="quickImportSubcategory('{{ sub.id }}', '{{ sub.name }}', {{ sub.asset_count | default(0) }})">
-            ⚡ Import Subcategory ({{ sub.asset_count | default(0) }} Assets)
+            {% if is_sub_marked %}
+              ⚡ Re-import Subcategory ({{ sub.asset_count | default(0) }} Assets)
+            {% else %}
+              ⚡ Import Subcategory ({{ sub.asset_count | default(0) }} Assets)
+            {% endif %}
           </button>
         </div>
       </div>
@@ -364,6 +385,8 @@ async function loadPickerAssets() {
     if (catId) params.set('categoryId', catId);
     if (subId) params.set('subCategoryId', subId);
     if (query) params.set('q', query);
+    if (targetCategoryId) params.set('target_category_id', targetCategoryId);
+    if (targetSubCategoryId) params.set('target_sub_category_id', targetSubCategoryId);
     params.set('page_size', '200');
 
     const res = await fetch(`/manager/instances/${instanceId}/picker/assets?${params.toString()}`);
@@ -394,6 +417,10 @@ function renderAssetGrid(assets) {
 
   assets.forEach(asset => {
     const isChecked = selectedAssetIds.has(asset.id);
+    const isAlreadyAdded = Boolean(asset.already_added || asset.alreadyAdded);
+    const isAlreadyInTarget = Boolean(asset.already_in_target || asset.alreadyInTarget);
+    const isAssetMarked = (targetSubCategoryId || targetCategoryId) ? isAlreadyInTarget : isAlreadyAdded;
+
     const card = document.createElement('div');
     card.className = 'card';
     card.style.padding = '0.75rem';
@@ -401,8 +428,17 @@ function renderAssetGrid(assets) {
     card.style.flexDirection = 'column';
     card.style.cursor = 'pointer';
     card.style.transition = 'border-color 0.15s, background-color 0.15s, box-shadow 0.15s';
-    card.style.border = isChecked ? '2px solid var(--md-sys-color-primary)' : '1px solid var(--md-sys-color-outline-variant)';
-    card.style.background = isChecked ? 'var(--md-sys-color-surface-container)' : 'var(--md-sys-color-surface)';
+
+    if (isChecked) {
+      card.style.border = '2px solid var(--md-sys-color-primary)';
+      card.style.background = 'var(--md-sys-color-surface-container)';
+    } else if (isAssetMarked) {
+      card.style.border = '1px solid rgba(34, 197, 94, 0.45)';
+      card.style.background = 'rgba(34, 197, 94, 0.02)';
+    } else {
+      card.style.border = '1px solid var(--md-sys-color-outline-variant)';
+      card.style.background = 'var(--md-sys-color-surface)';
+    }
 
     card.onclick = (e) => {
       if (e.target.tagName !== 'INPUT') {
@@ -414,13 +450,25 @@ function renderAssetGrid(assets) {
     const catName = asset.category_name || asset.categoryName || '';
     const subName = asset.sub_category_name || asset.subcategory_name || '';
 
+    let addedBadgeHtml = '';
+    if (targetSubCategoryId || targetCategoryId) {
+      if (isAlreadyInTarget) {
+        addedBadgeHtml = `<span class="badge" style="font-size:0.7rem; background:rgba(34, 197, 94, 0.15); color:#16a34a; font-weight:600; border:1px solid rgba(34, 197, 94, 0.35);">✓ In target</span>`;
+      }
+    } else if (isAlreadyAdded) {
+      addedBadgeHtml = `<span class="badge" style="font-size:0.7rem; background:rgba(34, 197, 94, 0.15); color:#16a34a; font-weight:600; border:1px solid rgba(34, 197, 94, 0.35);">✓ Added</span>`;
+    }
+
     card.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
         <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer; font-weight:600; font-size:0.8rem;">
           <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleAssetSelect('${asset.id}')">
           <span>Select</span>
         </label>
-        ${asset.type ? `<span class="badge badge-secondary" style="font-size:0.7rem; text-transform:uppercase;">${asset.type}</span>` : ''}
+        <div style="display:flex; align-items:center; gap:0.35rem;">
+          ${addedBadgeHtml}
+          ${asset.type ? `<span class="badge badge-secondary" style="font-size:0.7rem; text-transform:uppercase;">${asset.type}</span>` : ''}
+        </div>
       </div>
 
       <div style="width:100%; height:130px; border-radius:var(--radius-sm, 6px); overflow:hidden; background:var(--md-sys-color-surface-container-low); display:flex; align-items:center; justify-content:center; margin-bottom:0.5rem; border:1px solid var(--md-sys-color-outline-variant);">

@@ -440,6 +440,13 @@ async def get_resolved_assets(
                         {"$ifNull": ["$is_rewarded", False]},
                     ]
                 },
+                "is_priced": {
+                    "$cond": [
+                        {"$ne": [{"$type": "$overrides.is_priced"}, "missing"]},
+                        "$overrides.is_priced",
+                        {"$ifNull": ["$is_priced", False]},
+                    ]
+                },
                 "rewarded_credits": {
                     "$cond": [
                         {"$ne": [{"$type": "$overrides.rewarded_credits"}, "missing"]},
@@ -453,6 +460,7 @@ async def get_resolved_assets(
                 "created_at": {"$ifNull": ["$created_at", "$central.created_at"]},
                 "updated_at": {"$ifNull": ["$updated_at", "$central.updated_at"]},
                 "overrides": "$overrides",
+                "source_id": {"$ifNull": [{"$toString": "$source_id"}, {"$toString": "$central._id"}]},
                 "merged": {"$mergeObjects": ["$central", "$overrides"]},
             }
         },
@@ -460,6 +468,8 @@ async def get_resolved_assets(
             "$project": {
                 "_id": 0,
                 "id": 1,
+                "source_id": 1,
+                "sourceId": "$source_id",
                 "categoryId": 1,
                 "subCategoryId": 1,
                 "category_name": 1,
@@ -468,6 +478,8 @@ async def get_resolved_assets(
                 "is_premium": 1,
                 "is_rewarded": 1,
                 "isRewarded": "$is_rewarded",
+                "is_priced": 1,
+                "isPriced": "$is_priced",
                 "rewarded_credits": 1,
                 "rewardedCredits": "$rewarded_credits",
                 "sequence": 1,
@@ -681,6 +693,13 @@ async def get_resolved_single_asset(
                         {"$ifNull": ["$is_rewarded", False]},
                     ]
                 },
+                "is_priced": {
+                    "$cond": [
+                        {"$ne": [{"$type": "$overrides.is_priced"}, "missing"]},
+                        "$overrides.is_priced",
+                        {"$ifNull": ["$is_priced", False]},
+                    ]
+                },
                 "rewarded_credits": {
                     "$cond": [
                         {"$ne": [{"$type": "$overrides.rewarded_credits"}, "missing"]},
@@ -694,6 +713,7 @@ async def get_resolved_single_asset(
                 "created_at": {"$ifNull": ["$created_at", "$central.created_at"]},
                 "updated_at": {"$ifNull": ["$updated_at", "$central.updated_at"]},
                 "overrides": "$overrides",
+                "source_id": {"$ifNull": [{"$toString": "$source_id"}, {"$toString": "$central._id"}]},
                 "merged": {"$mergeObjects": ["$central", "$overrides"]},
             }
         },
@@ -701,6 +721,8 @@ async def get_resolved_single_asset(
             "$project": {
                 "_id": 0,
                 "id": 1,
+                "source_id": 1,
+                "sourceId": "$source_id",
                 "categoryId": 1,
                 "subCategoryId": 1,
                 "category_name": 1,
@@ -709,6 +731,8 @@ async def get_resolved_single_asset(
                 "is_premium": 1,
                 "is_rewarded": 1,
                 "isRewarded": "$is_rewarded",
+                "is_priced": 1,
+                "isPriced": "$is_priced",
                 "rewarded_credits": 1,
                 "rewardedCredits": "$rewarded_credits",
                 "sequence": 1,

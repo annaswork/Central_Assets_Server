@@ -3,6 +3,7 @@
 from collections import defaultdict
 from datetime import datetime, timezone
 import json
+import re
 from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -38,6 +39,43 @@ def _convert_value(col: str, val: str) -> Any:
         except ValueError:
             pass
 
+    # Tag and string list columns (tags, keywords, labels, badges, etc.)
+    is_list_col = (
+        col in (
+            "tags",
+            "tag",
+            "keywords",
+            "keyword",
+            "labels",
+            "label",
+            "badges",
+            "badge",
+            "string_list",
+            "strings",
+        )
+        or col.endswith(("_tags", "_list", "_keywords", "_labels"))
+    )
+    if is_list_col:
+        # JSON array structure
+        if val_stripped.startswith("[") and val_stripped.endswith("]"):
+            try:
+                parsed = json.loads(val_stripped)
+                if isinstance(parsed, list):
+                    return [str(x).strip() for x in parsed if str(x).strip()]
+            except Exception:
+                pass
+        # Comma, semicolon, pipe, or newline separated list
+        if any(sep in val_stripped for sep in (",", ";", "|", "\n")):
+            parts = [
+                p.strip()
+                for p in re.split(r"[,;|\n]+", val_stripped)
+                if p.strip()
+            ]
+            return parts
+        elif val_stripped:
+            return [val_stripped]
+        return []
+
     # JSON structures (if payload block or object is passed)
     if (val_stripped.startswith("{") and val_stripped.endswith("}")) or (
         val_stripped.startswith("[") and val_stripped.endswith("]")
@@ -45,7 +83,13 @@ def _convert_value(col: str, val: str) -> Any:
         try:
             return json.loads(val_stripped)
         except Exception:
-            pass
+            try:
+                import ast
+                parsed = ast.literal_eval(val_stripped)
+                if isinstance(parsed, (dict, list)):
+                    return parsed
+            except Exception:
+                pass
 
     return val_stripped
 

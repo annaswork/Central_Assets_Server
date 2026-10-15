@@ -14,7 +14,7 @@ def parse_csv_rows(content: str | bytes) -> tuple[list[dict[str, str]], list[dic
     if isinstance(content, bytes):
         content = content.decode("utf-8-sig", errors="replace")
 
-    reader = csv.DictReader(io.StringIO(content))
+    reader = csv.DictReader(io.StringIO(content), skipinitialspace=True)
     if not reader.fieldnames:
         return [], [{"line": 1, "error": "CSV has no header row"}]
 
@@ -26,9 +26,18 @@ def parse_csv_rows(content: str | bytes) -> tuple[list[dict[str, str]], list[dic
     errors: list[dict[str, Any]] = []
 
     for line_num, row in enumerate(reader, start=2):
-        if not any(v.strip() for v in row.values() if v):
+        if not any(v.strip() for v in row.values() if isinstance(v, str) and v):
             continue  # Skip blank lines
         clean_row = {k: (v.strip() if v else "") for k, v in row.items() if k}
+        # If there are overflow values (row has more comma-separated items than header columns)
+        if None in row and row[None]:
+            extra_vals = [x.strip() for x in row[None] if isinstance(x, str) and x.strip()]
+            if extra_vals and normalized_headers:
+                last_header = normalized_headers[-1]
+                if last_header in clean_row and clean_row[last_header]:
+                    clean_row[last_header] = clean_row[last_header] + ", " + ", ".join(extra_vals)
+                else:
+                    clean_row[last_header] = ", ".join(extra_vals)
         rows.append(clean_row)
 
     return rows, errors

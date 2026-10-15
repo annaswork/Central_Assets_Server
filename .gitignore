@@ -130,3 +130,8 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Agent Skills & Tooling
+.agents/skills/gravitas/
+skills-lock.json
+

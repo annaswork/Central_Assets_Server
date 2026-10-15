@@ -3,7 +3,7 @@
 > **Single Source of Truth** for the Creative Asset Library & App Instance Management Platform.  
 > **Purpose:** This document provides an exhaustive, authoritative reference for the architecture, data models, business logic, endpoints, asset processing pipelines, and chronological changelog of the entire codebase. Future modifications should reference this file directly without needing to re-analyze the entire codebase.
 >
-> **Last Updated:** October 12, 2026
+> **Last Updated:** October 15, 2026
 
 ---
 
@@ -499,6 +499,73 @@ Requires `manager_session` cookie.
     - `Ctrl + S` (Save Page HTML)
   - **Element Dragging Prevention:** Prevents dragging sensitive images and link elements outside the viewport.
   - **Anti-Debugging Protection:** Integrates a periodic debugger trap (`Function('debugger')()`) that halts script execution if DevTools is forced open via browser application menus.
+
+### Update 14: Subcategory & Category Cross-Folder Duplication, Import Marked Badges, Clickable App Instance Rows & Asset Table Column Sizing
+- **Requirement 1: Allow Duplicate Subcategories and Categories Across Folders in an App Instance:**
+  - **Root Cause:** In `database/indexes.py`, `instance_subcategories` had a unique index on `("app_instance_id", 1), ("source_id", 1)` (`uniq_instance_subcategory_source`), and `instance_assets` had `("app_instance_id", 1), ("source_id", 1)` (`uniq_instance_asset_source`). In addition, `controller/reference_controller.py` checked existence using `{"app_instance_id": inst_oid, "source_id": s_oid}` globally. When a user tried to import or copy the same subcategory into Category 2, the unique index and queries re-parented or blocked the subcategory, removing it from Category 1.
+  - **Resolution:**
+    - Dropped old instance-wide unique indexes and replaced with parent-hierarchy compound unique indexes:
+      - `instance_subcategories`: `[("app_instance_id", 1), ("category_id", 1), ("source_id", 1)]` (`uniq_instance_subcat_parent_source`).
+      - `instance_assets`: `[("app_instance_id", 1), ("category_id", 1), ("sub_category_id", 1), ("source_id", 1)]` (`uniq_instance_asset_hierarchy_source`).
+      - Non-unique reverse lookup index on `[("app_instance_id", 1), ("source_id", 1)]` retained for fast source lookups.
+    - Updated `controller/reference_controller.py` (`add_references` and `copy_references_from_instance`):
+      - Query filters now check `{"app_instance_id": inst_oid, "category_id": cat_link_id, "source_id": s_oid}` for subcategories, and `{"app_instance_id": inst_oid, "category_id": cat_link_id, "sub_category_id": sub_inst_id, "source_id": a_oid}` for assets.
+      - Category imports into target folders cleanly create and populate subcategories and assets under the target category without overwriting or moving existing instances in other categories.
+- **Requirement 2: Mark Already Added Content in Central Import Picker:**
+  - **Backend Support (`router/admin/instance_routes.py` & `router/manager/instance_routes.py`):**
+    - `admin_instance_picker`, `admin_instance_picker_categories`, `admin_instance_picker_subcategories`, `admin_instance_picker_assets` (and their Manager portal counterparts) now query existing instance references (`instance_categories`, `instance_subcategories`, `instance_assets`).
+    - Added booleans:
+      - `already_added`: Item is linked anywhere within this app instance.
+      - `already_in_target`: Item is linked specifically into the active target folder (`target_category_id` / `target_sub_category_id`).
+  - **Frontend UI (`templates/instances/picker.html` & `templates/manager/instances/picker.html`):**
+    - Categories & subcategories that are already added show a prominent `✓ Already Added` badge with green accent border and subtle background tint.
+    - Assets grid dynamically renders `✓ In target` or `✓ Added` badges and green outline styling on cards.
+- **Requirement 3: Clickable App Instance Rows & Remove "+ Add Central Data" Column Button:**
+  - In `templates/instances/list.html` and `templates/manager/instances/list.html`:
+    - Removed `+ Add Central Items` from the table row action column.
+    - Added `.clickable-row` styling (`cursor: pointer; transition: background-color 0.15s;`) to each `<tr>`.
+    - Clicking anywhere on the row navigates directly to browse the content of that app (`/admin/instances/{id}/content` or `/manager/instances/{id}/content`).
+    - Action buttons (`Browse Content`, `Edit`, `Delete`) stop event propagation so button clicks execute their intended actions without conflicting with row navigation.
+- **Requirement 4: Eliminate Horizontal Scrolling in Referenced Assets Table via Column Sizing:**
+  - In `templates/instances/content.html` and `templates/manager/instances/content.html`:
+    - Added dedicated CSS class `.instance-assets-table` and `.manager-instance-assets-table` reducing cell padding from `0.9rem 1rem` to `0.45rem 0.35rem`, saving over 300px of wasted whitespace across 12-13 columns.
+    - Explicit compact widths assigned to all numeric and toggle columns:
+      - Drag handle: `28px`
+      - Seq: `48px`
+      - Thumb: `44px`
+      - Views / Downloads: `50px`
+      - Enabled / Premium / Rewarded toggles: `46px`
+      - Credits: `52px`
+      - Actions: `130px` (Admin) / `75px` (Manager)
+    - Applied text ellipsis truncation to Asset Name, Description, Category, Subcategory, and Tags so table naturally fits standard desktop/laptop displays (>= 950px) without horizontal scrollbar. Responsive horizontal overflow container retained for small screens.
+
+### Update 14: App Instance Preview Modal, Styled Rename Popup, `isPriced` Flag, Clear Filters & Folder-Scoped Import Marking
+- **Requirement 1: Original Asset Preview Modal on App Instance Page:**
+  - Added click handler `openAssetPreviewModal('{{ asset.source_id or asset.sourceId or asset.id }}')` to asset thumbnails in both Admin (`templates/instances/content.html`) and Manager (`templates/manager/instances/content.html`) portals with hover pointer cue.
+  - Enhanced `templates/partials/asset_preview_modal.html` with dynamic portal route awareness (`/manager/api/...` vs `/api/...`) and a responsive embedded `more_fields` inspector (`#previewEmbeddedMoreFields`).
+  - Added visual rendering for all `more_fields` polymorphic blocks: images, audio (with playback), video (with playback), generic files/documents, text, colors, and key-values.
+  - For Frames and Templates: added embedded canvas rendering that draws color-coded bounding boxes over the base image alongside an interactive table of placeholder coordinates (X, Y, W, H, Rotation, Aspect Ratio, z-index).
+  - In `controller/asset_preview_controller.py`: added root-level `coordinates` and `placeholders` normalization into the standard `frames` block, and fallback resolution from instance asset docs to central asset docs via `source_id`.
+  - In `templates/css/components.css`: increased `.asset-preview-modal-container` max-width to `780px` to fit coordinates table and canvas stages comfortably.
+  - **Manager Asset Preview Route Fix (404 Resolution):** Mounted `@router.get("/api/assets/{asset_id}/preview")` in `router/manager/dashboard_routes.py` so it resolves at `/manager/api/assets/{asset_id}/preview` matching frontend modal requests (previously shadowed under `/manager/instances/...`). Also made `refreshAssetPreviewStats` portal-aware and hid the admin-only Interactive Editor link from manager modals.
+- **Requirement 2: Custom Material 3 Popup Modal for Asset Renaming:**
+  - Replaced the browser native `prompt(...)` dialog with a styled Material 3 modal `#renameAssetModal` in both Admin and Manager instance content pages.
+  - Includes backdrop blur, input autofocus with text auto-selection, Enter key submission, Escape key dismissal, and async save with loading spinner.
+- **Requirement 3: `isPriced` (`is_priced`) Flag & Decoupled Credits Editing:**
+  - Added `is_priced` toggle flag column alongside `is_premium` and `is_rewarded` in Admin and Manager referenced asset tables.
+  - Decoupled credit value editing: the credits input field is enabled exclusively when `is_priced` is enabled (independent of `is_rewarded`).
+  - In `controller/catalog_controller.py`: resolved `is_priced` from `overrides.is_priced` or asset root `is_priced`, and projected it in API outputs.
+  - In `controller/override_controller.py`, `router/admin/instance_routes.py`, and `router/manager/instance_routes.py`: added support for updating and persisting `is_priced` in `overrides.is_priced`.
+- **Requirement 4: Auto-Clear Filters on App Instance Assets List:**
+  - Added `autocomplete="off"` to the filter form and dropdowns in `templates/instances/content.html` and `templates/manager/instances/content.html`.
+  - Added URL query param checks on tab switch (`switchInstanceTab('assets')` / `switchTab('assets')`) and page load (`DOMContentLoaded`) to explicitly reset `assetCategorySelect` and `assetSubCategorySelect` when no category filter is active in the URL.
+- **Requirement 5: Folder-Scoped "Already Added" Marking in Central Import Picker:**
+  - In `router/admin/instance_routes.py` and `router/manager/instance_routes.py`: resolved comprehensive `valid_target_cat_keys` (handling both ObjectId and string representations of `_id` and `source_id`) to compute `target_sub_ids` and `target_asset_ids`.
+  - In `templates/instances/picker.html` and `templates/manager/instances/picker.html`:
+    - Updated subcategory cards to evaluate `{% set is_sub_marked = (sub.already_in_target if target_category_id else sub.already_added) %}`.
+    - Subcategories existing in `category1` are NOT labeled "Already Added" or highlighted in green when importing into empty `category2`; they show clean cards with "⚡ Import Subcategory".
+    - Updated asset card JavaScript rendering to scope card borders and badges to `isAlreadyInTarget` whenever a target destination folder is active.
+    - Added explicit `target_cat_oid = to_object_id(target_category_id) if target_category_id else None` in `admin_instance_picker` to guarantee safe initialization across all request pathways.
 
 ---
 

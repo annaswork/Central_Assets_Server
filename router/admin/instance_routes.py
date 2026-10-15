@@ -510,7 +510,71 @@ async def admin_instance_picker(
     if not session:
         return RedirectResponse(url="/admin/login", status_code=303)
 
+    inst_oid = to_object_id(id)
     instance = await get_app_instance(db, instance_id=id)
+
+    # 1. Existing instance categories
+    active_cat_ids = set(
+        await db[INSTANCE_CATEGORIES].distinct("source_id", {"app_instance_id": inst_oid, "deleted_at": None})
+    )
+
+    # 2. Existing instance subcategories
+    active_sub_docs = await db[INSTANCE_SUBCATEGORIES].find(
+        {"app_instance_id": inst_oid, "deleted_at": None},
+        {"source_id": 1, "category_id": 1}
+    ).to_list(length=None)
+    active_sub_ids = {s["source_id"] for s in active_sub_docs if s.get("source_id")}
+
+    target_cat_oid = to_object_id(target_category_id) if target_category_id else None
+    valid_target_cat_keys = set()
+    if target_cat_oid:
+        t_cat_doc = await db[INSTANCE_CATEGORIES].find_one(
+            {"app_instance_id": inst_oid, "$or": [{"_id": target_cat_oid}, {"source_id": target_cat_oid}]}
+        )
+        if t_cat_doc:
+            valid_target_cat_keys.add(t_cat_doc["_id"])
+            valid_target_cat_keys.add(str(t_cat_doc["_id"]))
+            if t_cat_doc.get("source_id"):
+                valid_target_cat_keys.add(t_cat_doc["source_id"])
+                valid_target_cat_keys.add(str(t_cat_doc["source_id"]))
+        valid_target_cat_keys.add(target_cat_oid)
+        valid_target_cat_keys.add(str(target_cat_oid))
+        if target_category_id:
+            valid_target_cat_keys.add(target_category_id)
+
+    target_sub_ids = {
+        s["source_id"] for s in active_sub_docs
+        if s.get("source_id") and s.get("category_id") in valid_target_cat_keys
+    }
+
+    # 3. Existing instance assets
+    active_asset_ids = set(
+        await db[INSTANCE_ASSETS].distinct("source_id", {"app_instance_id": inst_oid, "deleted_at": None})
+    )
+    target_asset_ids = set()
+    if target_sub_category_id:
+        t_sub_oid = to_object_id(target_sub_category_id)
+        valid_target_sub_keys = set()
+        if t_sub_oid:
+            t_sub_doc = await db[INSTANCE_SUBCATEGORIES].find_one(
+                {"app_instance_id": inst_oid, "$or": [{"_id": t_sub_oid}, {"source_id": t_sub_oid}]}
+            )
+            if t_sub_doc:
+                valid_target_sub_keys.add(t_sub_doc["_id"])
+                valid_target_sub_keys.add(str(t_sub_doc["_id"]))
+                if t_sub_doc.get("source_id"):
+                    valid_target_sub_keys.add(t_sub_doc["source_id"])
+                    valid_target_sub_keys.add(str(t_sub_doc["source_id"]))
+            valid_target_sub_keys.add(t_sub_oid)
+            valid_target_sub_keys.add(str(t_sub_oid))
+            valid_target_sub_keys.add(target_sub_category_id)
+            target_asset_ids = set(
+                await db[INSTANCE_ASSETS].distinct(
+                    "source_id",
+                    {"app_instance_id": inst_oid, "sub_category_id": {"$in": list(valid_target_sub_keys)}, "deleted_at": None}
+                )
+            )
+
     central_cats = await list_categories(db, page=1, page_size=200)
     for cat in central_cats.get("items", []):
         c_oid = to_object_id(cat["id"])
@@ -520,6 +584,7 @@ async def admin_instance_picker(
         cat["asset_count"] = await db[ASSETS].count_documents(
             {"category_id": c_oid, "deleted_at": None}
         )
+        cat["already_added"] = c_oid in active_cat_ids
 
     central_subs = await list_subcategories(db, page=1, page_size=500)
     for sub in central_subs.get("items", []):
@@ -527,8 +592,14 @@ async def admin_instance_picker(
         sub["asset_count"] = await db[ASSETS].count_documents(
             {"sub_category_id": s_oid, "deleted_at": None}
         )
+        sub["already_added"] = s_oid in active_sub_ids
+        sub["already_in_target"] = s_oid in target_sub_ids
 
     initial_assets = await list_assets(db, page=1, page_size=100)
+    for asset in initial_assets.get("items", []):
+        a_oid = to_object_id(asset["id"])
+        asset["already_added"] = a_oid in active_asset_ids
+        asset["already_in_target"] = a_oid in target_asset_ids
 
     return templates.TemplateResponse(
         request=request,
@@ -557,6 +628,11 @@ async def admin_instance_picker_categories(
     if not session:
         return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
 
+    inst_oid = to_object_id(id)
+    active_cat_ids = set(
+        await db[INSTANCE_CATEGORIES].distinct("source_id", {"app_instance_id": inst_oid, "deleted_at": None})
+    )
+
     clean_q = q.strip() if q and q.strip() else None
     result = await list_categories(db, search=clean_q, page=1, page_size=200)
     items = result.get("items", [])
@@ -568,6 +644,7 @@ async def admin_instance_picker_categories(
         cat["asset_count"] = await db[ASSETS].count_documents(
             {"category_id": c_oid, "deleted_at": None}
         )
+        cat["already_added"] = c_oid in active_cat_ids
     return JSONResponse(status_code=200, content={"success": True, "items": items})
 
 
@@ -577,11 +654,41 @@ async def admin_instance_picker_subcategories(
     id: str,
     categoryId: str | None = None,
     q: str | None = None,
+    target_category_id: str | None = None,
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
     if not session:
         return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    inst_oid = to_object_id(id)
+    active_sub_docs = await db[INSTANCE_SUBCATEGORIES].find(
+        {"app_instance_id": inst_oid, "deleted_at": None},
+        {"source_id": 1, "category_id": 1}
+    ).to_list(length=None)
+    active_sub_ids = {s["source_id"] for s in active_sub_docs if s.get("source_id")}
+
+    target_cat_oid = to_object_id(target_category_id) if target_category_id else None
+    valid_target_cat_keys = set()
+    if target_cat_oid:
+        t_cat_doc = await db[INSTANCE_CATEGORIES].find_one(
+            {"app_instance_id": inst_oid, "$or": [{"_id": target_cat_oid}, {"source_id": target_cat_oid}]}
+        )
+        if t_cat_doc:
+            valid_target_cat_keys.add(t_cat_doc["_id"])
+            valid_target_cat_keys.add(str(t_cat_doc["_id"]))
+            if t_cat_doc.get("source_id"):
+                valid_target_cat_keys.add(t_cat_doc["source_id"])
+                valid_target_cat_keys.add(str(t_cat_doc["source_id"]))
+        valid_target_cat_keys.add(target_cat_oid)
+        valid_target_cat_keys.add(str(target_cat_oid))
+        if target_category_id:
+            valid_target_cat_keys.add(target_category_id)
+
+    target_sub_ids = {
+        s["source_id"] for s in active_sub_docs
+        if s.get("source_id") and s.get("category_id") in valid_target_cat_keys
+    }
 
     clean_cat = categoryId.strip() if categoryId and categoryId.strip() else None
     clean_q = q.strip() if q and q.strip() else None
@@ -592,6 +699,8 @@ async def admin_instance_picker_subcategories(
         sub["asset_count"] = await db[ASSETS].count_documents(
             {"sub_category_id": s_oid, "deleted_at": None}
         )
+        sub["already_added"] = s_oid in active_sub_ids
+        sub["already_in_target"] = s_oid in target_sub_ids
     return JSONResponse(status_code=200, content={"success": True, "items": items})
 
 
@@ -602,6 +711,8 @@ async def admin_instance_picker_assets(
     categoryId: str | None = None,
     subCategoryId: str | None = None,
     q: str | None = None,
+    target_category_id: str | None = None,
+    target_sub_category_id: str | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=100, ge=1, le=500),
     db: AsyncIOMotorDatabase = Depends(get_db),
@@ -609,6 +720,34 @@ async def admin_instance_picker_assets(
     session = get_current_admin_session(request)
     if not session:
         return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    inst_oid = to_object_id(id)
+    active_asset_ids = set(
+        await db[INSTANCE_ASSETS].distinct("source_id", {"app_instance_id": inst_oid, "deleted_at": None})
+    )
+    target_asset_ids = set()
+    if target_sub_category_id:
+        t_sub_oid = to_object_id(target_sub_category_id)
+        valid_target_sub_keys = set()
+        if t_sub_oid:
+            t_sub_doc = await db[INSTANCE_SUBCATEGORIES].find_one(
+                {"app_instance_id": inst_oid, "$or": [{"_id": t_sub_oid}, {"source_id": t_sub_oid}]}
+            )
+            if t_sub_doc:
+                valid_target_sub_keys.add(t_sub_doc["_id"])
+                valid_target_sub_keys.add(str(t_sub_doc["_id"]))
+                if t_sub_doc.get("source_id"):
+                    valid_target_sub_keys.add(t_sub_doc["source_id"])
+                    valid_target_sub_keys.add(str(t_sub_doc["source_id"]))
+            valid_target_sub_keys.add(t_sub_oid)
+            valid_target_sub_keys.add(str(t_sub_oid))
+            valid_target_sub_keys.add(target_sub_category_id)
+            target_asset_ids = set(
+                await db[INSTANCE_ASSETS].distinct(
+                    "source_id",
+                    {"app_instance_id": inst_oid, "sub_category_id": {"$in": list(valid_target_sub_keys)}, "deleted_at": None}
+                )
+            )
 
     clean_cat = categoryId.strip() if categoryId and categoryId.strip() else None
     clean_sub = subCategoryId.strip() if subCategoryId and subCategoryId.strip() else None
@@ -622,11 +761,17 @@ async def admin_instance_picker_assets(
         page=page,
         page_size=page_size,
     )
+    items = result.get("items", [])
+    for a in items:
+        a_oid = to_object_id(a["id"])
+        a["already_added"] = a_oid in active_asset_ids
+        a["already_in_target"] = a_oid in target_asset_ids
+
     return JSONResponse(
         status_code=200,
         content={
             "success": True,
-            "items": result.get("items", []),
+            "items": items,
             "total": result.get("total", 0),
         },
     )
@@ -894,9 +1039,12 @@ async def admin_instance_asset_override(
     is_rewarded = payload.get("is_rewarded")
     if is_rewarded is None:
         is_rewarded = payload.get("isRewarded")
+    is_priced = payload.get("is_priced")
+    if is_priced is None:
+        is_priced = payload.get("isPriced")
     rewarded_credits = payload.get("rewarded_credits")
     if rewarded_credits is None:
-        rewarded_credits = payload.get("rewardedCredits") if "rewardedCredits" in payload else payload.get("credit")
+        rewarded_credits = payload.get("rewardedCredits") if "rewardedCredits" in payload else (payload.get("credit") if "credit" in payload else payload.get("credits"))
     name = payload.get("name")
     overrides = {}
     if name is not None:
@@ -911,6 +1059,7 @@ async def admin_instance_asset_override(
         sequence=sequence,
         is_premium=is_premium,
         is_rewarded=is_rewarded,
+        is_priced=is_priced,
         rewarded_credits=rewarded_credits,
         overrides=overrides if overrides else None,
     )

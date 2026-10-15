@@ -1,6 +1,7 @@
 """Controller for asset preview screen popup, stats reset, and status toggle."""
 
 from pathlib import Path
+import re
 from typing import Any
 from urllib.parse import urlparse
 
@@ -8,7 +9,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from config.constants import ALLOWED_AUDIO_EXTENSIONS, DEFAULT_AUDIO_THUMBNAIL_URL
 from controller.base_controller import serialize_mongo_doc
-from database.collections import ASSETS, CATEGORIES, SUBCATEGORIES
+from database.collections import ASSETS, CATEGORIES, INSTANCE_ASSETS, SUBCATEGORIES
 from utils.datetimes import format_datetime_display, utc_now
 from utils.errors import NotFoundError
 from utils.ids import to_object_id
@@ -58,6 +59,15 @@ async def get_asset_preview_details(db: AsyncIOMotorDatabase, asset_id: str) -> 
     """
     oid = to_object_id(asset_id)
     doc = await db[ASSETS].find_one({"_id": oid, "deleted_at": None})
+    if not doc:
+        # Check if asset_id is an instance asset referencing a central asset
+        inst_doc = await db[INSTANCE_ASSETS].find_one({"_id": oid, "deleted_at": None})
+        if inst_doc:
+            if inst_doc.get("source_id"):
+                source_oid = to_object_id(inst_doc["source_id"])
+                doc = await db[ASSETS].find_one({"_id": source_oid, "deleted_at": None})
+            if not doc:
+                doc = inst_doc
     if not doc:
         raise NotFoundError(f"Asset '{asset_id}' not found")
 
@@ -212,6 +222,22 @@ async def get_asset_preview_details(db: AsyncIOMotorDatabase, asset_id: str) -> 
             continue
 
         if not isinstance(block_val, dict):
+            # Check if scalar string is a tags/keywords block
+            if isinstance(block_val, str) and any(
+                kw in block_key.lower() for kw in ("tag", "keyword", "label", "badge")
+            ):
+                parts = [p.strip() for p in re.split(r"[,;|\n]+", block_val) if p.strip()]
+                processed_blocks.append(
+                    {
+                        "key": block_key,
+                        "type": "string_list",
+                        "label": b_label,
+                        "items": parts,
+                        "count": len(parts),
+                    }
+                )
+                continue
+
             # Fallback for scalar values
             processed_blocks.append(
                 {
@@ -407,6 +433,24 @@ async def get_asset_preview_details(db: AsyncIOMotorDatabase, asset_id: str) -> 
                 }
             )
 
+    # Check if doc has root-level coordinates or placeholders (e.g. legacy or standalone frames/templates)
+    has_root_coords = (doc.get("coordinates") and isinstance(doc.get("coordinates"), list)) or (
+        doc.get("placeholders") and isinstance(doc.get("placeholders"), list)
+    )
+    if has_root_coords and not any(b.get("type") == "frames" for b in processed_blocks):
+        coords = doc.get("coordinates") or doc.get("placeholders") or []
+        processed_blocks.append(
+            {
+                "key": "frames",
+                "type": "frames",
+                "label": "Frame / Template Slots",
+                "image_url": doc.get("thumbnail_url") or "",
+                "width": doc.get("width"),
+                "height": doc.get("height"),
+                "coordinates": coords,
+                "count": len(coords),
+            }
+        )
 
     return {
         "id": asset["id"],

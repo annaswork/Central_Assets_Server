@@ -134,14 +134,22 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
         await db[INSTANCE_SUBCATEGORIES].drop_index("uniq_instance_subcategory_source")
     except Exception:
         pass
+    try:
+        await db[INSTANCE_SUBCATEGORIES].drop_index("uniq_instance_subcat_parent_source")
+    except Exception:
+        pass
 
     await db[INSTANCE_SUBCATEGORIES].create_indexes(
         [
             IndexModel(
-                [("app_instance_id", ASCENDING), ("source_id", ASCENDING)],
+                [
+                    ("app_instance_id", ASCENDING),
+                    ("category_id", ASCENDING),
+                    ("source_id", ASCENDING),
+                ],
                 unique=True,
                 partialFilterExpression={"source_id": {"$type": "objectId"}},
-                name="uniq_instance_subcategory_source",
+                name="uniq_instance_subcat_parent_source",
             ),
             IndexModel(
                 [
@@ -157,16 +165,34 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
             ),
             IndexModel([("source_id", ASCENDING)], name="idx_instance_subcategory_reverse_lookup"),
             IndexModel([("deleted_at", ASCENDING)], name="idx_instance_subcategory_deleted_at"),
+            IndexModel(
+                [("app_instance_id", ASCENDING), ("source_id", ASCENDING)],
+                name="idx_instance_subcat_inst_source",
+            ),
         ]
     )
 
     # 7. Instance Assets
+    try:
+        await db[INSTANCE_ASSETS].drop_index("uniq_instance_asset_source")
+    except Exception:
+        pass
+    try:
+        await db[INSTANCE_ASSETS].drop_index("uniq_instance_asset_hierarchy_source")
+    except Exception:
+        pass
+
     await db[INSTANCE_ASSETS].create_indexes(
         [
             IndexModel(
-                [("app_instance_id", ASCENDING), ("source_id", ASCENDING)],
+                [
+                    ("app_instance_id", ASCENDING),
+                    ("category_id", ASCENDING),
+                    ("sub_category_id", ASCENDING),
+                    ("source_id", ASCENDING),
+                ],
                 unique=True,
-                name="uniq_instance_asset_source",
+                name="uniq_instance_asset_hierarchy_source",
             ),
             IndexModel(
                 [
@@ -187,6 +213,10 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
             ),
             IndexModel([("source_id", ASCENDING)], name="idx_instance_asset_reverse_lookup"),
             IndexModel([("deleted_at", ASCENDING)], name="idx_instance_asset_deleted_at"),
+            IndexModel(
+                [("app_instance_id", ASCENDING), ("source_id", ASCENDING)],
+                name="idx_instance_asset_inst_source",
+            ),
         ]
     )
 

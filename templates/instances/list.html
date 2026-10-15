@@ -29,6 +29,16 @@
   </form>
 </div>
 
+<style>
+  .clickable-row {
+    cursor: pointer;
+    transition: background-color 0.15s ease-in-out;
+  }
+  .clickable-row:hover td {
+    background-color: var(--md-sys-color-surface-container, rgba(0,0,0,0.03));
+  }
+</style>
+
 <!-- Instances Table -->
 <div class="table-responsive card" style="padding:0;">
   <table class="data-table">
@@ -42,7 +52,7 @@
     </thead>
     <tbody>
       {% for inst in data['items'] %}
-        <tr>
+        <tr class="clickable-row" onclick="if (!event.target.closest('a, button, form, input')) window.location='/admin/instances/{{ inst.id }}/content';" title="Click to browse content of {{ inst.name }}">
           <td data-label="Name">
             <strong>{{ inst.name }}</strong>
             <div style="font-size:0.8rem; font-family:monospace; color:var(--md-sys-color-on-surface-variant);">ID: {{ inst.id }}</div>
@@ -54,15 +64,12 @@
             {{ (inst.created_at|string)[:10] if inst.created_at else 'N/A' }}
           </td>
           <td data-label="Actions" style="text-align:right;">
-            <div style="display:inline-flex; gap:0.5rem;">
+            <div style="display:inline-flex; gap:0.5rem;" onclick="event.stopPropagation();">
               <a href="/admin/instances/{{ inst.id }}/content" class="btn btn-primary" style="min-height:36px; padding:0.25rem 0.75rem;">
                 Browse Content
               </a>
               <a href="/admin/instances/{{ inst.id }}/edit" class="btn btn-outlined" style="min-height:36px; padding:0.25rem 0.6rem;">
                 Edit
-              </a>
-              <a href="/admin/instances/{{ inst.id }}/picker" class="btn btn-outlined" style="min-height:36px; padding:0.25rem 0.6rem;">
-                + Add Central Items
               </a>
               <form method="POST" action="/admin/instances/{{ inst.id }}/delete" style="display:inline;" onsubmit="return confirm('Delete app instance {{ inst.name }}? This will remove all reference links and overrides.');">
                 <button type="submit" class="btn btn-destructive" style="min-height:36px; padding:0.25rem 0.6rem;">Delete</button>

@@ -90,6 +90,9 @@
         </button>
       </div>
 
+      <!-- Embedded More Fields Section (Directly visible in preview modal) -->
+      <div id="previewEmbeddedMoreFields" style="margin-top:1.25rem;"></div>
+
     </div>
 
     <!-- Modal Footer Controls -->
@@ -407,10 +410,27 @@
     document.getElementById('previewMoreFieldsCountBadge').textContent = 'Loading fields...';
 
     // Set Edit button link
+    const apiPrefix = window.location.pathname.startsWith('/manager') ? '/manager' : '/admin';
+    const isManager = window.location.pathname.startsWith('/manager');
     const editBtn = document.getElementById('previewEditBtn');
     if (editBtn) {
-      const currentUrl = window.location.pathname + window.location.search;
-      editBtn.href = `/admin/assets/${assetId}/edit?return_url=${encodeURIComponent(currentUrl)}`;
+      if (isManager) {
+        editBtn.style.display = 'none';
+      } else {
+        editBtn.style.display = '';
+        const currentUrl = window.location.pathname + window.location.search;
+        editBtn.href = `/admin/assets/${assetId}/edit?return_url=${encodeURIComponent(currentUrl)}`;
+      }
+    }
+
+    const resetBtn = document.getElementById('previewResetStatsBtn');
+    const toggleStatusBtn = document.getElementById('previewToggleStatusBtn');
+    if (isManager) {
+      if (resetBtn) resetBtn.style.display = 'none';
+      if (toggleStatusBtn) toggleStatusBtn.style.display = 'none';
+    } else {
+      if (resetBtn) resetBtn.style.display = '';
+      if (toggleStatusBtn) toggleStatusBtn.style.display = '';
     }
 
     // Show modal immediately
@@ -418,7 +438,7 @@
     document.body.style.overflow = 'hidden';
 
     try {
-      const res = await fetch(`/admin/api/assets/${assetId}/preview`, {
+      const res = await fetch(`${apiPrefix}/api/assets/${assetId}/preview`, {
         headers: { 'Accept': 'application/json' }
       });
       if (!res.ok) {
@@ -443,7 +463,7 @@
     const subtext = `${data.category_name || 'Category'} · ${data.subcategory_name || 'Subcategory'}`;
     document.getElementById('previewAssetSubtitle').textContent = subtext;
 
-    // Thumbnail (Clean preview, bounding boxes only in MoreFields Frames tab)
+    // Thumbnail
     const thumbImg = document.getElementById('previewThumbnailImg');
     const thumbPlaceholder = document.getElementById('previewThumbnailPlaceholder');
     if (data.thumbnail_url && data.thumbnail_url.trim()) {
@@ -492,12 +512,14 @@
       }
     }
 
-    // More Fields Launcher summary
+    // More Fields summary & embedded rendering
     const blocks = data.more_fields_blocks || [];
     let totalFiles = 0;
     blocks.forEach(b => {
       if (b.items && Array.isArray(b.items)) {
         totalFiles += b.items.length;
+      } else if (b.coordinates && Array.isArray(b.coordinates)) {
+        totalFiles += b.coordinates.length;
       }
     });
 
@@ -507,8 +529,173 @@
     } else {
       const blockStr = `${blocks.length} block${blocks.length === 1 ? '' : 's'}`;
       const itemStr = totalFiles > 0 ? ` · ${totalFiles} file${totalFiles === 1 ? '' : 's'}` : '';
-      badgeEl.textContent = `${blockStr}${itemStr} — click to explore`;
+      badgeEl.textContent = `${blockStr}${itemStr} — click to explore in popup`;
     }
+
+    // Embed all more_fields blocks (and frames marked boxes) directly in preview modal body
+    renderEmbeddedMoreFields(document.getElementById('previewEmbeddedMoreFields'), blocks, data);
+  }
+
+  function getBlockIcon(type) {
+    if (type === 'frames' || (type && type.includes('frame'))) return '🖼️';
+    if (type && type.startsWith('image')) return '🖼️';
+    if (type && type.startsWith('video')) return '🎬';
+    if (type && type.startsWith('audio')) return '🎵';
+    if (type === 'string_list') return '🏷️';
+    if (type === 'json_data') return '{ }';
+    if (type && (type.includes('gif') || type.includes('animation'))) return '✨';
+    return '📄';
+  }
+
+  function renderMediaItemsList(container, block) {
+    if (block.items && block.items.length > 0) {
+      const scrollContainer = document.createElement('div');
+      scrollContainer.className = 'morefields-items-scroll';
+
+      block.items.forEach((fileItem, fileIdx) => {
+        const itemCard = document.createElement('div');
+        itemCard.className = 'morefields-scroll-item';
+
+        const isAudio = fileItem.is_audio || (block.type && block.type.startsWith('audio'));
+        const isVideo = fileItem.is_video || (block.type && block.type.startsWith('video'));
+        const isGif = fileItem.is_gif;
+        const isAnim = fileItem.is_animation;
+
+        let previewHtml = '';
+        if (isAudio) {
+          previewHtml = `
+            <div class="morefields-scroll-preview morefields-scroll-preview--audio">
+              <div class="morefields-audio-icon-wrap-lg">🎵</div>
+              <audio controls preload="none" class="morefields-audio-el-lg" src="${escapeHtml(fileItem.url)}"></audio>
+              <span class="morefields-type-pill pill-audio">AUDIO</span>
+            </div>
+          `;
+        } else if (isVideo) {
+          previewHtml = `
+            <div class="morefields-scroll-preview morefields-scroll-preview--video">
+              <video controls preload="metadata" playsinline class="morefields-video-el-lg" src="${escapeHtml(fileItem.url)}"></video>
+              <span class="morefields-type-pill pill-video">VIDEO</span>
+            </div>
+          `;
+        } else {
+          let pillClass = isGif ? 'pill-gif' : (isAnim ? 'pill-anim' : '');
+          let pillText = isGif ? 'GIF' : (isAnim ? 'ANIMATION' : '');
+          let pillHtml = pillText ? `<span class="morefields-type-pill ${pillClass}">${pillText}</span>` : '';
+          previewHtml = `
+            <div class="morefields-scroll-preview morefields-scroll-preview--image" onclick="window.open('${escapeHtml(fileItem.url)}', '_blank')">
+              ${pillHtml}
+              <img src="${escapeHtml(fileItem.url)}" alt="${escapeHtml(fileItem.filename)}" loading="lazy" class="morefields-scroll-img">
+              <a href="${escapeHtml(fileItem.url)}" target="_blank" rel="noopener noreferrer" class="morefields-scroll-overlay" title="Open Full Size" onclick="event.stopPropagation()">↗</a>
+            </div>
+          `;
+        }
+
+        let metaRows = '';
+        metaRows += `<div class="morefields-meta-row"><span class="morefields-meta-label">Filename</span><span class="morefields-meta-val" title="${escapeHtml(fileItem.filename)}">${escapeHtml(fileItem.filename)}</span></div>`;
+        if (fileItem.format) {
+          metaRows += `<div class="morefields-meta-row"><span class="morefields-meta-label">Format</span><span class="morefields-meta-val">${escapeHtml(String(fileItem.format).toUpperCase())}</span></div>`;
+        }
+        if (fileItem.filesize_formatted && fileItem.filesize_formatted !== '—') {
+          metaRows += `<div class="morefields-meta-row"><span class="morefields-meta-label">Size</span><span class="morefields-meta-val">${escapeHtml(fileItem.filesize_formatted)}</span></div>`;
+        }
+        if (fileItem.dimensions && !isAudio) {
+          metaRows += `<div class="morefields-meta-row"><span class="morefields-meta-label">Dimensions</span><span class="morefields-meta-val">${escapeHtml(fileItem.dimensions)}</span></div>`;
+        }
+        if (fileItem.duration_formatted && fileItem.duration_formatted !== '—') {
+          metaRows += `<div class="morefields-meta-row"><span class="morefields-meta-label">Duration</span><span class="morefields-meta-val">${escapeHtml(fileItem.duration_formatted)}</span></div>`;
+        }
+        if (fileItem.media_kind) {
+          metaRows += `<div class="morefields-meta-row"><span class="morefields-meta-label">Kind</span><span class="morefields-meta-val morefields-meta-kind">${escapeHtml(fileItem.media_kind.charAt(0).toUpperCase() + fileItem.media_kind.slice(1))}</span></div>`;
+        }
+
+        itemCard.innerHTML = `
+          ${previewHtml}
+          <div class="morefields-scroll-meta">
+            <div class="morefields-scroll-meta-header">
+              <span class="morefields-scroll-file-num">#${fileIdx + 1}</span>
+              <a href="${escapeHtml(fileItem.url)}" target="_blank" rel="noopener noreferrer" class="morefields-file-link">Open File ↗</a>
+            </div>
+            <div class="morefields-meta-table">
+              ${metaRows}
+            </div>
+          </div>
+        `;
+        scrollContainer.appendChild(itemCard);
+      });
+      container.appendChild(scrollContainer);
+    } else {
+      container.innerHTML = '<div class="morefields-block-empty">No files uploaded in this block.</div>';
+    }
+  }
+
+  function renderEmbeddedMoreFields(container, blocks, assetData) {
+    if (!container) return;
+    container.innerHTML = '';
+    if (!blocks || blocks.length === 0) return;
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'asset-preview-section-title';
+    titleEl.style.marginTop = '1.25rem';
+    titleEl.style.marginBottom = '0.75rem';
+    titleEl.textContent = `MORE FIELDS & MEDIA (${blocks.length} BLOCK${blocks.length === 1 ? '' : 'S'})`;
+    container.appendChild(titleEl);
+
+    blocks.forEach((block, idx) => {
+      const isFrames = block.type === 'frames' || (block.coordinates && Array.isArray(block.coordinates)) || (block.placeholders && Array.isArray(block.placeholders));
+      const icon = getBlockIcon(block.type);
+      const itemCount = isFrames
+        ? (block.coordinates ? block.coordinates.length : (block.placeholders ? block.placeholders.length : 0))
+        : ((block.items && Array.isArray(block.items)) ? block.items.length : 0);
+      const countUnit = isFrames ? 'slot' : 'file';
+
+      const blockCard = document.createElement('div');
+      blockCard.style.cssText = 'background:var(--md-sys-color-surface-container, #1e1e2e); border:1px solid var(--md-sys-color-outline-variant, #313244); border-radius:12px; padding:1rem; margin-bottom:1rem;';
+
+      const headerRow = document.createElement('div');
+      headerRow.style.cssText = 'display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;';
+      headerRow.innerHTML = `
+        <div style="font-weight:600; color:var(--md-sys-color-on-surface); font-size:0.95rem; display:flex; align-items:center; gap:0.5rem;">
+          <span>${icon}</span>
+          <span>${escapeHtml(block.label || block.key)}</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:0.4rem;">
+          <span class="morefields-type-badge">${escapeHtml(block.type)}</span>
+          ${itemCount > 0 ? `<span class="morefields-count-badge" style="font-size:0.72rem; padding:2px 6px;">${itemCount} ${countUnit}${itemCount === 1 ? '' : 's'}</span>` : ''}
+        </div>
+      `;
+      blockCard.appendChild(headerRow);
+
+      const bodyEl = document.createElement('div');
+      if (isFrames) {
+        renderFramesPreviewBlock(bodyEl, block, assetData);
+      } else if (['image_list', 'image_single', 'video_list', 'video_single', 'audio_list', 'audio_single'].includes(block.type) || (block.items && block.items.length > 0 && block.items[0].url)) {
+        renderMediaItemsList(bodyEl, block);
+      } else if (block.type === 'string_list') {
+        const tagBox = document.createElement('div');
+        tagBox.className = 'morefields-tags-list';
+        if (block.items && block.items.length > 0) {
+          block.items.forEach(item => {
+            const pill = document.createElement('span');
+            pill.className = 'morefields-tag-bubble';
+            pill.textContent = `# ${item}`;
+            tagBox.appendChild(pill);
+          });
+        } else {
+          tagBox.innerHTML = '<div class="morefields-block-empty">Empty list</div>';
+        }
+        bodyEl.appendChild(tagBox);
+      } else {
+        const pre = document.createElement('pre');
+        pre.className = 'morefields-code-view';
+        pre.textContent = typeof block.data !== 'undefined'
+          ? (typeof block.data === 'object' ? JSON.stringify(block.data, null, 2) : String(block.data))
+          : (typeof block.raw_data !== 'undefined' ? JSON.stringify(block.raw_data, null, 2) : '—');
+        bodyEl.appendChild(pre);
+      }
+
+      blockCard.appendChild(bodyEl);
+      container.appendChild(blockCard);
+    });
   }
 
   // Open Secondary More Fields Modal
@@ -559,18 +746,6 @@
       totalBadge.textContent = `${blocks.length} block${blocks.length === 1 ? '' : 's'}${totalFilesCount > 0 ? ` (${totalFilesCount} files/items)` : ''}`;
     }
 
-    // Determine icon for each block type
-    function getBlockIcon(type) {
-      if (type === 'frames' || (type && type.includes('frame'))) return '🖼️';
-      if (type && type.startsWith('image')) return '🖼️';
-      if (type && type.startsWith('video')) return '🎬';
-      if (type && type.startsWith('audio')) return '🎵';
-      if (type === 'string_list') return '🏷️';
-      if (type === 'json_data') return '{ }';
-      if (type && (type.includes('gif') || type.includes('animation'))) return '✨';
-      return '📄';
-    }
-
     // Build tabs and panels
     blocks.forEach((block, idx) => {
       const isFrames = block.type === 'frames' || (block.coordinates && Array.isArray(block.coordinates));
@@ -618,7 +793,6 @@
       panelBody.className = 'morefields-panel-body';
 
       if (block.type === 'string_list') {
-        // --- String List: tag bubbles ---
         const tagBox = document.createElement('div');
         tagBox.className = 'morefields-tags-list';
         if (block.items && block.items.length > 0) {
@@ -634,95 +808,12 @@
         panelBody.appendChild(tagBox);
 
       } else if (isFrames) {
-        // --- Frames block: template image with bounding boxes overlay & inspector ---
         renderFramesPreviewBlock(panelBody, block, currentPreviewData);
 
       } else if (['image_list', 'image_single', 'video_list', 'video_single', 'audio_list', 'audio_single'].includes(block.type) || (block.items && block.items.length > 0 && block.items[0].url)) {
-        // --- Media blocks: scrollable items with preview + metadata ---
-        if (block.items && block.items.length > 0) {
-          const scrollContainer = document.createElement('div');
-          scrollContainer.className = 'morefields-items-scroll';
-
-          block.items.forEach((fileItem, fileIdx) => {
-            const itemCard = document.createElement('div');
-            itemCard.className = 'morefields-scroll-item';
-
-            const isAudio = fileItem.is_audio || block.type.startsWith('audio');
-            const isVideo = fileItem.is_video || block.type.startsWith('video');
-            const isGif = fileItem.is_gif;
-            const isAnim = fileItem.is_animation;
-
-            // --- Left: Media Preview ---
-            let previewHtml = '';
-            if (isAudio) {
-              previewHtml = `
-                <div class="morefields-scroll-preview morefields-scroll-preview--audio">
-                  <div class="morefields-audio-icon-wrap-lg">🎵</div>
-                  <audio controls preload="none" class="morefields-audio-el-lg" src="${escapeHtml(fileItem.url)}"></audio>
-                  <span class="morefields-type-pill pill-audio">AUDIO</span>
-                </div>
-              `;
-            } else if (isVideo) {
-              previewHtml = `
-                <div class="morefields-scroll-preview morefields-scroll-preview--video">
-                  <video controls preload="metadata" playsinline class="morefields-video-el-lg" src="${escapeHtml(fileItem.url)}"></video>
-                  <span class="morefields-type-pill pill-video">VIDEO</span>
-                </div>
-              `;
-            } else {
-              // Image / GIF / Animation
-              let pillClass = isGif ? 'pill-gif' : (isAnim ? 'pill-anim' : '');
-              let pillText = isGif ? 'GIF' : (isAnim ? 'ANIMATION' : '');
-              let pillHtml = pillText ? `<span class="morefields-type-pill ${pillClass}">${pillText}</span>` : '';
-              previewHtml = `
-                <div class="morefields-scroll-preview morefields-scroll-preview--image" onclick="window.open('${escapeHtml(fileItem.url)}', '_blank')">
-                  ${pillHtml}
-                  <img src="${escapeHtml(fileItem.url)}" alt="${escapeHtml(fileItem.filename)}" loading="lazy" class="morefields-scroll-img">
-                  <a href="${escapeHtml(fileItem.url)}" target="_blank" rel="noopener noreferrer" class="morefields-scroll-overlay" title="Open Full Size" onclick="event.stopPropagation()">↗</a>
-                </div>
-              `;
-            }
-
-            // --- Right: Metadata ---
-            let metaRows = '';
-            metaRows += `<div class="morefields-meta-row"><span class="morefields-meta-label">Filename</span><span class="morefields-meta-val" title="${escapeHtml(fileItem.filename)}">${escapeHtml(fileItem.filename)}</span></div>`;
-            if (fileItem.format) {
-              metaRows += `<div class="morefields-meta-row"><span class="morefields-meta-label">Format</span><span class="morefields-meta-val">${escapeHtml(String(fileItem.format).toUpperCase())}</span></div>`;
-            }
-            if (fileItem.filesize_formatted && fileItem.filesize_formatted !== '—') {
-              metaRows += `<div class="morefields-meta-row"><span class="morefields-meta-label">Size</span><span class="morefields-meta-val">${escapeHtml(fileItem.filesize_formatted)}</span></div>`;
-            }
-            if (fileItem.dimensions && !isAudio) {
-              metaRows += `<div class="morefields-meta-row"><span class="morefields-meta-label">Dimensions</span><span class="morefields-meta-val">${escapeHtml(fileItem.dimensions)}</span></div>`;
-            }
-            if (fileItem.duration_formatted && fileItem.duration_formatted !== '—') {
-              metaRows += `<div class="morefields-meta-row"><span class="morefields-meta-label">Duration</span><span class="morefields-meta-val">${escapeHtml(fileItem.duration_formatted)}</span></div>`;
-            }
-            if (fileItem.media_kind) {
-              metaRows += `<div class="morefields-meta-row"><span class="morefields-meta-label">Kind</span><span class="morefields-meta-val morefields-meta-kind">${escapeHtml(fileItem.media_kind.charAt(0).toUpperCase() + fileItem.media_kind.slice(1))}</span></div>`;
-            }
-
-            itemCard.innerHTML = `
-              ${previewHtml}
-              <div class="morefields-scroll-meta">
-                <div class="morefields-scroll-meta-header">
-                  <span class="morefields-scroll-file-num">#${fileIdx + 1}</span>
-                  <a href="${escapeHtml(fileItem.url)}" target="_blank" rel="noopener noreferrer" class="morefields-file-link">Open File ↗</a>
-                </div>
-                <div class="morefields-meta-table">
-                  ${metaRows}
-                </div>
-              </div>
-            `;
-            scrollContainer.appendChild(itemCard);
-          });
-          panelBody.appendChild(scrollContainer);
-        } else {
-          panelBody.innerHTML = '<div class="morefields-block-empty">No files uploaded in this block.</div>';
-        }
+        renderMediaItemsList(panelBody, block);
 
       } else {
-        // --- Generic / JSON data ---
         const pre = document.createElement('pre');
         pre.className = 'morefields-code-view';
         pre.textContent = typeof block.data !== 'undefined'
@@ -753,7 +844,7 @@
         ${block.width && block.height ? `<span class="morefields-frames-dims">Template Size: ${block.width} × ${block.height} px</span>` : ''}
       </div>
       <div class="morefields-frames-actions">
-        ${assetData && assetData.id ? `
+        ${!window.location.pathname.startsWith('/manager') && assetData && assetData.id ? `
           <a href="${editorUrl}" class="btn btn-primary" style="font-size:0.78rem; padding:4px 10px; display:inline-flex; align-items:center; gap:4px; text-decoration:none;">
             <span>Interactive Editor 🖼️</span>
           </a>
@@ -960,7 +1051,8 @@
     if (btn) btn.disabled = true;
 
     try {
-      const res = await fetch(`/admin/api/assets/${currentPreviewAssetId}/preview`);
+      const apiPrefix = window.location.pathname.startsWith('/manager') ? '/manager' : '/admin';
+      const res = await fetch(`${apiPrefix}/api/assets/${currentPreviewAssetId}/preview`);
       if (!res.ok) throw new Error('Failed to refresh stats');
       const data = await res.json();
       currentPreviewData = data;
@@ -1093,7 +1185,12 @@
       moreModal.style.display = 'none';
     }
     const modal = document.getElementById('assetPreviewModal');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+      modal.querySelectorAll('audio, video').forEach(el => {
+        try { el.pause(); } catch(e) {}
+      });
+      modal.style.display = 'none';
+    }
     document.body.style.overflow = '';
     currentPreviewAssetId = null;
     currentPreviewData = null;
