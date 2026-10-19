@@ -290,7 +290,7 @@
                   <div style="margin-top:0.75rem; padding:0.85rem; border-radius:8px; background:var(--md-sys-color-surface); border:1px solid var(--md-sys-color-outline-variant); color:var(--md-sys-color-on-surface);">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
                       <span style="font-weight:700; font-size:0.8rem; text-transform:uppercase; color:var(--md-sys-color-primary);">
-                        📦 Proposed {{ msg.payload_type|capitalize }}
+                        📦 Proposed {{ msg.payload_type|replace('_', ' ')|title }}
                       </span>
                       {% if msg.status == 'applied' %}
                         <span class="badge badge-success" style="font-size:0.75rem;">✓ Applied to Central Data</span>

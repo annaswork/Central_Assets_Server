@@ -14,6 +14,7 @@ from controller.asset_controller import create_asset
 from controller.base_controller import serialize_mongo_doc, serialize_mongo_docs
 from controller.category_controller import create_category
 from controller.subcategory_controller import create_subcategory
+from controller.super_category_controller import create_super_category
 from database.collections import (
     ADMIN_USERS,
     API_KEYS,
@@ -31,6 +32,7 @@ from database.models.app_instance import AppInstanceCreate
 from database.models.asset import AssetCreate
 from database.models.category import CategoryCreate
 from database.models.subcategory import SubcategoryCreate
+from database.models.super_category import SuperCategoryCreate
 from utils.datetimes import utc_now
 from utils.errors import ConflictError, NotFoundError, UnauthorizedError, ValidationError
 from utils.ids import to_object_id
@@ -575,7 +577,20 @@ async def apply_message_proposal_to_central(
 
     created_record = None
 
-    if payload_type == "category":
+    if payload_type == "super_category":
+        name = data_payload.get("name")
+        if not name or not str(name).strip():
+            raise ValidationError("Proposed super category requires a valid name.")
+        created_record = await create_super_category(
+            db,
+            SuperCategoryCreate(
+                name=str(name).strip(),
+                thumbnail_url=data_payload.get("thumbnail_url"),
+                image_url=data_payload.get("image_url"),
+            ),
+        )
+
+    elif payload_type == "category":
         name = data_payload.get("name")
         if not name or not str(name).strip():
             raise ValidationError("Proposed category requires a valid name.")
