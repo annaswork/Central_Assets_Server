@@ -22,6 +22,7 @@ from controller.admin_manager_controller import (
 )
 from controller.category_controller import list_categories
 from controller.subcategory_controller import list_subcategories
+from controller.super_category_controller import list_super_categories
 from router.deps import get_db
 from utils.datetimes import format_datetime_display
 from utils.errors import NotFoundError, ValidationError
@@ -271,6 +272,7 @@ async def admin_thread_detail(
             "messages": messages,
             "categories": categories_res.get("items", []),
             "subcategories": subcategories_res.get("items", []),
+            "super_categories": await list_super_categories(db),
             "active_tab": "messages",
         },
     )
@@ -312,6 +314,7 @@ async def admin_apply_proposal(
     manager_id: str = Form(...),
     category_id: str | None = Form(default=None),
     sub_category_id: str | None = Form(default=None),
+    super_category_id: str | None = Form(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     """Approve and apply a manager's structured proposal into central data."""
@@ -325,6 +328,7 @@ async def admin_apply_proposal(
             message_id=message_id,
             category_id=category_id,
             sub_category_id=sub_category_id,
+            super_category_id=super_category_id,
         )
         return RedirectResponse(
             url=f"/admin/messages/{manager_id}?msg=Proposal+successfully+applied+to+central+data",

@@ -17,6 +17,7 @@ from controller.manager_controller import (
 )
 from controller.media_controller import handle_upload
 from controller.subcategory_controller import list_subcategories
+from controller.super_category_controller import list_super_categories
 from router.deps import get_db
 from utils.datetimes import format_datetime_display
 from utils.errors import ValidationError
@@ -59,6 +60,7 @@ async def manager_messages_view(
             "messages": messages,
             "categories": categories_res.get("items", []),
             "subcategories": subcategories_res.get("items", []),
+            "super_categories": await list_super_categories(db),
             "active_tab": active_tab,
             "auto_open_proposal": is_proposing,
         },

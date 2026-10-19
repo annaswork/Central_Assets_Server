@@ -302,6 +302,9 @@
                     <div style="font-size:0.85rem; margin-bottom:0.35rem;">
                       <strong>Proposed Name:</strong> {{ msg.data_payload.name }}
                     </div>
+                    {% if msg.data_payload.super_category_name %}
+                      <div style="font-size:0.85rem; margin-bottom:0.35rem;"><strong>Proposed Super Category:</strong> ⭐ {{ msg.data_payload.super_category_name }}</div>
+                    {% endif %}
 
                     <!-- Media Information & Preview -->
                     {% if msg.data_payload.thumbnail_url or msg.data_payload.media_url %}
@@ -385,8 +388,16 @@
                       {% else %}
                         <!-- Category Proposal -->
                         <div style="margin-top:0.75rem; padding-top:0.5rem; border-top:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:flex-end;">
-                          <form method="POST" action="/admin/messages/{{ msg.id }}/apply-proposal" onsubmit="return confirm('Apply this proposal into central library data?');">
+                          <form method="POST" action="/admin/messages/{{ msg.id }}/apply-proposal" onsubmit="return confirm('Apply this proposal into central library data?');" style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
                             <input type="hidden" name="manager_id" value="{{ current_thread.id }}">
+                            {% if msg.payload_type == 'category' and super_categories %}
+                              <select name="super_category_id" class="select" title="Super Category" style="width:auto; font-size:0.82rem; padding:0.35rem 0.5rem; min-height:32px;">
+                                <option value="">— No super category —</option>
+                                {% for sc in super_categories %}
+                                  <option value="{{ sc.id }}" {% if msg.data_payload.super_category_id == sc.id %}selected{% endif %}>⭐ {{ sc.name }}</option>
+                                {% endfor %}
+                              </select>
+                            {% endif %}
                             <button type="submit" class="btn btn-primary btn-sm" style="display:inline-flex; align-items:center; gap:0.35rem;">
                               <span>✨</span>
                               <span>Apply to Central Data</span>

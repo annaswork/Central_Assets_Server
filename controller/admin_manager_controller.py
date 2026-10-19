@@ -562,8 +562,12 @@ async def apply_message_proposal_to_central(
     message_id: str,
     category_id: str | None = None,
     sub_category_id: str | None = None,
+    super_category_id: str | None = None,
 ) -> dict[str, Any]:
-    """Review and apply a manager's structured proposal payload into central library data."""
+    """Review and apply a manager's structured proposal payload into central library data.
+
+    For a category, `super_category_id` is the admin's choice ('' = none); None keeps the proposed one.
+    """
     msg_oid = to_object_id(message_id)
     msg = await db[MESSAGES].find_one({"_id": msg_oid})
     if not msg:
@@ -594,10 +598,12 @@ async def apply_message_proposal_to_central(
         name = data_payload.get("name")
         if not name or not str(name).strip():
             raise ValidationError("Proposed category requires a valid name.")
+        sup_id = data_payload.get("super_category_id") if super_category_id is None else super_category_id
         cat_create = CategoryCreate(
             name=str(name).strip(),
             thumbnail_url=data_payload.get("thumbnail_url"),
             image_url=data_payload.get("image_url"),
+            super_category_id=sup_id or None,
         )
         created_record = await create_category(db, cat_create)
 
@@ -714,6 +720,8 @@ async def apply_message_proposal_to_central(
         update_doc["data_payload.sub_category_id"] = str(sub_id)
     elif payload_type == "subcategory":
         update_doc["data_payload.category_id"] = str(cat_id)
+    elif payload_type == "category":
+        update_doc["data_payload.super_category_id"] = sup_id or None
 
     await db[MESSAGES].update_one(
         {"_id": msg_oid},

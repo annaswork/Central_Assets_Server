@@ -75,6 +75,9 @@
                 <div style="font-size:0.85rem;">
                   <strong>Name:</strong> {{ msg.data_payload.name }}
                 </div>
+                {% if msg.data_payload.super_category_name %}
+                  <div style="font-size:0.85rem;"><strong>Super Category:</strong> ⭐ {{ msg.data_payload.super_category_name }}</div>
+                {% endif %}
                 {% if msg.data_payload.thumbnail_url or msg.data_payload.media_url %}
                   <div style="font-size:0.8rem; color:var(--md-sys-color-outline); margin-top:0.35rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
                     {% if msg.data_payload.thumbnail_url %}
@@ -151,6 +154,17 @@
       <div class="form-group" style="margin-bottom:1rem;">
         <label class="form-label" for="propName">Proposed Item Name *</label>
         <input type="text" id="propName" class="input" required placeholder="e.g. Vintage Neon Frames">
+      </div>
+
+      <!-- Optional super category: shown for a Category proposal -->
+      <div id="propSuperGroup" class="form-group" style="margin-bottom:1rem;">
+        <label class="form-label" for="propSuperCat">Super Category <span style="font-size:0.8rem; color:var(--md-sys-color-outline);">(optional)</span></label>
+        <select id="propSuperCat" class="select">
+          <option value="">— None —</option>
+          {% for sc in super_categories %}
+            <option value="{{ sc.id }}">{{ sc.name }}</option>
+          {% endfor %}
+        </select>
       </div>
 
       <!-- Category picker for subcategory proposal or asset proposal -->
@@ -261,6 +275,7 @@
     const subcatGroup = document.getElementById('propSubcatGroup');
     const thumbGroup = document.getElementById('propThumbGroup');
     const mediaGroup = document.getElementById('propMediaFileGroup');
+    document.getElementById('propSuperGroup').style.display = type === 'category' ? 'block' : 'none';
 
     if (type === 'subcategory') {
       subGroup.style.display = 'block';
@@ -372,6 +387,11 @@
 
     if (type !== 'asset') {
       payload.thumbnail_url = thumb || null;
+    }
+    const superSel = document.getElementById('propSuperCat');
+    if (type === 'category' && superSel.value) {
+      payload.super_category_id = superSel.value;
+      payload.super_category_name = superSel.options[superSel.selectedIndex].text;
     }
 
     document.getElementById('dataPayloadJson').value = JSON.stringify(payload);
