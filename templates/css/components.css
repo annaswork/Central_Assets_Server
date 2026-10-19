@@ -240,7 +240,7 @@ input[type="button"].btn {
 
 /* Instance sub-folder grids: only the first 4 until "Show More" */
 .subs-collapsed > :nth-child(n+5) {
-  display: none;
+  display: none !important; /* beats the cards' inline display:flex */
 }
 
 .grid-2 {

@@ -154,10 +154,10 @@
             {% endfor %}
 
             {% if matching_subs|length > 0 %}
-              <div class="subcategories-grid{% if matching_subs|length > 4 %} subs-collapsed{% endif %}" data-parent-cat-id="{{ cat.id }}" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:0.75rem;">
+              <div class="subcategories-grid{% if matching_subs|length > 4 %} subs-collapsed{% endif %}" data-parent-cat-id="{{ cat.id }}" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:0.75rem;">
                 {% for sub in matching_subs %}
-                  <div class="card manager-sub-card" data-sub-id="{{ sub.id }}" draggable="true" style="padding:0.75rem 1rem; background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant); display:flex; flex-direction:row; justify-content:space-between; align-items:center; gap:0.5rem; cursor:grab;">
-                    <div style="display:flex; align-items:center; gap:0.65rem; min-width:0;">
+                  <div class="card manager-sub-card" data-sub-id="{{ sub.id }}" draggable="true" style="padding:0.75rem 1rem; background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant); display:flex; flex-direction:row; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:0.5rem; cursor:grab;">
+                    <div style="display:flex; align-items:center; gap:0.65rem; flex:1 1 auto; min-width:0;">
                       <span class="sub-drag-handle" style="cursor:grab; font-size:1.15rem; color:var(--md-sys-color-on-surface-variant); padding:0 2px; user-select:none;" title="Drag to reorder sub-folder">⠿</span>
                       <div style="width:36px; height:36px; border-radius:6px; overflow:hidden; background:var(--md-sys-color-surface); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
                         {% if sub.thumbnail_url %}
@@ -166,9 +166,9 @@
                           <span style="font-size:1.15rem;">📂</span>
                         {% endif %}
                       </div>
-                      <div>
+                      <div style="min-width:0;">
                         <div style="display:flex; align-items:center; gap:0.35rem;">
-                          <strong style="font-size:0.9rem;">{{ sub.name }}</strong>
+                          <strong style="font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{{ sub.name }}">{{ sub.name }}</strong>
                           <span class="badge badge-secondary sub-seq-badge" style="font-size:0.7rem;">#{{ loop.index }}</span>
                         </div>
                         <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">
@@ -177,7 +177,7 @@
                       </div>
                     </div>
 
-                    <div style="display:flex; align-items:center; gap:0.35rem; flex-shrink:0;">
+                    <div style="display:flex; align-items:center; gap:0.35rem; flex-shrink:0; margin-left:auto;">
                       <a href="/manager/instances/{{ instance.id }}/picker?target_category_id={{ cat.sourceId or cat.id }}&target_sub_category_id={{ sub.sourceId or sub.id }}&tab=assets" class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;" title="Import into Sub-folder">
                         📥 Import
                       </a>
