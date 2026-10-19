@@ -57,6 +57,16 @@
       </div>
     </div>
 
+    {% if not asset %}
+    <div class="form-group">
+      <label class="label" for="namesList">Text Assets <span
+          style="font-size:0.8rem; font-weight:normal; color:var(--md-sys-color-on-surface-variant);">(optional, one name
+          per line; creates an empty asset for each, uploads are ignored)</span></label>
+      <textarea id="namesList" name="names_list" class="textarea" rows="3"
+        placeholder="Sunset&#10;Ocean Breeze&#10;Forest"></textarea>
+    </div>
+    {% endif %}
+
     <div class="form-group">
       <label class="label" for="assetDescription">Description</label>
       <textarea id="assetDescription" name="description" class="textarea" rows="2"
@@ -2896,6 +2906,14 @@
       return;
     }
 
+    // Text assets: server creates one name-only asset per line, no uploads needed
+    const namesList = document.getElementById('namesList');
+    if (namesList && namesList.value.trim()) {
+      isSubmitting = true;
+      form.submit();
+      return;
+    }
+
     if (!isNameAvailable) {
       alert('The chosen asset name is already used in the database. Please rename the asset before saving.');
       const nameInput = document.getElementById('assetName');
@@ -2906,10 +2924,10 @@
       return;
     }
 
-    // Guard: asset must contain at least one payload item in moreFields
+    // Guard: an empty asset (no payload items) needs a name, since there is no file to name it after
     const totalAvailable = countAvailableMoreFieldsData();
-    if (totalAvailable === 0) {
-      alert('Cannot save asset: An asset must contain at least one payload item in more fields.');
+    if (totalAvailable === 0 && !document.getElementById('assetName').value.trim()) {
+      alert('Cannot save asset: Enter an asset name or add at least one payload item.');
       return;
     }
 

@@ -12,6 +12,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from authorization.admin_session import get_current_admin_session
 from config.paths import TEMPLATES_DIR
 from controller.asset_controller import (
+    bulk_create_assets,
     check_asset_name_availability,
     create_asset,
     delete_asset,
@@ -30,6 +31,7 @@ from router.deps import get_db
 from utils.datetimes import format_datetime_display
 from utils.errors import ConflictError
 from utils.ids import to_object_id
+from utils.csv_utils import parse_lines_list
 from utils.responses import append_query_params, safe_redirect_url
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -457,12 +459,25 @@ async def admin_save_asset(
     sub_category_id: str = Form(...),
     thumbnail_url: str | None = Form(default=None),
     more_fields_json: str | None = Form(default=None),
+    names_list: str | None = Form(default=None),
     return_url: str | None = Form(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
     if not session:
         return RedirectResponse(url="/admin/login", status_code=303)
+
+    # Text assets: one empty (name-only) asset per line; duplicates in the subcategory are skipped
+    names = parse_lines_list(names_list or "") if not id else []
+    if names:
+        await bulk_create_assets(
+            db,
+            [
+                AssetCreate(name=n, description=description, category_id=category_id, sub_category_id=sub_category_id)
+                for n in names
+            ],
+        )
+        return RedirectResponse(url=safe_redirect_url(return_url, "/admin/assets"), status_code=303)
 
     more_fields: dict[str, Any] = {}
     if more_fields_json and more_fields_json.strip():
