@@ -168,6 +168,8 @@ Only enabled items (`is_enabled: true`) are returned. Ideal for initial app boot
 
 > **Super Categories:** `super_categories` lists the enabled super categories, each with the ordered `categoryIds` it groups. Every category carries `superCategoryId` (`null` when ungrouped). The nested `categories` tree is unchanged, so clients that don't use super categories can ignore both fields.
 
+> **Grouped sections:** to show each super category as one block, render `super_categories[]` with the categories named in its `categoryIds` (in order), then the categories with `superCategoryId: null`. Everything comes from this one response. The category `id` here is the same ID that Managers see on each category card in the admin panel.
+
 #### cURL Example
 ```bash
 curl -X GET "https://assets.yourcompany.com/api/v1/instance/6650a3f1c2e4b80012abcdef/catalog" \

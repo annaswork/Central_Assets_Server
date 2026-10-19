@@ -41,6 +41,7 @@ Instance Super Cat. ┄► Instance Category ─────► Instance Subcate
   - Manage multiple client apps (iOS, Android, Web) independently.
   - Reference central categories/subcategories/assets or clone entire trees.
   - Drag-and-drop sequencing and monetization gating (`is_premium`).
+  - Content page groups each super category's categories into one collapsible block. Sub-folder lists show 4 at a time ("Show More"), and every category shows the instance `id` that client apps receive.
   - Sparse field overrides with one-click reset to central defaults.
 - **High-Performance Analytics**:
   - Non-blocking async queueing for client tracking events (`view`, `download`).

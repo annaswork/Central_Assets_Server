@@ -3,7 +3,7 @@
 > **Single Source of Truth** for the Creative Asset Library & App Instance Management Platform.  
 > **Purpose:** This document provides an exhaustive, authoritative reference for the architecture, data models, business logic, endpoints, asset processing pipelines, and chronological changelog of the entire codebase. Future modifications should reference this file directly without needing to re-analyze the entire codebase.
 >
-> **Last Updated:** October 16, 2026 (Super Categories)
+> **Last Updated:** October 19, 2026 (Instance content page: speed, layout, super-category blocks)
 
 ---
 
@@ -642,6 +642,22 @@ Requires `manager_session` cookie.
   - Admin sessions and unbound keys behave as before.
   - `tests/test_api_key_isolation.py` exercises this over HTTP through the real middleware. Mutation-checked: removing a guard fails it.
 - **Still open:** app-bound keys with `assets:write` / `categories:write` can still write the *central* library (`/api/v1/assets`, `/categories`, `/subcategories`, `/reorder`, `/media/*`).
+
+### Update 21: App Instance Content Page — Speed, Layout & Super-Category Blocks (Admin & Manager)
+- **Speed:** `instance_workspace_controller.py` no longer runs per-folder `count_documents` loops.
+  - `_group_counts` does one `$group` aggregation per (collection, field). It is used for the content page's folder badge fallback counts and for `picker_categories` / `picker_subcategories`. The manager content page calls both on every load; their per-subcategory `ASSETS.sub_category_id` counts were unindexed collection scans.
+  - Server-rendered thumbnails use `loading="lazy"`.
+- **Layout:**
+  - `.card` is `flex-direction: column`, so cards that need a row must set `flex-direction:row` inline (sub-folder cards do).
+  - Sub-folder grids use `repeat(auto-fill, minmax(260px, 1fr))`. Cards wrap their actions when tight, and long names end in an ellipsis.
+  - More than 4 sub-folders: class `.subs-collapsed` hides `:nth-child(n+5)` (`!important`, to beat the cards' inline `display:flex`), and a "Show More (N)" button toggles it.
+  - Each category shows its instance `id` (what client apps receive as `categories[].id`).
+  - `.badge-primary` / `.badge-secondary` are now defined in `components.css`; they were used but unstyled.
+- **Super-category blocks:** a super category holding 2+ of the shown categories renders as one collapsible `<details>` block. It is open when filtering by `folder_super`.
+  - `build_instance_content` reorders `categories` so each super category's members sit together at its first member's position (a stable sort, keeping their sequence order).
+  - The template opens and closes the block using `loop.previtem` / `loop.nextitem`.
+  - Drag-reorder is unchanged: it saves the DOM order of all category cards. Dragging a card out of its block does not change its super category; use the ⭐ selector for that.
+- **Client API:** no endpoint changes. The docs now explain grouping by `superCategoryId` / `categoryIds`.
 
 ---
 

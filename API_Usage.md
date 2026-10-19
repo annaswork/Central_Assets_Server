@@ -209,6 +209,8 @@ GET /api/v1/instance/{instanceId}/catalog
 
 > **⭐ Super Categories (optional 4th level):** `super_categories` lists the optional top level (Super Category → Category → Subcategory → Asset), each with the ordered `categoryIds` it groups. Every category carries `superCategoryId` (`null` when ungrouped). The nested `categories` tree is unchanged, so clients that ignore these fields keep working.
 
+> **🧩 Rendering grouped sections:** to show a super category as one section (as the admin panel does), render each entry of `super_categories` with the categories listed in its `categoryIds`, in that order. Then render the categories whose `superCategoryId` is `null`. No extra request is needed. Outside `/catalog`, call `/super-categories`, then `/categories?superCategoryId={id}` per section.
+
 ---
 
 ### 4.1a List Super Categories
