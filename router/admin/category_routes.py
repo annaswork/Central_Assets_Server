@@ -207,6 +207,7 @@ async def admin_create_category(
 async def admin_bulk_categories_page(
     request: Request,
     return_url: str | None = Query(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
     if not session:
@@ -215,7 +216,13 @@ async def admin_bulk_categories_page(
     return templates.TemplateResponse(
         request=request,
         name="categories/bulk.html",
-        context={"session": session, "results": None, "active_tab": "categories", "return_url": safe_return},
+        context={
+            "session": session,
+            "results": None,
+            "active_tab": "categories",
+            "return_url": safe_return,
+            "super_categories": await list_super_categories(db),
+        },
     )
 
 
@@ -226,6 +233,7 @@ async def admin_bulk_categories_submit(
     thumb_option: str | None = Form(default="custom"),
     thumbnail_file: UploadFile | None = File(default=None),
     thumbnail_url: str | None = Form(default=None),
+    super_category_id: str | None = Form(default=None),
     return_url: str | None = Form(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
@@ -253,7 +261,9 @@ async def admin_bulk_categories_submit(
     # Plain text lines
     if names_list and names_list.strip():
         for name in parse_lines_list(names_list):
-            items.append(CategoryCreate(name=name, thumbnail_url=final_thumb_url))
+            items.append(
+                CategoryCreate(name=name, thumbnail_url=final_thumb_url, super_category_id=super_category_id or None)
+            )
 
     if items:
         await bulk_create_categories(db, items=items)

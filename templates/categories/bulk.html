@@ -109,6 +109,19 @@
         <input type="hidden" id="thumbnail_url" name="thumbnail_url" value="">
       </div>
 
+      <div class="form-group" style="margin-bottom:1.25rem;">
+        <label class="form-label" for="super_category_id">Super Category</label>
+        <select id="super_category_id" name="super_category_id" class="select" style="width:100%;">
+          <option value="">— None (ungrouped) —</option>
+          {% for sc in super_categories or [] %}
+          <option value="{{ sc.id }}">{{ sc.name }}</option>
+          {% endfor %}
+        </select>
+        <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.3rem;">
+          Optional top-level group applied to every category in this list.
+        </div>
+      </div>
+
       <div class="form-group">
         <label class="form-label" for="names_list">Paste-a-List (one category name per line)</label>
         <textarea id="names_list" name="names_list" class="textarea" placeholder="Frames&#10;Stickers&#10;Backgrounds&#10;Music"></textarea>
