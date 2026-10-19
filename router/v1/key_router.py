@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from authorization.instance_guard import require_unbound_key
 from authorization.scopes import require_scope
 from controller.authorization_controller import (
     activate_key,
@@ -17,7 +18,7 @@ from controller.authorization_controller import (
 from database.models.api_key import ApiKeyCreate, ApiKeyOut
 from router.deps import get_db
 
-router = APIRouter(prefix="/keys", tags=["API Key Management"])
+router = APIRouter(prefix="/keys", tags=["API Key Management"], dependencies=[Depends(require_unbound_key)])
 
 
 @router.get("", dependencies=[Depends(require_scope("keys:manage"))])

@@ -1,0 +1,95 @@
+{# Super Categories strip for an app instance content page (Admin & Manager).
+   Needs: portal_base ('/admin' or '/manager'), instance, super_categories, available_super_categories,
+   folder_super, all_categories. #}
+{% set content_url = portal_base ~ '/instances/' ~ instance.id ~ '/content?tab=folders&active_section=folders' %}
+<div class="card" style="padding:1rem 1.25rem; margin-bottom:1.5rem; border:1px solid var(--md-sys-color-outline-variant);">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; margin-bottom:0.85rem;">
+    <div>
+      <h3 style="margin:0; font-size:1.05rem;">⭐ Super Categories ({{ super_categories|length }})</h3>
+      <p style="margin:0.15rem 0 0 0; font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
+        Optional top level that groups this app's categories. Click one to show only its categories.
+      </p>
+    </div>
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+      <a href="{{ portal_base }}/instances/{{ instance.id }}/picker?tab=supercategories" class="btn btn-outlined" style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;">📥 Import Super Category</a>
+      <button type="button" class="btn btn-outlined" style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;" onclick="openCreateFolderModal('supercategory')">+ New Super Category</button>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+    <a href="{{ content_url }}" class="badge {{ 'badge-primary' if not folder_super else 'badge-secondary' }}" style="text-decoration:none; padding:0.4rem 0.75rem;">All ({{ all_categories|length }})</a>
+    <a href="{{ content_url }}&folder_super=none" class="badge {{ 'badge-primary' if folder_super == 'none' else 'badge-secondary' }}" style="text-decoration:none; padding:0.4rem 0.75rem;">Ungrouped ({{ all_categories|selectattr('super_category_name', 'none')|list|length }})</a>
+  </div>
+
+  {% if not super_categories %}
+  <div style="margin-top:0.85rem; font-size:0.85rem; color:var(--md-sys-color-on-surface-variant);">
+    {% if available_super_categories %}
+    No super categories in this app yet. Pick one from the <strong>⭐ selector on any category card</strong> to put that category in it,
+    or import one with all its categories.
+    {% else %}
+    No super categories yet. Create one here, or ask an admin to add central Super Categories.
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if super_categories %}
+  <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:0.75rem; margin-top:0.85rem;">
+    {% for sc in super_categories %}
+    <div class="card" style="padding:0.75rem; background:var(--md-sys-color-surface-container-low); border:1px solid {{ 'var(--md-sys-color-primary)' if folder_super == sc.id else 'var(--md-sys-color-outline-variant)' }};">
+      <a href="{{ content_url }}&folder_super={{ sc.id }}" style="display:flex; align-items:center; gap:0.6rem; color:inherit; text-decoration:none;">
+        <div style="width:38px; height:38px; border-radius:var(--radius-sm); overflow:hidden; background:var(--md-sys-color-surface); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+          {% if sc.thumbnail_url or sc.image_url %}
+          <img src="{{ sc.thumbnail_url or sc.image_url }}" alt="{{ sc.name }}" style="width:100%; height:100%; object-fit:cover;">
+          {% else %}<span style="font-size:1.1rem;">⭐</span>{% endif %}
+        </div>
+        <div style="min-width:0;">
+          <strong style="font-size:0.9rem;">{{ sc.name }}</strong>
+          {% if sc.is_enabled == False %}<span class="badge badge-secondary" style="font-size:0.65rem;">Disabled</span>{% endif %}
+          <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">📁 {{ sc.categories_count }} Categories</div>
+        </div>
+      </a>
+      <div style="display:flex; gap:0.35rem; flex-wrap:wrap; margin-top:0.6rem;">
+        <a href="{{ portal_base }}/instances/{{ instance.id }}/picker?target_super_category_id={{ sc.id }}&tab=categories" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.72rem;">📥 Import Categories</a>
+        <button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.72rem;" onclick="openCreateFolderModal('category', '', '{{ sc.id }}')">+ Category</button>
+        <button type="button" class="btn btn-destructive" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.72rem;" data-name="{{ sc.name }}" onclick="detachSuperCategory('{{ sc.id }}', this.dataset.name, {{ sc.categories_count }})">Detach</button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+<script>
+  function setCardDraggable(el, on) {
+    const card = el.closest('.folder-card, .manager-cat-card');
+    if (card) card.setAttribute('draggable', on ? 'true' : 'false');
+  }
+
+  async function moveCategoryToSuper(catId, superId) {
+    try {
+      const res = await fetch(`{{ portal_base }}/instances/{{ instance.id }}/categories/${catId}/super`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ super_category_id: superId || null })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Failed to move category');
+      window.location.reload();
+    } catch (err) {
+      alert('Error moving category: ' + err.message);
+    }
+  }
+
+  async function detachSuperCategory(superId, name, categoryCount) {
+    if (!confirm(`Detach super category "${name}" from this app instance?\n\nIts ${categoryCount} categor${categoryCount === 1 ? 'y' : 'ies'} and all their sub-folders and assets are detached too. Central data remains untouched.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`{{ portal_base }}/instances/{{ instance.id }}/super-categories/${superId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to detach super category');
+      window.location.reload();
+    } catch (err) {
+      alert('Error detaching super category: ' + err.message);
+    }
+  }
+</script>

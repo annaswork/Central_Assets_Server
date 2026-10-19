@@ -1,12 +1,15 @@
 {% extends "base.html" %}
+{# Shared by Categories and Super Categories: pass entity_label / base_path to reuse. #}
+{% set entity_label = entity_label | default('Category') %}
+{% set base_path = base_path | default('/admin/categories') %}
 
-{% block title %}{% if category %}Edit Category{% else %}New Category{% endif %} — Asset Admin{% endblock %}
+{% block title %}{% if category %}Edit {{ entity_label }}{% else %}New {{ entity_label }}{% endif %} — Asset Admin{% endblock %}
 
 {% block content %}
 <div style="max-width:640px; margin:0 auto;">
   <div style="margin-bottom:1.5rem;">
-    <h1>{% if category %}Edit Category{% else %}New Central Category{% endif %}</h1>
-    <a href="{{ return_url or '/admin/categories' }}" id="backToListLink" style="color:var(--md-sys-color-primary); text-decoration:none; font-size:0.9rem;">← Back to Categories</a>
+    <h1>{% if category %}Edit {{ entity_label }}{% else %}New Central {{ entity_label }}{% endif %}</h1>
+    <a href="{{ return_url or base_path }}" id="backToListLink" style="color:var(--md-sys-color-primary); text-decoration:none; font-size:0.9rem;">← Back to {{ entity_label }} list</a>
   </div>
 
   {% if error %}
@@ -17,12 +20,27 @@
   {% endif %}
 
   <div class="card">
-    <form method="POST" enctype="multipart/form-data" action="{% if category %}/admin/categories/{{ category.id }}/edit{% else %}/admin/categories/new{% endif %}">
+    <form method="POST" enctype="multipart/form-data" action="{% if category and category.id %}{{ base_path }}/{{ category.id }}/edit{% else %}{{ base_path }}/new{% endif %}">
       <input type="hidden" name="return_url" id="returnUrlInput" value="{{ return_url or '' }}">
       <div class="form-group">
-        <label class="form-label" for="name">Category Name *</label>
+        <label class="form-label" for="name">{{ entity_label }} Name *</label>
         <input type="text" id="name" name="name" class="input" value="{{ category.name if category else '' }}" required maxlength="120" placeholder="e.g. Photo Frames">
       </div>
+
+      {% if super_categories is defined %}
+      <div class="form-group" style="margin-top:1.25rem;">
+        <label class="form-label" for="super_category_id">Super Category</label>
+        <select id="super_category_id" name="super_category_id" class="select" style="width:100%;">
+          <option value="">— None (ungrouped) —</option>
+          {% for sc in super_categories %}
+          <option value="{{ sc.id }}" {% if category and (category.super_category_id|string) == sc.id %}selected{% endif %}>{{ sc.name }}</option>
+          {% endfor %}
+        </select>
+        <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.3rem;">
+          Optional top-level group. Subcategories and assets are unaffected.
+        </div>
+      </div>
+      {% endif %}
 
       <!-- Hero / Banner Image with Drag & Drop -->
       <div class="form-group" style="margin-top:1.25rem;">
@@ -120,8 +138,8 @@
       </div>
 
       <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:2rem; border-top:1px solid var(--md-sys-color-outline-variant); padding-top:1.25rem;">
-        <a href="{{ return_url or '/admin/categories' }}" id="cancelBtn" class="btn btn-outlined">Cancel</a>
-        <button type="submit" class="btn btn-primary">Save Category</button>
+        <a href="{{ return_url or base_path }}" id="cancelBtn" class="btn btn-outlined">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save {{ entity_label }}</button>
       </div>
     </form>
   </div>
@@ -273,7 +291,7 @@
     if (returnInput && !returnInput.value) {
       try {
         const saved = sessionStorage.getItem('admin_categories_filter_url');
-        if (saved && saved.startsWith('/admin/categories')) {
+        if (saved && saved.startsWith('{{ base_path }}')) {
           returnInput.value = saved;
           if (backLink) backLink.href = saved;
           if (cancelBtn) cancelBtn.href = saved;

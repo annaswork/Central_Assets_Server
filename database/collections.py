@@ -5,19 +5,22 @@ from typing import Final
 from motor.motor_asyncio import AsyncIOMotorCollection, AsyncIOMotorDatabase
 
 # Central collections
+SUPER_CATEGORIES: Final[str] = "super_categories"
 CATEGORIES: Final[str] = "categories"
 SUBCATEGORIES: Final[str] = "subcategories"
 ASSETS: Final[str] = "assets"
 
-CENTRAL_COLLECTIONS: Final[set[str]] = {CATEGORIES, SUBCATEGORIES, ASSETS}
+CENTRAL_COLLECTIONS: Final[set[str]] = {SUPER_CATEGORIES, CATEGORIES, SUBCATEGORIES, ASSETS}
 
 # Instance collections
 APP_INSTANCES: Final[str] = "app_instances"
+INSTANCE_SUPER_CATEGORIES: Final[str] = "instance_super_categories"
 INSTANCE_CATEGORIES: Final[str] = "instance_categories"
 INSTANCE_SUBCATEGORIES: Final[str] = "instance_subcategories"
 INSTANCE_ASSETS: Final[str] = "instance_assets"
 
 INSTANCE_CONTENT_COLLECTIONS: Final[set[str]] = {
+    INSTANCE_SUPER_CATEGORIES,
     INSTANCE_CATEGORIES,
     INSTANCE_SUBCATEGORIES,
     INSTANCE_ASSETS,

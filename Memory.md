@@ -3,7 +3,7 @@
 > **Single Source of Truth** for the Creative Asset Library & App Instance Management Platform.  
 > **Purpose:** This document provides an exhaustive, authoritative reference for the architecture, data models, business logic, endpoints, asset processing pipelines, and chronological changelog of the entire codebase. Future modifications should reference this file directly without needing to re-analyze the entire codebase.
 >
-> **Last Updated:** October 15, 2026
+> **Last Updated:** October 16, 2026 (Super Categories)
 
 ---
 
@@ -81,7 +81,7 @@ The platform strictly separates content authoring from content delivery through 
 ```
 
 ### 2.1 Central Library (Global Content Domain)
-- **Hierarchy:** Fixed 3-level tree: `Category` → `Subcategory` → `Asset`.
+- **Hierarchy:** `Super Category` (optional) → `Category` → `Subcategory` → `Asset`. Only categories link upward (`categories.super_category_id`); subcategories, assets and storage paths are unaware of the super level. Categories may stay ungrouped.
 - **Single Source of Truth:** Central assets, categories, and subcategories cannot be deleted or mutated by app instances.
 - **Physical Media Storage:** Stored in `/static/central_data/` partitioned by content type (`images`, `videos`, `frames`, `html`, etc.).
 
@@ -161,11 +161,13 @@ Database Name: `admin_assets_db` (configured via `MONGODB_DB_NAME`).
 
 | Collection Constant | MongoDB Collection Name | Description | Key Fields & Indexes |
 |---|---|---|---|
-| `CATEGORIES` | `categories` | Central library categories | `_id`, `name`, `thumbnail_url`, `sequence`, `is_enabled`, `deleted_at`. Unique index on `name` where `deleted_at: null`. |
+| `SUPER_CATEGORIES` | `super_categories` | Central optional top level grouping categories | `_id`, `name`, `folder_name` (`_super/<slug>`), `thumbnail_url`, `image_url`, `sequence`, `deleted_at`. Unique ci index on `name`. |
+| `CATEGORIES` | `categories` | Central library categories (`super_category_id`: optional parent) | `_id`, `name`, `thumbnail_url`, `sequence`, `is_enabled`, `deleted_at`. Unique index on `name` where `deleted_at: null`. |
 | `SUBCATEGORIES` | `subcategories` | Central library subcategories | `_id`, `category_id`, `name`, `thumbnail_url`, `sequence`, `is_enabled`, `deleted_at`. Compound index on `(category_id, name)`. |
 | `ASSETS` | `assets` | Central library assets | `_id`, `category_id`, `sub_category_id`, `name`, `type` (`image`, `video`, `html`, etc.), `file_url`, `thumbnail_url`, `tags`, `frame_metadata`, `deleted_at`. |
 | `APP_INSTANCES` | `app_instances` | Client app delivery configurations | `_id`, `name`, `package_name`, `owner_id`, `is_active`, `created_at`. Unique index on `package_name`. |
-| `INSTANCE_CATEGORIES` | `instance_categories` | Categories linked or created in an app instance | `_id`, `app_instance_id`, `source_id` (ObjectId or None), `name`, `sequence`, `is_enabled`, `overrides: {}`, `deleted_at`. Compound index on `(app_instance_id, source_id)`. |
+| `INSTANCE_SUPER_CATEGORIES` | `instance_super_categories` | Super categories linked or created in an app instance | `_id`, `app_instance_id`, `source_id` (ObjectId or None), `name`, `sequence`, `is_enabled`, `overrides: {}`, `deleted_at`. Unique `(app_instance_id, source_id)`. |
+| `INSTANCE_CATEGORIES` | `instance_categories` | Categories linked or created in an app instance (`super_category_id` → instance super category `_id`, or None) | `_id`, `app_instance_id`, `source_id` (ObjectId or None), `name`, `sequence`, `is_enabled`, `overrides: {}`, `deleted_at`. Compound index on `(app_instance_id, source_id)`. |
 | `INSTANCE_SUBCATEGORIES` | `instance_subcategories` | Subcategories linked or created in an app instance | `_id`, `app_instance_id`, `source_id` (ObjectId or None), `category_id` (parent link), `name`, `sequence`, `is_enabled`, `overrides: {}`, `deleted_at`. |
 | `INSTANCE_ASSETS` | `instance_assets` | Assets linked into an app instance | `_id`, `app_instance_id`, `source_id`, `category_id`, `sub_category_id`, `sequence`, `is_enabled`, `is_premium`, `is_rewarded`, `rewarded_credits`, `tags`, `overrides: {}`, `deleted_at`. |
 | `MANAGERS` | `managers` | Product manager operator accounts | `_id`, `username`, `email`, `password_hash`, `is_active`, `status`, `two_factor_enabled`, `totp_secret`, `created_at`. |
@@ -567,6 +569,80 @@ Requires `manager_session` cookie.
     - Updated asset card JavaScript rendering to scope card borders and badges to `isAlreadyInTarget` whenever a target destination folder is active.
     - Added explicit `target_cat_oid = to_object_id(target_category_id) if target_category_id else None` in `admin_instance_picker` to guarantee safe initialization across all request pathways.
 
+### Update 15: Shared Admin/Manager Instance Workspace Controller (SOLID / DRY Refactor)
+- **Problem:** `router/admin/instance_routes.py` and `router/manager/instance_routes.py` duplicated ~1,000 lines of business logic (content view counts/filters, picker "already added" marking, folder creation, import/override payload parsing), so every fix had to be applied twice.
+- **Resolution:** Moved the shared logic into `controller/instance_workspace_controller.py`:
+  - `build_instance_content` (folders, live counts, filters, name fallbacks), `build_picker_page`, `picker_categories`, `picker_subcategories`, `picker_assets`, `create_instance_folder`, `parse_reference_payload`, `parse_asset_override_payload`.
+  - Routers now only do auth / `verify_manager_instance_access` and rendering. Folder creation errors raise `ValidationError`, which routes turn into `400 {"success": false, "message": ...}`.
+- **Behavior changes (intentional parity):** Admin asset search now also matches tags, and the Admin asset override accepts `tags` (both were Manager-only before).
+- **Bug fix:** Admin `POST /admin/instances/{id}/edit` was raising `NameError` (missing `AppInstanceUpdate` import).
+- **Rule:** Any new instance working-set logic goes in `instance_workspace_controller.py`, never in a portal router.
+
+### Update 16: `add_references` Split into Per-Kind Importers
+- **Problem:** `add_references` in `controller/reference_controller.py` was a single 715-line function that repeated the same "find link → restore if soft-deleted → else insert with next sequence → handle DuplicateKeyError" block 9 times across its category, subcategory, and asset branches.
+- **Resolution:** Same file, same public signature and return shape:
+  - `_ensure_link(db, coll, key, now)`: one find-or-create for any instance reference; the sequence scope is the key minus `source_id`, and asset docs get monetization/analytics defaults. Inserts still go through `InstanceRepository`, so the central-collection guard applies.
+  - `_restore_target`: resolves a target folder by `_id` or `source_id` and revives it if soft-deleted (the asset-import target subcategory is also re-parented).
+  - `_import_category`, `_import_subcategory`, `_import_asset`, `_link_asset`: one function per import kind. `add_references` is now about 15 lines of dispatch.
+- **Verified:** old vs new produced identical counts and identical `instance_*` state across 11 import scenarios on a seeded throwaway DB. `tests/test_add_references.py` is the lasting check.
+- **Only behavior change:** on the concurrent-insert race (`DuplicateKeyError`) path, selected/child items now always count as `already_present` (the old code was inconsistent there). Auto-added parents still don't count.
+
+### Update 17: Single `ASSET_TYPE_RULES` Table for Asset Type Filtering
+- **Problem:** `build_asset_type_filter` (MongoDB query, central asset lists) and `asset_has_type` (in-memory, app instance content page) each kept their own `if/elif` chain over 7 types with hand-copied regexes and excluded-type lists. These had drifted apart, so the same type filter could give different results on the central and instance pages. For example, `.flac/.opus/.wma` matched audio only in the DB, and frames found by their `/frames/` URL or MIME matched only in the DB.
+- **Resolution (`controller/asset_controller.py`):**
+  - `ASSET_TYPE_RULES`: one entry per type (`aliases`, `own` block types, `key`/`url`/`mime` regexes). Each type's excluded block types are derived as "every other type's `own`" rather than listed by hand.
+  - Both functions read the same table and regexes. The DB filter's rules were kept as the source of truth, and the in-memory check now mirrors them.
+  - **Adding a type = adding one table entry.**
+- **Behavior changes:** the in-memory check now matches the DB filter (all 8 audio extensions, frame URL/MIME, document MIME, `data` must be an object for JSON). Both now treat `file`/`file_list` blocks as their own type, so a `.png` inside a `file` block counts as a file, not an image.
+- **Verified:** identical match sets on all 213 dev-DB central assets for every alias, before and after. `tests/test_asset_type_rules.py` asserts DB filter == in-memory check == expected on fixtures covering every type and the old drift cases.
+
+### Update 18: Central-Data Isolation Enforced (Guard Helper + Static Test)
+- **Audit result:** no instance-scoped module writes to `categories` / `subcategories` / `assets`. Every raw central write is an Admin central-library operation (bulk actions, CSV updates, asset toggle/reset). The invariant held, but nothing enforced it.
+- **Decision:** the ~250 raw `db[...]` calls were **not** mass-converted to repositories. `BaseRepository` silently adds `deleted_at: None` to finds and updates, which would break the restore-soft-deleted lookups, and the conversion would add no protection that the guard below doesn't already give.
+- **Changes:**
+  - `database/repository.py`: `instance_collection(db, name)` is a raw collection handle (no soft-delete filtering) that raises `ValueError` for central collections.
+  - Every write whose collection is a *variable* now goes through it: `reference_controller.py`, `instance_workspace_controller.py`, `override_controller.py`.
+  - `tests/test_instance_isolation.py`: AST scan of instance modules (reference/override/workspace/catalog controllers, admin instance routes, all manager routes, v1 instance content/reference routers). It fails on a raw central write, on a dynamic `db[var]` write, or on `CentralRepository` use. Mutation-checked: an injected violation is reported.
+- **Open finding (not changed):** `/api/v1/reorder` and `/api/v1/assets` write *central* data, gated only by the `assets:write` scope. API keys with scope `*` (one exists in the dev DB, bound to an app instance) can therefore reorder or edit the central library. Decide whether app-bound keys should ever get central write scope.
+
+### Update 19: Optional 4th Level — Super Categories (Super Category → Category → Subcategory → Asset)
+- **Design:** only categories point up (`categories.super_category_id`, `instance_categories.super_category_id`). Subcategories, assets, storage paths and all existing `category_id` links are untouched. One instance category per central category, as before; its super category is a movable parent link.
+- **Central (Admin):**
+  - `controller/super_category_controller.py`: CRUD; unpaginated (marked `ponytail:`).
+  - `router/admin/super_category_routes.py` and `templates/super_categories/list.html`. `templates/categories/form.html` is reused via `entity_label`/`base_path`; media goes under `central_data/_super/<slug>/`.
+  - Category form: Super Category dropdown. Category list: Super column and `superCategoryId` filter. Nav: drawer and rail.
+  - Deleting a super category is refused while categories are assigned. After deletion, apps keep their categories, ungrouped.
+- **Instance flow (Admin & Manager, via `instance_workspace_controller.py`):**
+  - `add_references(super_category_ids=…, target_super_category_id=…)`. Importing a super category brings all its categories and their contents.
+  - A *newly* added category auto-joins its central super category (auto-added, like parent categories for subcategories). `target_super_category_id` places or moves imported categories.
+  - Custom folders: `folder_type: "supercategory"`, plus `parent_super_category_id` for categories.
+  - Move or ungroup: `POST /{admin|manager}/instances/{id}/categories/{catId}/super`. Detach (cascades to its categories): `DELETE /{admin|manager}/instances/{id}/super-categories/{superId}`.
+  - Overrides, reorder and bulk flags accept `item_type: "super_category"` (`override_controller._collection_for`, which replaced 4 duplicated ternaries).
+  - UI: shared partials `instance_super_categories.html` (strip with All / Ungrouped / per-super filters, import, add, detach), `category_super_select.html` (per-category move) and `picker_super_categories_tab.html` (picker tab). The create-folder modal gains the Super Category level.
+- **Client API (additive, non-breaking):**
+  - `GET /api/v1/{instance|app-instances}/{id}/super-categories`.
+  - `?superCategoryId=` on categories endpoints; every category has `superCategoryId`.
+  - `/catalog` gains `super_categories[]`, each with `categoryIds`.
+  - `DELETE /api/v1/app-instances/{id}/super-categories/{superId}` (with instance guard).
+- **Tests:** `tests/test_super_categories.py` covers central → import → auto-parent → target/move → custom folders → catalog → detach cascade → guarded delete. All 48 existing route cases and all `add_references` scenarios are unchanged on data without super categories.
+- **Known gaps (pre-existing, not fixed):**
+  - `copy_references_from_instance` copies parent ids verbatim (so copied subcategories and assets point at the source app's folders) and does not copy super categories.
+  - `API_Usage.md` examples still show the removed `sourceId`.
+
+### Update 20: Category → Super Category Placement Fix & API Key Instance Isolation
+- **Bug:** inside an app instance, a category could only be placed in a super category already linked to *that app*. With central super categories but none in the app, the per-card selector didn't render and the create-folder list was empty. Category cards were also `draggable`, which could swallow clicks on the selector.
+- **Fix:**
+  - The selector and the create-folder dialog also list central super categories not yet in the app (optgroup "Central library"). Picking one links it in and places the category in it: `reference_controller.link_super_category`, used by `instance_workspace_controller._instance_super_id`.
+  - Focusing the selector switches its card's drag off (`setCardDraggable`).
+  - The content strip explains how to start when the app has no super categories.
+- **API key isolation (security):**
+  - Router-level dependencies in `authorization/instance_guard.py` replace per-route calls.
+  - `require_instance_access` covers every `/api/v1/app-instances/{id}/…` and `/api/v1/instance/{id}/…` route. Previously 13 instance routes (PATCH/DELETE/reorder/bulk-flags/track/unresolved/references) let a key bound to app A act on app B. `copy-from` also checks the *source* app.
+  - `require_unbound_key` covers `/api/v1/keys` and `/api/v1/app-instances`. Previously a bound key with `*` could list every app or mint an unbound `*` key.
+  - Admin sessions and unbound keys behave as before.
+  - `tests/test_api_key_isolation.py` exercises this over HTTP through the real middleware. Mutation-checked: removing a guard fails it.
+- **Still open:** app-bound keys with `assets:write` / `categories:write` can still write the *central* library (`/api/v1/assets`, `/categories`, `/subcategories`, `/reorder`, `/media/*`).
+
 ---
 
 ## 9. Project Directory Tree & Key File Map
@@ -583,10 +659,12 @@ Requires `manager_session` cookie.
 │   └── paths.py                     # Static, templates, and upload directory paths
 ├── controller/
 │   ├── asset_controller.py          # Central asset CRUD & upload validation
+│   ├── super_category_controller.py # Central super categories (optional level above categories)
 │   ├── category_controller.py       # Central category business logic
 │   ├── subcategory_controller.py    # Central subcategory business logic
 │   ├── reference_controller.py      # Instance reference linking & destination scoping
 │   ├── override_controller.py       # Sparse field overrides, tags, monetization
+│   ├── instance_workspace_controller.py # Shared Admin/Manager instance content, picker & folder logic
 │   ├── manager_controller.py        # Manager auth, access verification, 2FA
 │   ├── frame_controller.py          # Frame placeholder coordinate detection
 │   └── crop_controller.py           # Alpha-preserving image, GIF (dither-free) & video cropper
@@ -655,11 +733,12 @@ Requires `manager_session` cookie.
 | `DOCS_PASSWORD` | *(Required)* | HTTP Basic Auth password for `/docs` |
 
 ### 10.2 Maintenance & Operational Invariants
-1. **Never mutate Central Data during Instance Operations:** Creating, modifying, detaching, or reordering folders and assets in an App Instance must never touch the `categories`, `subcategories`, or `assets` collections.
+1. **Never mutate Central Data during Instance Operations:** Creating, modifying, detaching, or reordering folders and assets in an App Instance must never touch the `categories`, `subcategories`, or `assets` collections. Enforced by `tests/test_instance_isolation.py`; use `instance_collection(db, name)` when the collection name is a variable.
 2. **Access Control Verification:** Every manager endpoint under `/manager/instances/{id}` must call `await verify_manager_instance_access(db, user_id, instance_id)` before reading or mutating instance data.
 3. **Preserve Alpha Transparency:** Any image cropping or resizing operation must maintain RGBA / alpha channels without introducing black or white background fills.
 4. **GIF Dither Suppression & Clean Disposal:** Always use `clean_frame_dither(frame)`, `dither=Image.Dither.NONE`, and `disposal=2` (restore background) when saving multi-frame animated GIFs to avoid animation ghosting and quantization noise.
 5. **Video Encoding Dimensions:** All video crops must enforce even dimensions ($w \% 2 == 0, h \% 2 == 0$) for H.264 compatibility, and attach `+faststart` metadata for streaming.
 6. **Dynamic Pagination Limits:** All catalog listing endpoints must constrain `page_size` to $1 \le \text{page\_size} \le 500$ and support standard steps (20, 40, 60, 100, 200).
 7. **Duplicate Name Guards:** Folder creation must verify case-insensitive uniqueness within that instance and parent category to prevent user confusion.
-8. **Cascading Detach:** Detaching a category folder must soft-delete its child subcategories and referenced assets within that specific app instance.
+8. **Cascading Detach:** Detaching a category folder must soft-delete its child subcategories and referenced assets within that specific app instance. Detaching a super category detaches its categories the same way.
+9. **Super Category Link Direction:** Only categories reference a super category (`super_category_id`). Never add super-category ids to subcategories, assets or storage paths.

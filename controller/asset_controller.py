@@ -39,57 +39,106 @@ from utils.sequencing import compute_next_sequence
 from utils.slugify import filename_to_title, slugify
 
 
+# Filterable asset types, shared by the Mongo filter and the in-memory check so both agree.
+#   key:  regex on a more_fields block's key or `type`
+#   url / mime: regexes on a block's or item's `url` / `mime`
+#   own:  block types of this kind; other kinds' block types don't count via their own url/mime
+ASSET_TYPE_RULES: dict[str, dict[str, Any]] = {
+    "image": {
+        "aliases": ("image", "images"),
+        "own": ("image", "image_list"),
+        "key": r"image|img|photo|pic",
+        "url": r"\.(png|jpe?g|webp|gif|svg|bmp|ico|tiff|avif|apng|heic)(\?|$)",
+        "mime": r"^image/",
+    },
+    "video": {
+        "aliases": ("video", "videos"),
+        "own": ("video", "video_list"),
+        "key": r"video|vid|movie",
+        "url": r"\.(mp4|webm|mov|mkv|avi|flv|wmv|m4v)(\?|$)",
+        "mime": r"^video/",
+    },
+    "audio": {
+        "aliases": ("audio", "audios", "sound"),
+        "own": ("audio", "audio_list"),
+        "key": r"audio|sound|voice|music",
+        "url": r"\.(mp3|wav|aac|m4a|ogg|flac|opus|wma)(\?|$)",
+        "mime": r"^audio/",
+    },
+    "json": {
+        "aliases": ("json", "json_data"),
+        "own": ("json", "json_data"),
+        "key": r"json",
+        "url": r"\.json(\?|$)",
+        "mime": r"application/json",
+    },
+    "frames": {
+        "aliases": ("frame", "frames"),
+        "own": ("frames",),
+        "key": r"frame",
+        "url": r"frame",
+        "mime": r"frame",
+    },
+    "html": {
+        "aliases": ("html", "htm", "web"),
+        "own": ("html", "html_list"),
+        "key": r"html|htm|web",
+        "url": r"\.(html?|htm)(\?|$)",
+        "mime": r"^text/html",
+    },
+    "file": {
+        "aliases": ("file", "files", "document", "documents", "xml", "doc", "pdf"),
+        "own": ("file", "file_list"),
+        "key": r"file|doc|document|xml|pdf|sheet|attachment",
+        "url": r"\.(xml|pdf|docx?|xlsx?|txt|csv|zip|rar|7z|tar|gz)(\?|$)",
+        "mime": r"^(application/(xml|pdf|msword|vnd\.|zip|x-)|text/(plain|csv|xml))",
+    },
+}
+
+_ALL_BLOCK_TYPES = {t for rule in ASSET_TYPE_RULES.values() for t in rule["own"]}
+
+
+def _resolve_asset_type(asset_type: str | None) -> tuple[str, dict[str, Any], list[str]] | None:
+    """Map a user-supplied type alias to (canonical name, rule, excluded block types)."""
+    dt = (asset_type or "").lower().strip()
+    for name, rule in ASSET_TYPE_RULES.items():
+        if dt in rule["aliases"]:
+            return name, rule, sorted(_ALL_BLOCK_TYPES - set(rule["own"]))
+    return None
+
+
 def build_asset_type_filter(asset_type: str | None) -> dict[str, Any] | None:
-    """Build a MongoDB query condition to filter assets that contain the specified polymorphic object type.
-
-    Supported types:
-      - 'images' (or 'image'): checks for image blocks/items/mime/extensions
-      - 'videos' (or 'video'): checks for video blocks/items/mime/extensions
-      - 'audios' (or 'audio'): checks for audio blocks/items/mime/extensions
-      - 'json' (or 'json_data'): checks for json blocks/items/data
-      - 'frames' (or 'frame'): checks for frames blocks/placeholders
-    """
-    if not asset_type:
+    """Build a MongoDB query condition matching assets whose more_fields contain the given type (see ASSET_TYPE_RULES)."""
+    resolved = _resolve_asset_type(asset_type)
+    if not resolved:
         return None
+    name, rule, excluded_types = resolved
+    key_re, url_re, mime_re = rule["key"], rule["url"], rule["mime"]
 
-    dt = asset_type.lower().strip()
-    if dt in ("image", "images"):
-        key_re = "image|img|photo|pic"
-        ext_re = r"\.(png|jpe?g|webp|gif|svg|bmp|ico|tiff|avif|apng|heic)(\?|$)"
-        mime_re = r"^image/"
-        excluded_types = ["frames", "video", "video_list", "audio", "audio_list", "json", "json_data", "html", "html_list"]
-    elif dt in ("video", "videos"):
-        key_re = "video|vid|movie"
-        ext_re = r"\.(mp4|webm|mov|mkv|avi|flv|wmv|m4v)(\?|$)"
-        mime_re = r"^video/"
-        excluded_types = ["frames", "image", "image_list", "audio", "audio_list", "json", "json_data", "html", "html_list"]
-    elif dt in ("audio", "audios", "sound"):
-        key_re = "audio|sound|voice|music"
-        ext_re = r"\.(mp3|wav|aac|m4a|ogg|flac|opus|wma)(\?|$)"
-        mime_re = r"^audio/"
-        excluded_types = ["frames", "image", "image_list", "video", "video_list", "json", "json_data", "html", "html_list"]
-    elif dt in ("json", "json_data"):
-        key_re = "json"
-        ext_re = r"\.json(\?|$)"
-        mime_re = r"application/json"
-        excluded_types = ["frames", "image", "image_list", "video", "video_list", "audio", "audio_list", "html", "html_list"]
-    elif dt in ("frame", "frames"):
-        key_re = "frame"
-        ext_re = r"frame"
-        mime_re = r"frame"
-        excluded_types = ["image", "image_list", "video", "video_list", "audio", "audio_list", "json", "json_data", "html", "html_list"]
-    elif dt in ("html", "htm", "web"):
-        key_re = "html|htm|web"
-        ext_re = r"\.(html?|htm)(\?|$)"
-        mime_re = r"^text/html"
-        excluded_types = ["frames", "image", "image_list", "video", "video_list", "audio", "audio_list", "json", "json_data", "file", "file_list"]
-    elif dt in ("file", "files", "document", "documents", "xml", "doc", "pdf"):
-        key_re = "file|doc|document|xml|pdf|sheet|attachment"
-        ext_re = r"\.(xml|pdf|docx?|xlsx?|txt|csv|zip|rar|7z|tar|gz)(\?|$)"
-        mime_re = r"^(application/(xml|pdf|msword|vnd\.|zip|x-)|text/(plain|csv|xml))"
-        excluded_types = ["frames", "image", "image_list", "video", "video_list", "audio", "audio_list", "json", "json_data", "html", "html_list"]
-    else:
-        return None
+    def media_match(var: str) -> dict[str, Any]:
+        return {
+            "$or": [
+                {"$regexMatch": {"input": {"$ifNull": [f"{var}.mime", ""]}, "regex": mime_re, "options": "i"}},
+                {"$regexMatch": {"input": {"$ifNull": [f"{var}.url", ""]}, "regex": url_re, "options": "i"}},
+            ]
+        }
+
+    def any_item_matches(input_expr: str) -> dict[str, Any]:
+        return {
+            "$anyElementTrue": {
+                "$map": {
+                    "input": input_expr,
+                    "as": "subitem",
+                    "in": {
+                        "$cond": {
+                            "if": {"$eq": [{"$type": "$$subitem"}, "object"]},
+                            "then": media_match("$$subitem"),
+                            "else": False,
+                        }
+                    },
+                }
+            }
+        }
 
     type_expr = {
         "$expr": {
@@ -101,7 +150,7 @@ def build_asset_type_filter(asset_type: str | None) -> dict[str, Any] | None:
                         "$or": [
                             # 1. Block key name matches
                             {"$regexMatch": {"input": "$$item.k", "regex": key_re, "options": "i"}},
-                            # 2. Block value is a dict/object
+                            # 2. Block value is an object
                             {
                                 "$cond": {
                                     "if": {"$eq": [{"$type": "$$item.v"}, "object"]},
@@ -115,45 +164,20 @@ def build_asset_type_filter(asset_type: str | None) -> dict[str, Any] | None:
                                                         {"$gt": [{"$size": {"$ifNull": ["$$item.v.placeholders", []]}}, 0]},
                                                     ]
                                                 }
-                                                if dt in ("frame", "frames")
+                                                if name == "frames"
                                                 else False
                                             ),
-                                            ({"$eq": [{"$type": "$$item.v.data"}, "object"]} if dt in ("json", "json_data") else False),
+                                            ({"$eq": [{"$type": "$$item.v.data"}, "object"]} if name == "json" else False),
                                             {
                                                 "$and": [
                                                     {"$not": [{"$in": [{"$ifNull": ["$$item.v.type", ""]}, excluded_types]}]},
-                                                    {
-                                                        "$or": [
-                                                            {"$regexMatch": {"input": {"$ifNull": ["$$item.v.mime", ""]}, "regex": mime_re, "options": "i"}},
-                                                            {"$regexMatch": {"input": {"$ifNull": ["$$item.v.url", ""]}, "regex": ext_re, "options": "i"}},
-                                                        ]
-                                                    },
+                                                    media_match("$$item.v"),
                                                 ]
                                             },
-                                            # Check items inside dict
                                             {
                                                 "$cond": {
                                                     "if": {"$eq": [{"$type": "$$item.v.items"}, "array"]},
-                                                    "then": {
-                                                        "$anyElementTrue": {
-                                                            "$map": {
-                                                                "input": "$$item.v.items",
-                                                                "as": "subitem",
-                                                                "in": {
-                                                                    "$cond": {
-                                                                        "if": {"$eq": [{"$type": "$$subitem"}, "object"]},
-                                                                        "then": {
-                                                                            "$or": [
-                                                                                {"$regexMatch": {"input": {"$ifNull": ["$$subitem.mime", ""]}, "regex": mime_re, "options": "i"}},
-                                                                                {"$regexMatch": {"input": {"$ifNull": ["$$subitem.url", ""]}, "regex": ext_re, "options": "i"}},
-                                                                            ]
-                                                                        },
-                                                                        "else": False,
-                                                                    }
-                                                                },
-                                                            }
-                                                        }
-                                                    },
+                                                    "then": any_item_matches("$$item.v.items"),
                                                     "else": False,
                                                 }
                                             },
@@ -166,44 +190,19 @@ def build_asset_type_filter(asset_type: str | None) -> dict[str, Any] | None:
                             {
                                 "$cond": {
                                     "if": {"$eq": [{"$type": "$$item.v"}, "array"]},
-                                    "then": {
-                                        "$anyElementTrue": {
-                                            "$map": {
-                                                "input": "$$item.v",
-                                                "as": "subitem",
-                                                "in": {
-                                                    "$cond": {
-                                                        "if": {"$eq": [{"$type": "$$subitem"}, "object"]},
-                                                        "then": {
-                                                            "$or": [
-                                                                {"$regexMatch": {"input": {"$ifNull": ["$$subitem.mime", ""]}, "regex": mime_re, "options": "i"}},
-                                                                {"$regexMatch": {"input": {"$ifNull": ["$$subitem.url", ""]}, "regex": ext_re, "options": "i"}},
-                                                            ]
-                                                        },
-                                                        "else": False,
-                                                    }
-                                                },
-                                            }
-                                        }
-                                    },
+                                    "then": any_item_matches("$$item.v"),
                                     "else": False,
                                 }
                             },
                         ]
-                    }
+                    },
                 }
             }
         }
     }
 
-    if dt in ("audio", "audios", "sound"):
-        return {
-            "$or": [
-                type_expr,
-                {"thumbnail_url": {"$regex": ext_re, "$options": "i"}},
-            ]
-        }
-
+    if name == "audio":
+        return {"$or": [type_expr, {"thumbnail_url": {"$regex": url_re, "$options": "i"}}]}
     return type_expr
 
 
@@ -212,91 +211,41 @@ def asset_has_type(
     asset_type: str,
     thumbnail_url: str | None = None,
 ) -> bool:
-    """Check whether an asset dictionary or more_fields contains the specified polymorphic object type."""
+    """In-memory twin of build_asset_type_filter: does this asset contain the given type?"""
     if not asset_type:
         return True
-
-    dt = asset_type.lower().strip()
-    more_fields = more_fields or {}
-    if not isinstance(more_fields, dict):
-        more_fields = {}
-
-    if dt in ("image", "images"):
-        key_pattern = re.compile(r"image|img|photo|pic", re.I)
-        exts = {"png", "jpg", "jpeg", "webp", "gif", "svg", "bmp", "ico", "tiff", "avif", "apng", "heic"}
-        mime_prefix = "image/"
-        excluded_types = {"frames", "video", "video_list", "audio", "audio_list", "json", "json_data", "html", "html_list"}
-    elif dt in ("video", "videos"):
-        key_pattern = re.compile(r"video|vid|movie", re.I)
-        exts = {"mp4", "webm", "mov", "mkv", "avi", "flv", "wmv", "m4v"}
-        mime_prefix = "video/"
-        excluded_types = {"frames", "image", "image_list", "audio", "audio_list", "json", "json_data", "html", "html_list"}
-    elif dt in ("audio", "audios", "sound"):
-        key_pattern = re.compile(r"audio|sound|voice|music", re.I)
-        exts = set(ALLOWED_AUDIO_EXTENSIONS)
-        mime_prefix = "audio/"
-        excluded_types = {"frames", "image", "image_list", "video", "video_list", "json", "json_data", "html", "html_list"}
-        if thumbnail_url:
-            t_ext = Path(thumbnail_url.split("?")[0]).suffix.lower().lstrip(".")
-            if t_ext in exts:
-                return True
-    elif dt in ("json", "json_data"):
-        key_pattern = re.compile(r"json", re.I)
-        exts = {"json"}
-        mime_prefix = "application/json"
-        excluded_types = {"frames", "image", "image_list", "video", "video_list", "audio", "audio_list", "html", "html_list"}
-    elif dt in ("frame", "frames"):
-        key_pattern = re.compile(r"frame", re.I)
-        exts = set()
-        mime_prefix = ""
-        excluded_types = {"image", "image_list", "video", "video_list", "audio", "audio_list", "json", "json_data", "html", "html_list"}
-    elif dt in ("html", "htm", "web"):
-        key_pattern = re.compile(r"html|htm|web", re.I)
-        exts = {"html", "htm"}
-        mime_prefix = "text/html"
-        excluded_types = {"frames", "image", "image_list", "video", "video_list", "audio", "audio_list", "json", "json_data", "file", "file_list"}
-    elif dt in ("file", "files", "document", "documents", "xml", "doc", "pdf"):
-        key_pattern = re.compile(r"file|doc|document|xml|pdf|sheet|attachment", re.I)
-        exts = {"xml", "pdf", "docx", "doc", "xlsx", "xls", "txt", "csv", "zip", "rar", "7z", "tar", "gz"}
-        mime_prefix = ""
-        excluded_types = {"frames", "image", "image_list", "video", "video_list", "audio", "audio_list", "json", "json_data", "html", "html_list"}
-    else:
+    resolved = _resolve_asset_type(asset_type)
+    if not resolved:
         return False
+    name, rule, excluded_types = resolved
+    more_fields = more_fields if isinstance(more_fields, dict) else {}
 
-    def check_item(item: Any) -> bool:
-        if not isinstance(item, dict):
-            return False
-        mime = str(item.get("mime") or "").lower()
-        if mime_prefix and mime.startswith(mime_prefix):
-            return True
-        url = str(item.get("url") or "")
-        ext = Path(url.split("?")[0]).suffix.lower().lstrip(".")
-        if ext and ext in exts:
-            return True
-        return False
+    def media_match(item: Any) -> bool:
+        return isinstance(item, dict) and bool(
+            re.search(rule["mime"], str(item.get("mime") or ""), re.I)
+            or re.search(rule["url"], str(item.get("url") or ""), re.I)
+        )
+
+    if name == "audio" and thumbnail_url and re.search(rule["url"], thumbnail_url, re.I):
+        return True
 
     for block_key, block_val in more_fields.items():
-        if key_pattern.search(str(block_key)):
+        if re.search(rule["key"], str(block_key), re.I):
             return True
         if isinstance(block_val, dict):
             b_type = str(block_val.get("type") or "").lower()
-            if key_pattern.search(b_type):
+            if re.search(rule["key"], b_type, re.I):
                 return True
-            if dt in ("frame", "frames") and (
-                block_val.get("coordinates") or block_val.get("placeholders") or b_type == "frames"
-            ):
+            if name == "frames" and (block_val.get("coordinates") or block_val.get("placeholders")):
                 return True
-            if dt in ("json", "json_data") and (b_type in ("json", "json_data") or "data" in block_val):
+            if name == "json" and isinstance(block_val.get("data"), dict):
                 return True
-            if b_type not in excluded_types and check_item(block_val):
+            if b_type not in excluded_types and media_match(block_val):
                 return True
-            for it in block_val.get("items") or []:
-                if check_item(it):
-                    return True
-        elif isinstance(block_val, list):
-            for it in block_val:
-                if check_item(it):
-                    return True
+            if any(media_match(it) for it in block_val.get("items") or []):
+                return True
+        elif isinstance(block_val, list) and any(media_match(it) for it in block_val):
+            return True
 
     return False
 

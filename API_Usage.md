@@ -13,6 +13,7 @@
 3. [Authentication & Security](#3-authentication--security)
 4. [Endpoints Reference](#4-endpoints-reference)
    - [Get Full Catalog Tree](#41-get-full-catalog-tree)
+   - [List Super Categories](#41a-list-super-categories)
    - [List Categories](#42-list-categories)
    - [List Subcategories](#43-list-subcategories)
    - [List Assets](#44-list-assets)
@@ -32,7 +33,7 @@
 
 The **Admin Assets App** is a centralized creative asset management server. It allows your admin team to:
 
-- Upload and organize creative assets (images, audio, video, Lottie animations, JSON configs, frame packs) into **Categories → Subcategories → Assets**.
+- Upload and organize creative assets (images, audio, video, Lottie animations, JSON configs, frame packs) into **Categories → Subcategories → Assets**, optionally grouped under **Super Categories** (e.g. "Seasonal" → Frames, Stickers).
 - Create multiple **App Instances** — each representing a distinct mobile app (e.g., "Collage Maker", "Photo Editor", "Video Maker").
 - Each App Instance maintains its own **independent** set of enabled/disabled states, premium flags, view counts, and download counts — completely isolated from other instances and the central library.
 
@@ -122,7 +123,7 @@ X-API-Key: ak_prod_aBcDeFgHiJkLmNoPqRsTuV_xYzAbCdEfGhIjKlMnOpQrStUvWx
 
 | Scope | Required For |
 |---|---|
-| `categories:read` | Listing categories and subcategories |
+| `categories:read` | Listing super categories, categories and subcategories |
 | `assets:read` | Listing assets, getting asset details, tracking views/downloads |
 
 > **💡 Tip:** Your admin should create your API key with **only** these two scopes and bind it to your App Instance ID. This follows the principle of least privilege.
@@ -151,10 +152,21 @@ GET /api/v1/instance/{instanceId}/catalog
 ```json
 {
   "app_instance_id": "6650a3f1c2e4b80012abcdef",
+  "super_categories": [
+    {
+      "id": "sup_001",
+      "name": "Seasonal",
+      "thumbnail_url": "/static/central_data/_super/seasonal/thumb.webp",
+      "is_enabled": true,
+      "sequence": 1,
+      "categoryIds": ["cat_001"]
+    }
+  ],
   "categories": [
     {
       "id": "cat_001",
       "sourceId": "central_cat_001",
+      "superCategoryId": "sup_001",
       "name": "Frames",
       "thumbnail_url": "https://cdn.example.com/frames-thumb.webp",
       "is_enabled": true,
@@ -195,6 +207,36 @@ GET /api/v1/instance/{instanceId}/catalog
 
 > **📌 Note:** Only `is_enabled: true` items are included in the catalog tree. Use this endpoint for pre-loading the entire hierarchy. For granular querying, use the individual list endpoints below.
 
+> **⭐ Super Categories (optional 4th level):** `super_categories` lists the optional top level (Super Category → Category → Subcategory → Asset), each with the ordered `categoryIds` it groups. Every category carries `superCategoryId` (`null` when ungrouped). The nested `categories` tree is unchanged, so clients that ignore these fields keep working.
+
+---
+
+### 4.1a List Super Categories
+
+```http
+GET /api/v1/instance/{instanceId}/super-categories
+```
+
+**Required Scope:** `categories:read` · **Query:** `only_enabled` (`boolean`, default `false`)
+
+**Response:** `200 OK` — Array of super category objects, sorted by `sequence`, then `name`.
+
+```json
+[
+  {
+    "id": "66d4e5f6a7b8c90012345678",
+    "name": "Seasonal",
+    "thumbnail_url": "/static/central_data/_super/seasonal/thumb.webp",
+    "image_url": "/static/central_data/_super/seasonal/banner.webp",
+    "is_enabled": true,
+    "sequence": 1,
+    "overrides": {}
+  }
+]
+```
+
+Fetch a super category's categories with `GET /categories?superCategoryId={id}`.
+
 ---
 
 ### 4.2 List Categories
@@ -210,14 +252,16 @@ GET /api/v1/instance/{instanceId}/categories
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `only_enabled` | `boolean` | `false` | If `true`, returns only enabled categories |
+| `superCategoryId` | `string` | — | Only categories inside this super category (instance super category `id`; its central source ID is also accepted) |
 
-**Response:** `200 OK` — Array of category objects
+**Response:** `200 OK` — Array of category objects (each includes `superCategoryId`, `null` when ungrouped)
 
 ```json
 [
   {
     "id": "66a1b2c3d4e5f60012345678",
     "sourceId": "669f1234abcd5678ef901234",
+    "superCategoryId": "66d4e5f6a7b8c90012345678",
     "name": "Stickers",
     "thumbnail_url": "https://cdn.example.com/stickers-thumb.webp",
     "image_url": "https://cdn.example.com/stickers-banner.webp",
@@ -228,6 +272,7 @@ GET /api/v1/instance/{instanceId}/categories
   {
     "id": "66a1b2c3d4e5f60012345679",
     "sourceId": "669f1234abcd5678ef901235",
+    "superCategoryId": null,
     "name": "Backgrounds",
     "thumbnail_url": "https://cdn.example.com/bg-thumb.webp",
     "is_enabled": true,
@@ -444,12 +489,26 @@ User taps "Apply to Photo"
 
 ## 5. Response Schemas
 
+### Super Category Object
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Instance-specific super category ID |
+| `name` | `string` | Display name |
+| `thumbnail_url` | `string?` | Thumbnail image URL |
+| `image_url` | `string?` | Banner/header image URL |
+| `is_enabled` | `boolean` | Whether this super category is active |
+| `sequence` | `integer` | Sort order (lower = first) |
+| `overrides` | `object` | Admin-applied per-instance overrides |
+| `categoryIds` | `string[]` | **Catalog only** — ordered IDs of the categories it groups |
+
 ### Category Object
 
 | Field | Type | Description |
 |---|---|---|
 | `id` | `string` | Instance-specific category ID |
 | `sourceId` | `string` | Central library source ID |
+| `superCategoryId` | `string?` | Parent super category ID (`null` when ungrouped) |
 | `name` | `string` | Display name |
 | `thumbnail_url` | `string?` | Category thumbnail image URL |
 | `image_url` | `string?` | Category banner/header image URL |
@@ -588,9 +647,10 @@ GET /api/v1/instance/{instanceId}/assets?categoryId=66a1b2c3...&only_enabled=tru
 
 | Filter | Applies To | Description |
 |---|---|---|
+| `superCategoryId` | categories | Show categories in a specific super category |
 | `categoryId` | subcategories, assets | Show items in a specific category |
 | `subCategoryId` | assets | Show items in a specific subcategory |
-| `only_enabled` | categories, subcategories, assets | Exclude disabled items |
+| `only_enabled` | super categories, categories, subcategories, assets | Exclude disabled items |
 
 ### Sorting
 
@@ -784,9 +844,16 @@ interface AssetsApiService {
         @Path("instanceId") instanceId: String
     ): CatalogResponse
 
+    @GET("instance/{instanceId}/super-categories")
+    suspend fun getSuperCategories(
+        @Path("instanceId") instanceId: String,
+        @Query("only_enabled") onlyEnabled: Boolean = true
+    ): List<SuperCategory>
+
     @GET("instance/{instanceId}/categories")
     suspend fun getCategories(
         @Path("instanceId") instanceId: String,
+        @Query("superCategoryId") superCategoryId: String? = null,
         @Query("only_enabled") onlyEnabled: Boolean = true
     ): List<Category>
 
@@ -829,12 +896,24 @@ interface AssetsApiService {
 
 data class CatalogResponse(
     @SerializedName("app_instance_id") val appInstanceId: String,
+    @SerializedName("super_categories") val superCategories: List<SuperCategory> = emptyList(),
     val categories: List<CategoryWithContent>
+)
+
+data class SuperCategory(
+    val id: String,
+    val name: String,
+    @SerializedName("thumbnail_url") val thumbnailUrl: String?,
+    @SerializedName("image_url") val imageUrl: String?,
+    @SerializedName("is_enabled") val isEnabled: Boolean,
+    val sequence: Int,
+    val categoryIds: List<String>? = null   // Only in /catalog
 )
 
 data class CategoryWithContent(
     val id: String,
     val sourceId: String,
+    val superCategoryId: String?,
     val name: String,
     @SerializedName("thumbnail_url") val thumbnailUrl: String?,
     @SerializedName("is_enabled") val isEnabled: Boolean,
@@ -856,6 +935,7 @@ data class SubcategoryWithAssets(
 data class Category(
     val id: String,
     val sourceId: String,
+    val superCategoryId: String?,
     val name: String,
     @SerializedName("thumbnail_url") val thumbnailUrl: String?,
     @SerializedName("image_url") val imageUrl: String?,
@@ -991,8 +1071,12 @@ class AssetsRepository {
 
     // ── Categories ───────────────────────────────────────────
 
-    suspend fun getCategories(): Result<List<Category>> = runCatching {
-        api.getCategories(instanceId, onlyEnabled = true)
+    suspend fun getSuperCategories(): Result<List<SuperCategory>> = runCatching {
+        api.getSuperCategories(instanceId, onlyEnabled = true)
+    }
+
+    suspend fun getCategories(superCategoryId: String? = null): Result<List<Category>> = runCatching {
+        api.getCategories(instanceId, superCategoryId = superCategoryId, onlyEnabled = true)
     }
 
     suspend fun getSubcategories(categoryId: String): Result<List<Subcategory>> = runCatching {
@@ -1125,6 +1209,10 @@ Implement offline fallback:
 
 The `thumbnail_url` and media block `url` fields contain direct CDN URLs. Download them using OkHttp, Coil, Glide, or any HTTP client. These URLs do **not** require the API key — they are public CDN links.
 
+### Q: Do I have to use Super Categories?
+
+**No.** They are an optional grouping level above categories. If your UI doesn't need it, ignore `super_categories` / `superCategoryId` — `/categories` still returns every category (grouped or not), and the catalog's nested `categories` tree is unchanged.
+
 ### Q: What is the `overrides` field?
 
 It contains per-instance customizations applied by the admin (e.g., a different name or description for your specific app). The API response already merges overrides with central data, so you can ignore this field and use the top-level `name`, `description`, etc. directly.
@@ -1141,8 +1229,9 @@ It contains per-instance customizations applied by the admin (e.g., a different 
 │  Auth Header:  X-API-Key: ak_prod_...                              │
 │  Base Path:    /api/v1/instance/{instanceId}                       │
 │                                                                     │
-│  GET  /catalog            → Full tree (categories > subs > assets) │
-│  GET  /categories         → List categories                        │
+│  GET  /catalog            → Full tree (+ super_categories list)    │
+│  GET  /super-categories   → List super categories (optional level) │
+│  GET  /categories         → List categories (?superCategoryId=...) │
 │  GET  /subcategories      → List subcategories (?categoryId=...)   │
 │  GET  /assets             → List assets (?categoryId=&sort=...)    │
 │  GET  /assets/{assetId}   → Single asset detail                    │

@@ -21,6 +21,7 @@ class CategoryCreate(BaseModel):
     sequence: int | None = Field(
         default=None, description="Display sequence order; lower numbers appear first"
     )
+    super_category_id: str | None = Field(default=None, description="Optional parent super category")
 
 
 class CategoryUpdate(BaseModel):
@@ -30,6 +31,7 @@ class CategoryUpdate(BaseModel):
     is_enabled: bool | None = None
     is_premium: bool | None = None
     sequence: int | None = None
+    super_category_id: str | None = Field(default=None, description="Parent super category; '' to ungroup")
 
 
 class CategoryOut(MongoModel):
@@ -40,6 +42,7 @@ class CategoryOut(MongoModel):
     is_enabled: bool = True
     is_premium: bool = False
     sequence: int = 1
+    super_category_id: str | None = None
     created_at: datetime
     updated_at: datetime
 

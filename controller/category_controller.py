@@ -16,6 +16,7 @@ from database.collections import (
 )
 from database.models.category import CategoryCreate, CategoryUpdate
 from database.repository import CentralRepository
+from controller.super_category_controller import resolve_super_category_id
 from utils.datetimes import utc_now
 from utils.errors import ConflictError, NotFoundError
 from utils.ids import to_object_id
@@ -32,12 +33,15 @@ async def list_categories(
     search: str | None = None,
     sort_by: str = "sequence",
     sort_order: str = "asc",
+    super_category_id: str | None = None,
 ) -> dict[str, Any]:
-    """List central categories with pagination, optional search, and sorting."""
+    """List central categories with pagination, optional search, super category filter, and sorting."""
     repo = CentralRepository(db, CATEGORIES)
     query: dict[str, Any] = {}
     if search and search.strip():
         query["name"] = {"$regex": search.strip(), "$options": "i"}
+    if super_category_id:
+        query["super_category_id"] = to_object_id(super_category_id)
 
     # Determine sort field and direction
     s_lower = (sort_by or "sequence").lower()
@@ -83,6 +87,7 @@ async def create_category(db: AsyncIOMotorDatabase, data: CategoryCreate) -> dic
     existing = await repo.find_one({"name": {"$regex": f"^{data.name.strip()}$", "$options": "i"}})
     if existing:
         raise ConflictError(f"Category with name '{data.name}' already exists")
+    super_oid = await resolve_super_category_id(db, data.super_category_id)
 
     folder_name = slugify(data.name.strip()) or "category"
     category_dir = get_category_dir(folder_name)
@@ -120,6 +125,7 @@ async def create_category(db: AsyncIOMotorDatabase, data: CategoryCreate) -> dic
         "thumbnail_url": thumb_url,
         "image_url": data.image_url,
         "sequence": assigned_seq,
+        "super_category_id": super_oid,
         "created_at": now,
         "updated_at": now,
         "deleted_at": None,
@@ -163,6 +169,8 @@ async def update_category(
         update_fields["image_url"] = data.image_url
     if data.sequence is not None:
         update_fields["sequence"] = data.sequence
+    if "super_category_id" in data.model_fields_set:
+        update_fields["super_category_id"] = await resolve_super_category_id(db, data.super_category_id)
 
     if update_fields:
         await repo.update_one({"_id": oid}, {"$set": update_fields})

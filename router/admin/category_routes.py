@@ -17,6 +17,7 @@ from controller.category_controller import (
 )
 from controller.csv_update_controller import apply_csv_column_updates
 from controller.media_controller import handle_upload, process_category_media_upload
+from controller.super_category_controller import list_super_categories
 from database.collections import ASSETS, CATEGORIES, SUBCATEGORIES
 from database.models.category import CategoryCreate, CategoryUpdate
 from router.deps import get_db
@@ -44,6 +45,7 @@ async def admin_list_categories(
     order: str = Query(default="asc"),
     deleted: int | None = None,
     name: str | None = None,
+    superCategoryId: str | None = None,
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -73,8 +75,18 @@ async def admin_list_categories(
         current_sort = "sequence"
 
     data = await list_categories(
-        db, page=page, page_size=effective_page_size, search=search, sort_by=sort_by, sort_order=sort_order
+        db,
+        page=page,
+        page_size=effective_page_size,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        super_category_id=superCategoryId or None,
     )
+    super_categories = await list_super_categories(db)
+    super_names = {sc["id"]: sc["name"] for sc in super_categories}
+    for item in data.get("items", []):
+        item["super_category_name"] = super_names.get(str(item.get("super_category_id") or ""))
 
     # Attach live subcategory & asset counts for critical warning checks
     for item in data.get("items", []):
@@ -107,6 +119,8 @@ async def admin_list_categories(
             "active_tab": "categories",
             "toast_message": toast_message,
             "return_url": current_return_url,
+            "super_categories": super_categories,
+            "selected_super": superCategoryId or "",
         },
     )
 
@@ -115,6 +129,7 @@ async def admin_list_categories(
 async def admin_new_category_page(
     request: Request,
     return_url: str | None = Query(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
     if not session:
@@ -129,6 +144,7 @@ async def admin_new_category_page(
             "error": None,
             "active_tab": "categories",
             "return_url": safe_return,
+            "super_categories": await list_super_categories(db),
         },
     )
 
@@ -143,6 +159,7 @@ async def admin_create_category(
     thumbnail_file: UploadFile | None = File(default=None),
     image_file: UploadFile | None = File(default=None),
     return_url: str | None = Form(default=None),
+    super_category_id: str | None = Form(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -165,6 +182,7 @@ async def admin_create_category(
                 name=name,
                 thumbnail_url=final_thumb_url or None,
                 image_url=final_img_url or None,
+                super_category_id=super_category_id or None,
             ),
         )
         redirect_target = safe_redirect_url(return_url, "/admin/categories")
@@ -175,10 +193,11 @@ async def admin_create_category(
             name="categories/form.html",
             context={
                 "session": session,
-                "category": {"name": name, "thumbnail_url": thumbnail_url, "image_url": image_url},
+                "category": {"name": name, "thumbnail_url": thumbnail_url, "image_url": image_url, "super_category_id": super_category_id},
                 "error": err.message,
                 "active_tab": "categories",
                 "return_url": safe_redirect_url(return_url, "/admin/categories"),
+                "super_categories": await list_super_categories(db),
             },
             status_code=409,
         )
@@ -297,6 +316,7 @@ async def admin_edit_category_page(
             "error": None,
             "active_tab": "categories",
             "return_url": safe_return,
+            "super_categories": await list_super_categories(db),
         },
     )
 
@@ -312,6 +332,7 @@ async def admin_update_category(
     thumbnail_file: UploadFile | None = File(default=None),
     image_file: UploadFile | None = File(default=None),
     return_url: str | None = Form(default=None),
+    super_category_id: str | None = Form(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -335,6 +356,7 @@ async def admin_update_category(
                 name=name,
                 thumbnail_url=final_thumb_url or None,
                 image_url=final_img_url or None,
+                super_category_id=super_category_id or None,
             ),
         )
         redirect_target = safe_redirect_url(return_url, "/admin/categories")
@@ -350,6 +372,7 @@ async def admin_update_category(
                 "error": err.message,
                 "active_tab": "categories",
                 "return_url": safe_redirect_url(return_url, "/admin/categories"),
+                "super_categories": await list_super_categories(db),
             },
             status_code=409,
         )

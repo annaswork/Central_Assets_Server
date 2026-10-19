@@ -78,6 +78,8 @@ Example:  https://assets.yourcompany.com + /static/central_data/stickers/summer/
 
 ## 3. Endpoints Reference
 
+Content hierarchy: **Super Category** *(optional)* → **Category** → **Subcategory** → **Asset**.
+
 All client endpoints are scoped under:  
 `{BASE_URL}/instance/{instanceId}`
 
@@ -85,7 +87,7 @@ All client endpoints are scoped under:
 
 ### 3.1 Get Full Catalog Tree (Splash / Boot Preload)
 
-Retrieves the complete category → subcategory → asset hierarchy for this app in a single call.  
+Retrieves the complete category → subcategory → asset hierarchy for this app in a single call, plus the optional `super_categories` grouping level.  
 Only enabled items (`is_enabled: true`) are returned. Ideal for initial app boot, splash screen pre-caching, or offline storage.
 
 * **Method:** `GET`
@@ -98,10 +100,23 @@ Only enabled items (`is_enabled: true`) are returned. Ideal for initial app boot
 ```json
 {
   "app_instance_id": "6650a3f1c2e4b80012abcdef",
+  "super_categories": [
+    {
+      "id": "66d4e5f6a7b8c90012345678",
+      "name": "Seasonal",
+      "thumbnail_url": "/static/central_data/_super/seasonal/thumb.webp",
+      "image_url": null,
+      "is_enabled": true,
+      "sequence": 1,
+      "overrides": {},
+      "categoryIds": ["66a1b2c3d4e5f60012345678"]
+    }
+  ],
   "categories": [
     {
       "id": "66a1b2c3d4e5f60012345678",
       "sourceId": "669f1234abcd5678ef901234",
+      "superCategoryId": "66d4e5f6a7b8c90012345678",
       "name": "Frames",
       "thumbnail_url": "/static/central_data/frames/thumb.webp",
       "sequence": 1,
@@ -151,6 +166,8 @@ Only enabled items (`is_enabled: true`) are returned. Ideal for initial app boot
 }
 ```
 
+> **Super Categories:** `super_categories` lists the enabled super categories, each with the ordered `categoryIds` it groups. Every category carries `superCategoryId` (`null` when ungrouped). The nested `categories` tree is unchanged, so clients that don't use super categories can ignore both fields.
+
 #### cURL Example
 ```bash
 curl -X GET "https://assets.yourcompany.com/api/v1/instance/6650a3f1c2e4b80012abcdef/catalog" \
@@ -159,9 +176,49 @@ curl -X GET "https://assets.yourcompany.com/api/v1/instance/6650a3f1c2e4b80012ab
 
 ---
 
+### 3.1a List Super Categories
+
+Fetches the optional top-level groups (e.g. "Seasonal", "Festive") above categories. Sorted by `sequence`, then `name`.
+
+* **Method:** `GET`
+* **Path:** `/api/v1/instance/{instanceId}/super-categories`
+* **Required Scope:** `categories:read`
+
+#### Query Parameters
+| Parameter | Type | Required | Default | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `only_enabled` | `boolean` | No | `false` | If `true`, returns only enabled super categories. |
+
+* **Request Body:** None
+
+#### Response (`200 OK`)
+```json
+[
+  {
+    "id": "66d4e5f6a7b8c90012345678",
+    "name": "Seasonal",
+    "thumbnail_url": "/static/central_data/_super/seasonal/thumb.webp",
+    "image_url": "/static/central_data/_super/seasonal/banner.webp",
+    "is_enabled": true,
+    "sequence": 1,
+    "overrides": {}
+  }
+]
+```
+
+To list the categories inside one, call [3.2 List Categories](#32-list-categories) with `?superCategoryId={id}`.
+
+#### cURL Example
+```bash
+curl -X GET "https://assets.yourcompany.com/api/v1/instance/6650a3f1c2e4b80012abcdef/super-categories?only_enabled=true" \
+  -H "X-API-Key: ak_prod_YOUR_API_KEY"
+```
+
+---
+
 ### 3.2 List Categories
 
-Fetches the list of categories assigned to this app instance.
+Fetches the list of categories assigned to this app instance, optionally limited to one super category.
 
 * **Method:** `GET`
 * **Path:** `/api/v1/instance/{instanceId}/categories`
@@ -171,6 +228,7 @@ Fetches the list of categories assigned to this app instance.
 | Parameter | Type | Required | Default | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `only_enabled` | `boolean` | No | `false` | If `true`, returns only enabled categories. |
+| `superCategoryId` | `string` | No | `null` | Only categories inside this super category (instance super category `id`; its central source ID is also accepted). |
 
 * **Request Body:** None
 
@@ -180,6 +238,7 @@ Fetches the list of categories assigned to this app instance.
   {
     "id": "66a1b2c3d4e5f60012345678",
     "sourceId": "669f1234abcd5678ef901234",
+    "superCategoryId": "66d4e5f6a7b8c90012345678",
     "name": "Stickers",
     "thumbnail_url": "/static/central_data/stickers/thumb.webp",
     "image_url": "/static/central_data/stickers/banner.webp",
@@ -190,9 +249,11 @@ Fetches the list of categories assigned to this app instance.
 ]
 ```
 
+`superCategoryId` is `null` for categories not placed in any super category.
+
 #### cURL Example
 ```bash
-curl -X GET "https://assets.yourcompany.com/api/v1/instance/6650a3f1c2e4b80012abcdef/categories?only_enabled=true" \
+curl -X GET "https://assets.yourcompany.com/api/v1/instance/6650a3f1c2e4b80012abcdef/categories?superCategoryId=66d4e5f6a7b8c90012345678&only_enabled=true" \
   -H "X-API-Key: ak_prod_YOUR_API_KEY"
 ```
 

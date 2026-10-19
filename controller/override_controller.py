@@ -13,16 +13,18 @@ from database.collections import (
     INSTANCE_ASSETS,
     INSTANCE_CATEGORIES,
     INSTANCE_SUBCATEGORIES,
+    INSTANCE_SUPER_CATEGORIES,
 )
+from database.repository import instance_collection
 from utils.datetimes import utc_now
 from utils.errors import NotFoundError, ValidationError
 from utils.ids import to_object_id
 from utils.sequencing import generate_sequence_reordering
 
-ALLOWED_CATEGORY_OVERRIDES = {"name", "thumbnail_url", "image_url"}
-ALLOWED_SUBCATEGORY_OVERRIDES = {"name", "thumbnail_url", "image_url"}
+ALLOWED_FOLDER_OVERRIDES = {"name", "thumbnail_url", "image_url"}
 ALLOWED_ASSET_OVERRIDES = {"name", "description", "thumbnail_url", "more_fields", "tags"}
 BLOCKED_OVERRIDE_KEYS = {
+    "super_category_id",
     "category_id",
     "sub_category_id",
     "source_id",
@@ -30,6 +32,19 @@ BLOCKED_OVERRIDE_KEYS = {
     "updated_at",
     "deleted_at",
 }
+
+
+_COLLECTION_BY_TYPE = {
+    "super_category": INSTANCE_SUPER_CATEGORIES,
+    "supercategory": INSTANCE_SUPER_CATEGORIES,
+    "category": INSTANCE_CATEGORIES,
+    "subcategory": INSTANCE_SUBCATEGORIES,
+}
+
+
+def _collection_for(item_type: str) -> str:
+    """Instance collection for an item type; anything unrecognized is treated as an asset."""
+    return _COLLECTION_BY_TYPE.get(item_type, INSTANCE_ASSETS)
 
 
 async def update_item_settings_and_overrides(
@@ -49,17 +64,9 @@ async def update_item_settings_and_overrides(
     inst_oid = to_object_id(app_instance_id)
     ref_oid = to_object_id(item_id)
 
-    col_name = (
-        INSTANCE_CATEGORIES
-        if item_type == "category"
-        else INSTANCE_SUBCATEGORIES if item_type == "subcategory" else INSTANCE_ASSETS
-    )
+    col_name = _collection_for(item_type)
     allowed_overrides = (
-        ALLOWED_CATEGORY_OVERRIDES
-        if item_type == "category"
-        else (
-            ALLOWED_SUBCATEGORY_OVERRIDES if item_type == "subcategory" else ALLOWED_ASSET_OVERRIDES
-        )
+        ALLOWED_ASSET_OVERRIDES if col_name == INSTANCE_ASSETS else ALLOWED_FOLDER_OVERRIDES
     )
 
     query = {
@@ -68,7 +75,7 @@ async def update_item_settings_and_overrides(
         "deleted_at": None,
     }
 
-    doc = await db[col_name].find_one(query)
+    doc = await instance_collection(db, col_name).find_one(query)
     if not doc:
         raise NotFoundError(f"Instance {item_type} reference not found")
 
@@ -114,8 +121,8 @@ async def update_item_settings_and_overrides(
         elif "tags" in overrides and overrides["tags"] is None:
             set_fields["tags"] = []
 
-    await db[col_name].update_one({"_id": doc["_id"]}, {"$set": set_fields})
-    updated = await db[col_name].find_one({"_id": doc["_id"]})
+    await instance_collection(db, col_name).update_one({"_id": doc["_id"]}, {"$set": set_fields})
+    updated = await instance_collection(db, col_name).find_one({"_id": doc["_id"]})
     return updated  # type: ignore
 
 
@@ -130,11 +137,7 @@ async def reset_overrides(
     inst_oid = to_object_id(app_instance_id)
     ref_oid = to_object_id(item_id)
 
-    col_name = (
-        INSTANCE_CATEGORIES
-        if item_type == "category"
-        else INSTANCE_SUBCATEGORIES if item_type == "subcategory" else INSTANCE_ASSETS
-    )
+    col_name = _collection_for(item_type)
 
     query = {
         "app_instance_id": inst_oid,
@@ -142,25 +145,25 @@ async def reset_overrides(
         "deleted_at": None,
     }
 
-    doc = await db[col_name].find_one(query)
+    doc = await instance_collection(db, col_name).find_one(query)
     if not doc:
         raise NotFoundError(f"Instance {item_type} reference not found")
 
     if not fields:
         # Reset all overrides
-        await db[col_name].update_one(
+        await instance_collection(db, col_name).update_one(
             {"_id": doc["_id"]},
             {"$set": {"overrides": {}, "updated_at": utc_now()}},
         )
     else:
         # Unset specific keys from the overrides object
         unset_dict = {f"overrides.{f}": "" for f in fields}
-        await db[col_name].update_one(
+        await instance_collection(db, col_name).update_one(
             {"_id": doc["_id"]},
             {"$unset": unset_dict, "$set": {"updated_at": utc_now()}},
         )
 
-    updated = await db[col_name].find_one({"_id": doc["_id"]})
+    updated = await instance_collection(db, col_name).find_one({"_id": doc["_id"]})
     return updated  # type: ignore
 
 
@@ -172,18 +175,14 @@ async def reorder_items(
 ) -> dict[str, Any]:
     """Assign sequence numbers spaced by 10 according to the provided ordered list of IDs."""
     inst_oid = to_object_id(app_instance_id)
-    col_name = (
-        INSTANCE_CATEGORIES
-        if item_type == "category"
-        else INSTANCE_SUBCATEGORIES if item_type == "subcategory" else INSTANCE_ASSETS
-    )
+    col_name = _collection_for(item_type)
 
     reorder_pairs = generate_sequence_reordering(ordered_ids)
     now = utc_now()
 
     for item_id, seq in reorder_pairs:
         oid = to_object_id(item_id)
-        await db[col_name].update_one(
+        await instance_collection(db, col_name).update_one(
             {
                 "app_instance_id": inst_oid,
                 "$or": [{"_id": oid}, {"source_id": oid}],
@@ -205,11 +204,7 @@ async def bulk_update_flags(
 ) -> dict[str, Any]:
     """Bulk update is_enabled and/or is_premium flags across referenced items in an app."""
     inst_oid = to_object_id(app_instance_id)
-    col_name = (
-        INSTANCE_CATEGORIES
-        if item_type == "category"
-        else INSTANCE_SUBCATEGORIES if item_type == "subcategory" else INSTANCE_ASSETS
-    )
+    col_name = _collection_for(item_type)
 
     set_fields: dict[str, Any] = {"updated_at": utc_now()}
     if is_enabled is not None:
@@ -218,7 +213,7 @@ async def bulk_update_flags(
         set_fields["is_premium"] = is_premium
 
     oids = [to_object_id(i) for i in ids]
-    res = await db[col_name].update_many(
+    res = await instance_collection(db, col_name).update_many(
         {
             "app_instance_id": inst_oid,
             "$or": [{"_id": {"$in": oids}}, {"source_id": {"$in": oids}}],

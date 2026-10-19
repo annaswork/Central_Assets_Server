@@ -23,7 +23,7 @@
   </div>
 </div>
 
-{% if target_category_id or target_sub_category_id %}
+{% if target_category_id or target_sub_category_id or target_super_category_id %}
 <div class="banner banner-info"
   style="margin-bottom:1.5rem; display:flex; align-items:center; justify-content:space-between;">
   <div>
@@ -40,6 +40,9 @@
 <!-- Picker Tab Navigation -->
 <div
   style="display:flex; gap:0.5rem; margin-bottom:1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.75rem;">
+  <button type="button" id="tabBtnSuper" class="btn btn-outlined" onclick="switchTab('supercategories')" style="min-height:36px; padding:0.35rem 1rem;">
+    ⭐ Super Categories <span class="badge badge-secondary" style="margin-left:0.35rem;">{{ super_categories|length }}</span>
+  </button>
   <button type="button" id="tabBtnCategories" class="btn btn-primary" onclick="switchTab('categories')"
     style="min-height:36px; padding:0.35rem 1rem;">
     📁 Categories (Folders) <span class="badge badge-secondary" style="margin-left:0.35rem;">{{ categories|length
@@ -55,6 +58,8 @@
     🖼️ Individual Assets
   </button>
 </div>
+
+{% include "partials/picker_super_categories_tab.html" %}
 
 <!-- TAB 1: CATEGORIES (WHOLE FOLDERS) -->
 <div id="tabContentCategories">
@@ -284,6 +289,7 @@
   const instanceId = "{{ instance.id }}";
   const targetCategoryId = "{{ target_category_id }}";
   const targetSubCategoryId = "{{ target_sub_category_id }}";
+  const targetSuperCategoryId = "{{ target_super_category_id }}";
 
   let currentTab = 'categories';
   const selectedCategoryIds = new Set();
@@ -295,10 +301,12 @@
 
   function switchTab(tab) {
     currentTab = tab;
+    document.getElementById('tabContentSuper').style.display = tab === 'supercategories' ? 'block' : 'none';
     document.getElementById('tabContentCategories').style.display = tab === 'categories' ? 'block' : 'none';
     document.getElementById('tabContentSubcategories').style.display = tab === 'subcategories' ? 'block' : 'none';
     document.getElementById('tabContentAssets').style.display = tab === 'assets' ? 'block' : 'none';
 
+    document.getElementById('tabBtnSuper').className = tab === 'supercategories' ? 'btn btn-primary' : 'btn btn-outlined';
     document.getElementById('tabBtnCategories').className = tab === 'categories' ? 'btn btn-primary' : 'btn btn-outlined';
     document.getElementById('tabBtnSubcategories').className = tab === 'subcategories' ? 'btn btn-primary' : 'btn btn-outlined';
     document.getElementById('tabBtnAssets').className = tab === 'assets' ? 'btn btn-primary' : 'btn btn-outlined';
@@ -578,6 +586,7 @@
     }
     const payload = { category_ids: [catId] };
     if (targetCategoryId) payload.target_category_id = targetCategoryId;
+    if (targetSuperCategoryId) payload.target_super_category_id = targetSuperCategoryId;
     if (targetSubCategoryId) payload.target_sub_category_id = targetSubCategoryId;
     await sendAddReferencesRequest(payload);
   }
@@ -588,6 +597,7 @@
     }
     const payload = { sub_category_ids: [subId] };
     if (targetCategoryId) payload.target_category_id = targetCategoryId;
+    if (targetSuperCategoryId) payload.target_super_category_id = targetSuperCategoryId;
     if (targetSubCategoryId) payload.target_sub_category_id = targetSubCategoryId;
     await sendAddReferencesRequest(payload);
   }
@@ -599,6 +609,7 @@
       asset_ids: Array.from(selectedAssetIds)
     };
     if (targetCategoryId) payload.target_category_id = targetCategoryId;
+    if (targetSuperCategoryId) payload.target_super_category_id = targetSuperCategoryId;
     if (targetSubCategoryId) payload.target_sub_category_id = targetSubCategoryId;
 
     await sendAddReferencesRequest(payload);
@@ -629,8 +640,10 @@
   document.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
     const tabParam = urlParams.get('tab');
-    if (tabParam === 'subcategories' || tabParam === 'assets' || tabParam === 'categories') {
+    if (tabParam === 'supercategories' || tabParam === 'subcategories' || tabParam === 'assets' || tabParam === 'categories') {
       switchTab(tabParam);
+    } else if (targetSuperCategoryId) {
+      switchTab('categories');
     } else if (targetSubCategoryId) {
       switchTab('assets');
     } else if (targetCategoryId) {

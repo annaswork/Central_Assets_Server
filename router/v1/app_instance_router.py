@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from authorization.instance_guard import require_unbound_key
 from authorization.scopes import require_scope
 from controller.app_instance_controller import (
     create_app_instance,
@@ -18,7 +19,7 @@ from database.models.app_instance import AppInstanceCreate, AppInstanceUpdate
 from router.deps import get_db, get_pagination
 from utils.pagination import PageParams
 
-router = APIRouter(prefix="/app-instances", tags=["App Instances"])
+router = APIRouter(prefix="/app-instances", tags=["App Instances"], dependencies=[Depends(require_unbound_key)])
 
 
 @router.get("", dependencies=[Depends(require_scope("keys:manage"))])

@@ -12,6 +12,7 @@ from database.collections import (
     INSTANCE_ASSETS,
     INSTANCE_CATEGORIES,
     INSTANCE_SUBCATEGORIES,
+    INSTANCE_SUPER_CATEGORIES,
 )
 from database.models.app_instance import AppInstanceCreate, AppInstanceUpdate
 from utils.datetimes import utc_now
@@ -152,6 +153,9 @@ async def delete_app_instance(db: AsyncIOMotorDatabase, instance_id: str) -> dic
 
     now = utc_now()
     # Soft delete all instance reference rows for this app
+    await db[INSTANCE_SUPER_CATEGORIES].update_many(
+        {"app_instance_id": oid}, {"$set": {"deleted_at": now}}
+    )
     await db[INSTANCE_CATEGORIES].update_many(
         {"app_instance_id": oid}, {"$set": {"deleted_at": now}}
     )

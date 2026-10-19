@@ -19,10 +19,12 @@ from database.collections import (
     INSTANCE_ASSETS,
     INSTANCE_CATEGORIES,
     INSTANCE_SUBCATEGORIES,
+    INSTANCE_SUPER_CATEGORIES,
     MANAGERS,
     MESSAGES,
     MONITORED_ENDPOINTS,
     SUBCATEGORIES,
+    SUPER_CATEGORIES,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,6 +37,19 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
     """Create all required declarative indexes across collections."""
     logger.info("Applying database index declarations...")
 
+    # 0. Super Categories (optional parent level above categories)
+    await db[SUPER_CATEGORIES].create_indexes(
+        [
+            IndexModel(
+                [("name", ASCENDING)],
+                unique=True,
+                collation=CASE_INSENSITIVE_COLLATION,
+                name="uniq_super_category_name_ci",
+            ),
+            IndexModel([("deleted_at", ASCENDING)], name="idx_super_category_deleted_at"),
+        ]
+    )
+
     # 1. Categories
     await db[CATEGORIES].create_indexes(
         [
@@ -45,6 +60,7 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
                 name="uniq_category_name_ci",
             ),
             IndexModel([("deleted_at", ASCENDING)], name="idx_category_deleted_at"),
+            IndexModel([("super_category_id", ASCENDING)], name="idx_category_super_category_id"),
         ]
     )
 
@@ -102,6 +118,23 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
         ]
     )
 
+    # 5a. Instance Super Categories
+    await db[INSTANCE_SUPER_CATEGORIES].create_indexes(
+        [
+            IndexModel(
+                [("app_instance_id", ASCENDING), ("source_id", ASCENDING)],
+                unique=True,
+                partialFilterExpression={"source_id": {"$type": "objectId"}},
+                name="uniq_instance_super_category_source",
+            ),
+            IndexModel(
+                [("app_instance_id", ASCENDING), ("sequence", ASCENDING)],
+                name="idx_instance_super_category_sequence",
+            ),
+            IndexModel([("source_id", ASCENDING)], name="idx_instance_super_category_reverse_lookup"),
+        ]
+    )
+
     # 5. Instance Categories
     try:
         await db[INSTANCE_CATEGORIES].drop_index("uniq_instance_category_source")
@@ -126,6 +159,10 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
             ),
             IndexModel([("source_id", ASCENDING)], name="idx_instance_category_reverse_lookup"),
             IndexModel([("deleted_at", ASCENDING)], name="idx_instance_category_deleted_at"),
+            IndexModel(
+                [("app_instance_id", ASCENDING), ("super_category_id", ASCENDING)],
+                name="idx_instance_category_super",
+            ),
         ]
     )
 

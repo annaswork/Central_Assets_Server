@@ -18,34 +18,38 @@ from database.collections import (
     INSTANCE_ASSETS,
     INSTANCE_CATEGORIES,
     INSTANCE_SUBCATEGORIES,
+    INSTANCE_SUPER_CATEGORIES,
     SUBCATEGORIES,
+    SUPER_CATEGORIES,
 )
 from utils.ids import to_object_id
 
 
-async def get_resolved_categories(
-    db: AsyncIOMotorDatabase,
-    app_instance_id: str,
-    only_enabled: bool = False,
-) -> list[dict[str, Any]]:
-    """Retrieve resolved categories for an app instance with overrides merged."""
-    inst_oid = to_object_id(app_instance_id)
+def _one_parent(id_var: str, cat_var: str | None = None) -> list[dict[str, Any]]:
+    """Parent-lookup tail keeping a single match: the exact _id first, else one in the same category.
 
-    match_filter: dict[str, Any] = {"app_instance_id": inst_oid, "deleted_at": None}
-    if only_enabled:
-        match_filter["is_enabled"] = True
+    A central subcategory can live in several instance categories, so the source_id fallbacks
+    match many parents and the following $unwind would show the row once per parent.
+    """
+    rank: dict[str, Any] = {"_exact": {"$eq": ["$_id", f"$${id_var}"]}}
+    if cat_var:
+        rank["_same_cat"] = {"$eq": ["$category_id", f"$${cat_var}"]}
+    return [{"$addFields": rank}, {"$sort": {k: -1 for k in rank}}, {"$limit": 1}]
 
-    pipeline = [
+
+def _top_folder_pipeline(match_filter: dict[str, Any], central_coll: str, extra: dict[str, Any]) -> list[dict[str, Any]]:
+    """Resolve instance folder rows (super categories / categories) against their central docs + overrides."""
+    return [
         {"$match": match_filter},
         {
             "$lookup": {
-                "from": CATEGORIES,
+                "from": central_coll,
                 "localField": "source_id",
                 "foreignField": "_id",
                 "as": "central",
             }
         },
-        # Preserve categories created directly in the app instance (where source_id is None)
+        # Preserve folders created directly in the app instance (where source_id is None)
         {"$unwind": {"path": "$central", "preserveNullAndEmptyArrays": True}},
         {
             "$match": {
@@ -58,6 +62,7 @@ async def get_resolved_categories(
         {
             "$project": {
                 "id": {"$toString": "$_id"},
+                **extra,
                 "is_enabled": "$is_enabled",
                 "sequence": "$sequence",
                 "overrides": {"$ifNull": ["$overrides", {}]},
@@ -77,6 +82,7 @@ async def get_resolved_categories(
             "$project": {
                 "_id": 0,
                 "id": 1,
+                **{k: 1 for k in extra},
                 "is_enabled": 1,
                 "sequence": 1,
                 "overrides": 1,
@@ -88,6 +94,47 @@ async def get_resolved_categories(
         {"$sort": {"sequence": 1, "name": 1}},
     ]
 
+
+async def get_resolved_super_categories(
+    db: AsyncIOMotorDatabase,
+    app_instance_id: str,
+    only_enabled: bool = False,
+) -> list[dict[str, Any]]:
+    """Retrieve resolved super categories (the optional level above categories) for an app instance."""
+    match_filter: dict[str, Any] = {"app_instance_id": to_object_id(app_instance_id), "deleted_at": None}
+    if only_enabled:
+        match_filter["is_enabled"] = True
+    cursor = db[INSTANCE_SUPER_CATEGORIES].aggregate(_top_folder_pipeline(match_filter, SUPER_CATEGORIES, {}))
+    return await cursor.to_list(length=None)
+
+
+async def get_resolved_categories(
+    db: AsyncIOMotorDatabase,
+    app_instance_id: str,
+    only_enabled: bool = False,
+    super_category_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Retrieve resolved categories for an app instance with overrides merged.
+
+    `superCategoryId` is the instance super category _id (or None when ungrouped).
+    """
+    inst_oid = to_object_id(app_instance_id)
+
+    match_filter: dict[str, Any] = {"app_instance_id": inst_oid, "deleted_at": None}
+    if only_enabled:
+        match_filter["is_enabled"] = True
+    if super_category_id:
+        sc_oid = to_object_id(super_category_id)
+        sup = await db[INSTANCE_SUPER_CATEGORIES].find_one(
+            {"app_instance_id": inst_oid, "$or": [{"_id": sc_oid}, {"source_id": sc_oid}]}, {"_id": 1}
+        )
+        match_filter["super_category_id"] = sup["_id"] if sup else sc_oid
+
+    pipeline = _top_folder_pipeline(
+        match_filter,
+        CATEGORIES,
+        {"superCategoryId": {"$cond": [{"$ifNull": ["$super_category_id", False]}, {"$toString": "$super_category_id"}, None]}},
+    )
     cursor = db[INSTANCE_CATEGORIES].aggregate(pipeline)
     return await cursor.to_list(length=None)
 
@@ -168,7 +215,8 @@ async def get_resolved_subcategories(
                                 ]
                             }
                         }
-                    }
+                    },
+                    *_one_parent("sub_cat_id"),
                 ],
                 "as": "parent_inst_cat",
             }
@@ -318,7 +366,8 @@ async def get_resolved_assets(
                                 ]
                             }
                         }
-                    }
+                    },
+                    *_one_parent("asset_cat_id"),
                 ],
                 "as": "parent_inst_cat",
             }
@@ -329,6 +378,7 @@ async def get_resolved_assets(
                 "from": INSTANCE_SUBCATEGORIES,
                 "let": {
                     "asset_sub_id": "$sub_category_id",
+                    "asset_cat_id": "$category_id",
                     "central_sub_id": "$central.sub_category_id",
                     "inst_id": "$app_instance_id",
                 },
@@ -354,7 +404,8 @@ async def get_resolved_assets(
                                 ]
                             }
                         }
-                    }
+                    },
+                    *_one_parent("asset_sub_id", "asset_cat_id"),
                 ],
                 "as": "parent_inst_sub",
             }
@@ -581,7 +632,8 @@ async def get_resolved_single_asset(
                                 ]
                             }
                         }
-                    }
+                    },
+                    *_one_parent("asset_cat_id"),
                 ],
                 "as": "parent_inst_cat",
             }
@@ -592,6 +644,7 @@ async def get_resolved_single_asset(
                 "from": INSTANCE_SUBCATEGORIES,
                 "let": {
                     "asset_sub_id": "$sub_category_id",
+                    "asset_cat_id": "$category_id",
                     "central_sub_id": "$central.sub_category_id",
                     "inst_id": "$app_instance_id",
                 },
@@ -617,7 +670,8 @@ async def get_resolved_single_asset(
                                 ]
                             }
                         }
-                    }
+                    },
+                    *_one_parent("asset_sub_id", "asset_cat_id"),
                 ],
                 "as": "parent_inst_sub",
             }
@@ -759,7 +813,12 @@ async def get_instance_catalog(
     db: AsyncIOMotorDatabase,
     app_instance_id: str,
 ) -> dict[str, Any]:
-    """Build the complete, resolved, enabled catalog hierarchy ready for client apps."""
+    """Build the complete, resolved, enabled catalog hierarchy ready for client apps.
+
+    `categories` keeps its original nested shape; `super_categories` (additive) lists the optional top level,
+    each with the ordered `categoryIds` it groups. Categories carry `superCategoryId`.
+    """
+    super_categories = await get_resolved_super_categories(db, app_instance_id, only_enabled=True)
     categories = await get_resolved_categories(db, app_instance_id, only_enabled=True)
     subcategories = await get_resolved_subcategories(db, app_instance_id, only_enabled=True)
     assets = await get_resolved_assets(db, app_instance_id, only_enabled=True)
@@ -777,10 +836,16 @@ async def get_instance_catalog(
         cat_id = s.get("categoryId", "")
         subs_by_cat.setdefault(cat_id, []).append(s)
 
+    cat_ids_by_super: dict[str, list[str]] = {}
     for c in categories:
         c["subcategories"] = subs_by_cat.get(c["id"], [])
+        if c.get("superCategoryId"):
+            cat_ids_by_super.setdefault(c["superCategoryId"], []).append(c["id"])
+    for sc in super_categories:
+        sc["categoryIds"] = cat_ids_by_super.get(sc["id"], [])
 
     return {
         "app_instance_id": app_instance_id,
+        "super_categories": super_categories,
         "categories": categories,
     }

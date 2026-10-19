@@ -62,6 +62,7 @@
     <form method="GET" action="/manager/instances/{{ instance.id }}/content" class="search-filter-form" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem; width:100%;">
       <input type="hidden" name="active_section" value="folders">
       <input type="hidden" name="tab" value="folders">
+      {% if folder_super %}<input type="hidden" name="folder_super" value="{{ folder_super }}">{% endif %}
       <div class="filter-group-left" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; flex-shrink:0; white-space:nowrap;">
         <select name="folder_cat" id="managerFolderCategoryFilter" class="select" style="max-width:220px;" onchange="this.form.submit()">
           <option value="">All Categories</option>
@@ -91,6 +92,9 @@
       </div>
     </form>
   </div>
+  {% set portal_base = '/manager' %}
+  {% include "partials/instance_super_categories.html" %}
+
   {% if categories and categories|length > 0 %}
     <div id="managerCategoriesContainer" style="display:flex; flex-direction:column; gap:1.25rem;">
       {% for cat in categories %}
@@ -121,6 +125,7 @@
             </div>
 
             <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+              {% include "partials/category_super_select.html" %}
               <a href="/manager/instances/{{ instance.id }}/picker?target_category_id={{ cat.sourceId or cat.id }}&tab=subcategories" class="btn btn-outlined" style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;" title="Import Central Items into this Folder">
                 📥 Import Central Data
               </a>
@@ -193,7 +198,7 @@
         </div>
       {% endfor %}
     </div>
-  {% elif folder_cat or folder_search %}
+  {% elif folder_cat or folder_search or folder_super %}
     <div class="card" style="text-align:center; padding:3.5rem 1rem; color:var(--md-sys-color-on-surface-variant);">
       <div style="font-size:2.5rem; margin-bottom:0.5rem;">🔍</div>
       <div style="font-size:1.1rem; font-weight:600;">No matching categories or subcategories found</div>
@@ -491,6 +496,10 @@
         <label class="label">Folder Level</label>
         <div style="display:flex; gap:1.5rem; margin-top:0.35rem;">
           <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer;">
+            <input type="radio" name="folder_type" value="supercategory" onchange="onFolderTypeChange('supercategory')">
+            <span>⭐ Super Category</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer;">
             <input type="radio" name="folder_type" value="category" checked onchange="onFolderTypeChange('category')">
             <span>Category (Top-level)</span>
           </label>
@@ -499,6 +508,23 @@
             <span>Sub-folder (Subcategory)</span>
           </label>
         </div>
+      </div>
+
+      <div id="parentSuperWrap" class="form-group" style="margin-bottom:1rem;">
+        <label class="label" for="parentSuperSelect">Super Category (Optional)</label>
+        <select id="parentSuperSelect" class="select" style="width:100%;">
+          <option value="">— None (ungrouped) —</option>
+          {% if super_categories %}<optgroup label="In this app">
+          {% for sc in super_categories %}
+            <option value="{{ sc.id }}">{{ sc.name }}</option>
+          {% endfor %}
+          </optgroup>{% endif %}
+          {% if available_super_categories %}<optgroup label="Central library (adds it to this app)">
+          {% for sc in available_super_categories %}
+            <option value="{{ sc.id }}">＋ {{ sc.name }}</option>
+          {% endfor %}
+          </optgroup>{% endif %}
+        </select>
       </div>
 
       <div id="parentCategoryWrap" class="form-group" style="margin-bottom:1rem; display:none;">
@@ -664,13 +690,16 @@
     }
   }
 
-  function openCreateFolderModal(folderType = 'category', parentCatId = '') {
+  function openCreateFolderModal(folderType = 'category', parentCatId = '', parentSuperId = '') {
     const modal = document.getElementById('createFolderModal');
     const typeRadios = document.getElementsByName('folder_type');
     typeRadios.forEach(r => {
       r.checked = r.value === folderType;
     });
     onFolderTypeChange(folderType);
+
+    const superSelect = document.getElementById('parentSuperSelect');
+    if (superSelect) superSelect.value = parentSuperId || '';
 
     if (parentCatId) {
       const pSelect = document.getElementById('parentCategorySelect');
@@ -689,6 +718,7 @@
 
   function onFolderTypeChange(type) {
     const parentWrap = document.getElementById('parentCategoryWrap');
+    document.getElementById('parentSuperWrap').style.display = type === 'category' ? 'block' : 'none';
     parentWrap.style.display = type === 'subcategory' ? 'block' : 'none';
   }
 
@@ -710,6 +740,7 @@
         folder_type: folderType,
         name: name,
         parent_category_id: folderType === 'subcategory' ? parentCategoryId : '',
+        parent_super_category_id: folderType === 'category' ? document.getElementById('parentSuperSelect').value : '',
         thumbnail_url: thumbnailUrl
       };
 

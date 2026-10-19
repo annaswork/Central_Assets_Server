@@ -1,0 +1,26 @@
+{# Per-category "move to super category" selector. Needs: cat, super_categories, available_super_categories;
+   JS from instance_super_categories.html. Focus disables the card's drag so the dropdown opens normally. #}
+{% if super_categories or available_super_categories %}
+<select class="select" title="Super Category" draggable="false"
+  style="min-height:34px; max-width:200px; font-size:0.8rem; padding:0.2rem 0.5rem;"
+  onfocus="setCardDraggable(this, false)" onblur="setCardDraggable(this, true)"
+  onchange="moveCategoryToSuper('{{ cat.id }}', this.value)">
+  <option value="" {% if not cat.superCategoryId %}selected{% endif %}>⭐ No super category</option>
+  {% if super_categories %}
+  <optgroup label="In this app">
+    {% for sc in super_categories %}
+    <option value="{{ sc.id }}" {% if cat.superCategoryId == sc.id %}selected{% endif %}>⭐ {{ sc.name }}</option>
+    {% endfor %}
+  </optgroup>
+  {% endif %}
+  {% if available_super_categories %}
+  <optgroup label="Central library (adds it to this app)">
+    {% for sc in available_super_categories %}
+    <option value="{{ sc.id }}">＋ {{ sc.name }}</option>
+    {% endfor %}
+  </optgroup>
+  {% endif %}
+</select>
+{% elif cat.super_category_name %}
+<span class="badge badge-primary" style="font-size:0.75rem;">⭐ {{ cat.super_category_name }}</span>
+{% endif %}

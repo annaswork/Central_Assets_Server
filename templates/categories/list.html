@@ -45,13 +45,22 @@
     style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem; width:100%;">
     <div class="filter-group-left"
       style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; flex-shrink:0; white-space:nowrap;">
+      {% if super_categories %}
+      <select name="superCategoryId" id="categorySuperSelect" class="select" style="min-width:150px; max-width:200px;"
+        onchange="this.form.submit()">
+        <option value="">All Super Categories</option>
+        {% for sc in super_categories %}
+        <option value="{{ sc.id }}" {% if selected_super == sc.id %}selected{% endif %}>⭐ {{ sc.name }}</option>
+        {% endfor %}
+      </select>
+      {% endif %}
       <select name="sort" id="categorySortSelect" class="select" style="min-width:140px; max-width:180px;"
         onchange="this.form.submit()">
         <option value="sequence" {% if sort=='sequence' or not sort %}selected{% endif %}>Sequence / Custom</option>
         <option value="newest" {% if sort=='newest' %}selected{% endif %}>Newest First</option>
         <option value="oldest" {% if sort=='oldest' %}selected{% endif %}>Oldest First</option>
       </select>
-      {% if (sort and sort in ('newest', 'oldest')) and not search %}
+      {% if ((sort and sort in ('newest', 'oldest')) or selected_super) and not search %}
       <a href="/admin/categories" class="btn btn-outlined btn-filter"
         onclick="sessionStorage.removeItem('admin_categories_filter_url')">Clear</a>
       {% endif %}
@@ -82,6 +91,7 @@
             onchange="toggleMasterSelect(this.checked)"></th>
         <th style="width:60px;">Thumb</th>
         <th>Category Name</th>
+        <th>Super Category</th>
         <th>Contents</th>
         <th>CREATED</th>
         <th style="text-align:right;">ACTIONS</th>
@@ -112,6 +122,14 @@
             <span class="badge badge-secondary" style="font-size:0.7rem; padding:0.15rem 0.45rem;">Disabled</span>
             {% endif %}
           </div>
+        </td>
+        <td data-label="Super Category">
+          {% if item.super_category_name %}
+          <a href="/admin/categories?superCategoryId={{ item.super_category_id }}" class="badge badge-primary"
+            style="text-decoration:none;">⭐ {{ item.super_category_name }}</a>
+          {% else %}
+          <span style="color:var(--md-sys-color-on-surface-variant);">—</span>
+          {% endif %}
         </td>
         <td data-label="Contents">
           <div style="display:flex; gap:0.35rem; flex-wrap:wrap;">
@@ -159,7 +177,7 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="5" style="text-align:center; padding:2rem; color:var(--md-sys-color-on-surface-variant);">
+        <td colspan="7" style="text-align:center; padding:2rem; color:var(--md-sys-color-on-surface-variant);">
           No categories found. Click "+ New Category" or "Bulk Add" to get started.
         </td>
       </tr>

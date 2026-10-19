@@ -43,7 +43,7 @@ class BulkFlagsPayload(BaseModel):
 
 
 class ReorderPayload(BaseModel):
-    type: str = Field(..., description="'category', 'subcategory', or 'asset'")
+    type: str = Field(..., description="'super_category', 'category', 'subcategory', or 'asset'")
     ordered_ids: list[str]
 
 

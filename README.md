@@ -13,16 +13,16 @@ A centralized creative asset library and multi-tenant app instance delivery plat
 
 ```
 CENTRAL LIBRARY (Single source of truth for authored content)
-Category ──────────────► Subcategory ──────────────► Asset
-   ▲                          ▲                         ▲
-   │                          │                         │  reference by source_id
-   │                          │                         │  (+ sparse overrides)
-   │                          │                         │
+Super Category ┄┄► Category ──────────────► Subcategory ──────────────► Asset
+ (optional)          ▲                          ▲                         ▲
+      ▲              │                          │                         │  reference by source_id
+      │              │                          │                         │  (+ sparse overrides)
+      │              │                          │                         │
 APP INSTANCE "Photo Editor Pro" (package: com.app.photoeditor)
-Instance Category ─────► Instance Subcategory ─────► Instance Asset
-• is_enabled              • is_enabled               • is_enabled, sequence
-• sequence                • sequence                 • is_premium (monetization)
-• sparse overrides{}      • sparse overrides{}       • analytics (views, downloads)
+Instance Super Cat. ┄► Instance Category ─────► Instance Subcategory ─────► Instance Asset
+• is_enabled            • is_enabled              • is_enabled               • is_enabled, sequence
+• sequence              • super_category_id       • sequence                 • is_premium (monetization)
+• sparse overrides{}    • sparse overrides{}      • sparse overrides{}       • analytics (views, downloads)
 ```
 
 - **One-Way Data Flow**: Edits and sequence orders made within an app instance only affect that specific app. Central content remains clean and untouched.
@@ -33,7 +33,7 @@ Instance Category ─────► Instance Subcategory ─────► Ins
 ## ✨ Key Features
 
 - **Central Asset Catalog**:
-  - 3-level fixed hierarchy: `Category` → `Subcategory` → `Asset`.
+  - Hierarchy: optional `Super Category` → `Category` → `Subcategory` → `Asset` (categories may stay ungrouped).
   - Flexible content blocks: images, videos, audio, text lists, and custom JSON payloads.
   - Transparent frame placeholder detection and bounding-box extraction using OpenCV.
   - Automatic video poster generation and duration/dimension probing via FFmpeg.

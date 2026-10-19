@@ -13,11 +13,13 @@ from router.admin.instance_routes import router as admin_instance_router
 from router.admin.manager_admin_routes import router as admin_managers_router
 from router.admin.settings_routes import router as admin_settings_router
 from router.admin.subcategory_routes import router as admin_subcategory_router
+from router.admin.super_category_routes import router as admin_super_category_router
 
 admin = APIRouter(prefix="/admin")
 
 admin.include_router(admin_auth_router)
 admin.include_router(admin_dashboard_router)
+admin.include_router(admin_super_category_router)
 admin.include_router(admin_category_router)
 admin.include_router(admin_subcategory_router)
 admin.include_router(admin_asset_router)

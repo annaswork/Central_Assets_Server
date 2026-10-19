@@ -5,13 +5,14 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel, Field
 
 from analytics.counters import increment_asset_counter
-from authorization.instance_guard import get_instance_filter
+from authorization.instance_guard import get_instance_filter, require_instance_access
 from authorization.scopes import require_scope
 from controller.catalog_controller import (
     get_resolved_assets,
     get_resolved_categories,
     get_resolved_single_asset,
     get_resolved_subcategories,
+    get_resolved_super_categories,
 )
 from controller.override_controller import (
     bulk_update_flags,
@@ -33,7 +34,19 @@ from utils.errors import NotFoundError
 class TrackEventPayload(BaseModel):
     event: Literal["view", "download"] = Field(..., description="'view' or 'download'")
 
-router = APIRouter(prefix="/app-instances/{id}", tags=["Instance Content"])
+router = APIRouter(prefix="/app-instances/{id}", tags=["Instance Content"], dependencies=[Depends(require_instance_access)])
+
+
+@router.get("/super-categories", dependencies=[Depends(require_scope("categories:read"))])
+async def get_instance_super_categories_endpoint(
+    id: str,
+    request: Request,
+    only_enabled: bool = Query(default=False),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> list[dict[str, Any]]:
+    """Resolved super categories (optional level above categories) for an app instance."""
+    get_instance_filter(request, target_instance_id=id)
+    return await get_resolved_super_categories(db, app_instance_id=id, only_enabled=only_enabled)
 
 
 @router.get("/categories", dependencies=[Depends(require_scope("categories:read"))])
@@ -41,10 +54,13 @@ async def get_instance_categories_endpoint(
     id: str,
     request: Request,
     only_enabled: bool = Query(default=False),
+    superCategoryId: str | None = Query(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> list[dict[str, Any]]:
     get_instance_filter(request, target_instance_id=id)
-    return await get_resolved_categories(db, app_instance_id=id, only_enabled=only_enabled)
+    return await get_resolved_categories(
+        db, app_instance_id=id, only_enabled=only_enabled, super_category_id=superCategoryId
+    )
 
 
 @router.get("/subcategories", dependencies=[Depends(require_scope("categories:read"))])
@@ -162,6 +178,17 @@ async def delete_instance_subcategory_endpoint(
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> dict[str, Any]:
     return await remove_reference(db, app_instance_id=id, item_type="subcategory", item_id=subId)
+
+
+@router.delete("/super-categories/{superId}", dependencies=[Depends(require_scope("categories:write"))])
+async def delete_instance_super_category_endpoint(
+    id: str,
+    superId: str,
+    request: Request,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> dict[str, Any]:
+    get_instance_filter(request, target_instance_id=id)
+    return await remove_reference(db, app_instance_id=id, item_type="super_category", item_id=superId)
 
 
 @router.delete("/categories/{catId}", dependencies=[Depends(require_scope("categories:write"))])

@@ -175,3 +175,11 @@ class InstanceRepository(BaseRepository):
                 f"{INSTANCE_CONTENT_COLLECTIONS}, got '{collection_name}'"
             )
         super().__init__(db, collection_name)
+
+
+def instance_collection(db: AsyncIOMotorDatabase, collection_name: str) -> AsyncIOMotorCollection:
+    """Raw instance_* collection handle (no soft-delete filtering) that refuses central collections.
+
+    Use instead of db[name] whenever the collection name is a variable.
+    """
+    return InstanceRepository(db, collection_name).collection

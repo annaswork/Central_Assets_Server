@@ -6,9 +6,10 @@ Instances can NEVER author content. Rejects create attempts with 409 INSTANCE_CA
 
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from authorization.instance_guard import get_instance_filter, require_instance_access
 from authorization.scopes import require_scope
 from controller.reference_controller import (
     add_references,
@@ -18,7 +19,7 @@ from database.models.instance_content import ReferenceAddPayload, ReferenceCopyP
 from router.deps import get_db
 from utils.errors import InstanceCannotCreateContentError
 
-router = APIRouter(prefix="/app-instances/{id}", tags=["Instance References"])
+router = APIRouter(prefix="/app-instances/{id}", tags=["Instance References"], dependencies=[Depends(require_instance_access)])
 
 
 @router.post("/references", status_code=201, dependencies=[Depends(require_scope("assets:write"))])
@@ -43,9 +44,11 @@ async def add_references_endpoint(
 async def copy_references_endpoint(
     id: str,
     payload: ReferenceCopyPayload,
+    request: Request,
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> dict[str, Any]:
     """Copy all reference selections and settings from an existing app instance."""
+    get_instance_filter(request, target_instance_id=payload.source_instance_id)
     return await copy_references_from_instance(
         db,
         target_instance_id=id,
