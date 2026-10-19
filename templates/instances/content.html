@@ -4,7 +4,8 @@
 
 {% block content %}
 <div style="margin-bottom:1.5rem;">
-  <a href="/admin/instances" style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
+  <a href="/admin/instances"
+    style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
     ← Back to Instances
   </a>
   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
@@ -12,19 +13,21 @@
       <div style="display:flex; align-items:center; gap:0.75rem;">
         <h1>{{ instance.name }}</h1>
         {% if unresolved_count > 0 %}
-          <a href="/admin/instances">{{ instance.package_name or 'No Package' }}</a>
+        <a href="/admin/instances">{{ instance.package_name or 'No Package' }}</a>
         {% endif %}
       </div>
       <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem;">
-        Package: <code>{{ instance.packageName or instance.package_name or '—' }}</code> | Instance ID: <code>{{ instance.id }}</code>
+        Package: <code>{{ instance.packageName or instance.package_name or '—' }}</code> | Instance ID:
+        <code>{{ instance.id }}</code>
       </p>
     </div>
 
     <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
       {% if unresolved_count > 0 %}
-        <a href="/admin/instances/{{ instance.id }}/unresolved" class="btn btn-outlined" style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);">
-          ⚠️ {{ unresolved_count }} Unresolved References
-        </a>
+      <a href="/admin/instances/{{ instance.id }}/unresolved" class="btn btn-outlined"
+        style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);">
+        ⚠️ {{ unresolved_count }} Unresolved References
+      </a>
       {% endif %}
       <a href="/admin/instances/{{ instance.id }}/edit" class="btn btn-outlined">
         ✏️ Edit Instance
@@ -42,18 +45,24 @@
 {% set is_assets_tab = (selected_tab == 'assets') %}
 
 <!-- Instance Content Tabs -->
-<div style="display:flex; gap:0.5rem; margin-bottom:1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.75rem;">
-  <button type="button" id="tabBtnFolders" class="btn {% if is_assets_tab %}btn-outlined{% else %}btn-primary{% endif %}" onclick="switchInstanceTab('folders')" style="min-height:36px; padding:0.35rem 1rem;">
-    📁 Categories & Subcategories ({{ categories|length }}{% if (all_categories|length) != (categories|length) %} of {{ all_categories|length }}{% endif %})
+<div
+  style="display:flex; gap:0.5rem; margin-bottom:1.25rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.75rem;">
+  <button type="button" id="tabBtnFolders"
+    class="btn {% if is_assets_tab %}btn-outlined{% else %}btn-primary{% endif %}"
+    onclick="switchInstanceTab('folders')" style="min-height:36px; padding:0.35rem 1rem;">
+    📁 Categories & Subcategories ({{ categories|length }}{% if (all_categories|length) != (categories|length) %} of {{
+    all_categories|length }}{% endif %})
   </button>
-  <button type="button" id="tabBtnAssets" class="btn {% if is_assets_tab %}btn-primary{% else %}btn-outlined{% endif %}" onclick="switchInstanceTab('assets')" style="min-height:36px; padding:0.35rem 1rem;">
+  <button type="button" id="tabBtnAssets" class="btn {% if is_assets_tab %}btn-primary{% else %}btn-outlined{% endif %}"
+    onclick="switchInstanceTab('assets')" style="min-height:36px; padding:0.35rem 1rem;">
     🖼️ Referenced Assets ({{ assets|length }})
   </button>
 </div>
 
 <!-- SECTION 1: CATEGORIES & SUBCATEGORIES -->
 <div id="sectionFolders" style="display:{% if is_assets_tab %}none{% else %}block{% endif %};">
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+  <div
+    style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
     <div>
       <h3 style="margin:0;">Categories & Subcategories</h3>
       <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.85rem; margin:0.2rem 0 0 0;">
@@ -67,34 +76,44 @@
 
   <!-- Filters & Search (Categories & Subcategories) -->
   <div class="card search-filter-card" style="padding:0.85rem 1rem; margin-bottom:1.5rem; overflow-x:auto;">
-    <form method="GET" action="/admin/instances/{{ instance.id }}/content" class="search-filter-form" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem; width:100%;">
+    <form method="GET" action="/admin/instances/{{ instance.id }}/content" class="search-filter-form"
+      style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem; width:100%;">
       <input type="hidden" name="tab" value="folders">
       {% if folder_super %}<input type="hidden" name="folder_super" value="{{ folder_super }}">{% endif %}
-      <div class="filter-group-left" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; flex-shrink:0; white-space:nowrap;">
-        <select name="folder_cat" id="folderCategoryFilter" class="select" style="max-width:220px;" onchange="this.form.submit()">
+      <div class="filter-group-left"
+        style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; flex-shrink:0; white-space:nowrap;">
+        <select name="folder_cat" id="folderCategoryFilter" class="select" style="max-width:220px;"
+          onchange="this.form.submit()">
           <option value="">All Categories</option>
           {% for cat in all_categories %}
-            <option value="{{ cat.id }}" {% if folder_cat == (cat.id|string) or folder_cat == (cat.sourceId|string) %}selected{% endif %}>{{ cat.name }}</option>
+          <option value="{{ cat.id }}" {% if folder_cat==(cat.id|string) or folder_cat==(cat.sourceId|string)
+            %}selected{% endif %}>{{ cat.name }}</option>
           {% endfor %}
         </select>
 
-        <select name="folder_sort" id="folderSortSelect" class="select" style="min-width:160px; max-width:190px;" onchange="this.form.submit()">
-          <option value="sequence" {% if folder_sort == 'sequence' or not folder_sort %}selected{% endif %}>Sequence / Custom</option>
-          <option value="name" {% if folder_sort == 'name' %}selected{% endif %}>By Name</option>
-          <option value="newest" {% if folder_sort == 'newest' %}selected{% endif %}>Newest First</option>
-          <option value="oldest" {% if folder_sort == 'oldest' %}selected{% endif %}>Oldest First</option>
+        <select name="folder_sort" id="folderSortSelect" class="select" style="min-width:160px; max-width:190px;"
+          onchange="this.form.submit()">
+          <option value="sequence" {% if folder_sort=='sequence' or not folder_sort %}selected{% endif %}>Sequence /
+            Custom</option>
+          <option value="name" {% if folder_sort=='name' %}selected{% endif %}>By Name</option>
+          <option value="newest" {% if folder_sort=='newest' %}selected{% endif %}>Newest First</option>
+          <option value="oldest" {% if folder_sort=='oldest' %}selected{% endif %}>Oldest First</option>
         </select>
 
         {% if folder_cat or (folder_sort and folder_sort not in ('sequence', '')) %}
-          <a href="/admin/instances/{{ instance.id }}/content?tab=folders{% if folder_search %}&folder_search={{ folder_search | urlencode }}{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
+        <a href="/admin/instances/{{ instance.id }}/content?tab=folders{% if folder_search %}&folder_search={{ folder_search | urlencode }}{% endif %}"
+          class="btn btn-outlined btn-filter">Clear</a>
         {% endif %}
       </div>
 
-      <div class="search-group-right" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; margin-left:auto; white-space:nowrap; flex-shrink:0;">
-        <input type="text" name="folder_search" class="input" placeholder="Search categories & subcategories..." value="{{ folder_search }}" style="max-width:320px;">
+      <div class="search-group-right"
+        style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; margin-left:auto; white-space:nowrap; flex-shrink:0;">
+        <input type="text" name="folder_search" class="input" placeholder="Search categories & subcategories..."
+          value="{{ folder_search }}" style="max-width:320px;">
         <button type="submit" class="btn btn-outlined btn-filter">Search</button>
         {% if folder_search %}
-          <a href="/admin/instances/{{ instance.id }}/content?tab=folders{% if folder_cat %}&folder_cat={{ folder_cat }}{% endif %}{% if folder_sort and folder_sort not in ('sequence', '') %}&folder_sort={{ folder_sort }}{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
+        <a href="/admin/instances/{{ instance.id }}/content?tab=folders{% if folder_cat %}&folder_cat={{ folder_cat }}{% endif %}{% if folder_sort and folder_sort not in ('sequence', '') %}&folder_sort={{ folder_sort }}{% endif %}"
+          class="btn btn-outlined btn-filter">Clear</a>
         {% endif %}
       </div>
     </form>
@@ -106,162 +125,202 @@
   <div id="folderCardsContainer" style="display:flex; flex-direction:column; gap:1.25rem;">
     {% if categories and categories|length > 0 %}
     {% for cat in categories %}
-{# A super category with 2+ categories here shows as one collapsible block (controller keeps them adjacent) #}
-{% set sc_id = cat.superCategoryId %}
-{% set sc_size = (categories|selectattr('superCategoryId', 'equalto', sc_id)|list|length) if sc_id else 0 %}
-{% if sc_size > 1 and (loop.first or loop.previtem.superCategoryId != sc_id) %}
-<details class="super-group"{% if folder_super %} open{% endif %} style="border:1px solid var(--md-sys-color-primary); border-radius:var(--radius-lg); background:var(--md-sys-color-surface-container-low); padding:0.85rem 1.25rem;">
-  <summary style="cursor:pointer; font-weight:600;">
-    ⭐ {{ cat.super_category_name }}
-    <span class="badge badge-secondary" style="font-size:0.75rem; margin-left:0.4rem;">{{ sc_size }} Categories</span>
-    <span style="font-size:0.75rem; font-weight:400; margin-left:0.4rem; color:var(--md-sys-color-on-surface-variant);">Click to expand</span>
-  </summary>
-  <div style="display:flex; flex-direction:column; gap:1.25rem; margin-top:0.85rem;">
-{% endif %}
-      <div class="card folder-card" data-cat-id="{{ cat.id }}" style="padding:1.25rem; border:1px solid var(--md-sys-color-outline-variant);">
-        <!-- Category Folder Header -->
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; padding-bottom:0.75rem; border-bottom:1px solid var(--md-sys-color-outline-variant);">
-          <div style="display:flex; align-items:center; gap:0.75rem;">
-            <span class="folder-drag-handle" style="cursor:grab; font-size:1.2rem; color:var(--md-sys-color-on-surface-variant); padding:2px; user-select:none;" title="Drag to reorder folder">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; pointer-events:none;">
-                <circle cx="9" cy="6" r="1.2"></circle>
-                <circle cx="9" cy="12" r="1.2"></circle>
-                <circle cx="9" cy="18" r="1.2"></circle>
-                <circle cx="15" cy="6" r="1.2"></circle>
-                <circle cx="15" cy="12" r="1.2"></circle>
-                <circle cx="15" cy="18" r="1.2"></circle>
-              </svg>
-            </span>
-            <div style="width:46px; height:46px; border-radius:var(--radius-sm); overflow:hidden; background:var(--md-sys-color-surface-container-low); display:flex; align-items:center; justify-content:center; border:1px solid var(--md-sys-color-outline-variant); flex-shrink:0;">
-              {% if cat.thumbnail_url or cat.thumbnailUrl or cat.image_url %}
-                <img loading="lazy" src="{{ cat.thumbnail_url or cat.thumbnailUrl or cat.image_url }}" alt="{{ cat.name }}" style="width:100%; height:100%; object-fit:cover;">
-              {% else %}
+    {# A super category with 2+ categories here shows as one collapsible block (controller keeps them adjacent) #}
+    {% set sc_id = cat.superCategoryId %}
+    {% set sc_size = (categories|selectattr('superCategoryId', 'equalto', sc_id)|list|length) if sc_id else 0 %}
+    {% if sc_size > 1 and (loop.first or loop.previtem.superCategoryId != sc_id) %}
+    <details class="super-group" {% if folder_super %} open{% endif %}
+      style="border:1px solid var(--md-sys-color-primary); border-radius:var(--radius-lg); background:var(--md-sys-color-surface-container-low); padding:0.85rem 1.25rem;">
+      <summary style="cursor:pointer; font-weight:600;">
+        ⭐ {{ cat.super_category_name }}
+        <span class="badge badge-secondary" style="font-size:0.75rem; margin-left:0.4rem;">{{ sc_size }}
+          Categories</span>
+        <span
+          style="font-size:0.75rem; font-weight:400; margin-left:0.4rem; color:var(--md-sys-color-on-surface-variant);">Click
+          to expand</span>
+      </summary>
+      <div style="display:flex; flex-direction:column; gap:1.25rem; margin-top:0.85rem;">
+        {% endif %}
+        <div class="card folder-card" data-cat-id="{{ cat.id }}"
+          style="padding:1.25rem; border:1px solid var(--md-sys-color-outline-variant);">
+          <!-- Category Folder Header -->
+          <div
+            style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; padding-bottom:0.75rem; border-bottom:1px solid var(--md-sys-color-outline-variant);">
+            <div style="display:flex; align-items:center; gap:0.75rem;">
+              <span class="folder-drag-handle"
+                style="cursor:grab; font-size:1.2rem; color:var(--md-sys-color-on-surface-variant); padding:2px; user-select:none;"
+                title="Drag to reorder folder">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; pointer-events:none;">
+                  <circle cx="9" cy="6" r="1.2"></circle>
+                  <circle cx="9" cy="12" r="1.2"></circle>
+                  <circle cx="9" cy="18" r="1.2"></circle>
+                  <circle cx="15" cy="6" r="1.2"></circle>
+                  <circle cx="15" cy="12" r="1.2"></circle>
+                  <circle cx="15" cy="18" r="1.2"></circle>
+                </svg>
+              </span>
+              <div
+                style="width:46px; height:46px; border-radius:var(--radius-sm); overflow:hidden; background:var(--md-sys-color-surface-container-low); display:flex; align-items:center; justify-content:center; border:1px solid var(--md-sys-color-outline-variant); flex-shrink:0;">
+                {% if cat.thumbnail_url or cat.thumbnailUrl or cat.image_url %}
+                <img loading="lazy" src="{{ cat.thumbnail_url or cat.thumbnailUrl or cat.image_url }}"
+                  alt="{{ cat.name }}" style="width:100%; height:100%; object-fit:cover;">
+                {% else %}
                 <span style="font-size:1.4rem;">📁</span>
-              {% endif %}
-            </div>
-            <div>
-              <h3 style="margin:0 0 0.25rem 0; font-size:1.1rem; display:flex; align-items:center; gap:0.5rem;">
-                {{ cat.name }}
-                <span class="badge badge-secondary folder-seq-badge" style="font-size:0.75rem;">#{{ loop.index }}</span>
-                <span class="badge badge-secondary" style="font-size:0.75rem;">Category Folder</span>
-              </h3>
-              <div style="display:flex; gap:0.4rem; font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
-                <span>📂 {{ cat.subcategories_count | default(0) }} Sub-folders</span>
-                <span>•</span>
-                <span>🖼️ {{ cat.assets_count | default(0) }} Assets</span>
-                <span>•</span>
-                <span title="Category ID used by the app">ID: <code style="user-select:all;">{{ cat.id }}</code></span>
+                {% endif %}
+              </div>
+              <div>
+                <h3 style="margin:0 0 0.25rem 0; font-size:1.1rem; display:flex; align-items:center; gap:0.5rem;">
+                  {{ cat.name }}
+                  <span class="badge badge-secondary folder-seq-badge" style="font-size:0.75rem;">#{{ loop.index
+                    }}</span>
+                  <span class="badge badge-secondary" style="font-size:0.75rem;">Category Folder</span>
+                </h3>
+                <div style="display:flex; gap:0.4rem; font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
+                  <span>📂 {{ cat.subcategories_count | default(0) }} Sub-folders</span>
+                  <span>•</span>
+                  <span>🖼️ {{ cat.assets_count | default(0) }} Assets</span>
+                  <span>•</span>
+                  <span title="Category ID used by the app">ID: <code
+                      style="user-select:all;">{{ cat.id }}</code></span>
+                </div>
               </div>
             </div>
+
+            <div
+              style="display:flex; gap:0.5rem; align-items:center; justify-content:flex-end; flex-wrap:wrap; margin-left:auto;">
+              {% include "partials/category_super_select.html" %}
+              <a href="/admin/instances/{{ instance.id }}/picker?target_category_id={{ cat.sourceId or cat.id }}&tab=subcategories"
+                class="btn btn-outlined" style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;"
+                title="Import Central Items into this Folder">
+                📥 Import Central Data
+              </a>
+              <button type="button" class="btn btn-outlined"
+                style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;"
+                onclick="openCreateFolderModal('subcategory', '{{ cat.sourceId or cat.id }}')">
+                + Add Sub-folder
+              </button>
+              <button type="button" class="btn btn-destructive"
+                style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;"
+                onclick="detachCategoryFolder('{{ cat.id }}', '{{ cat.name }}')">
+                Detach Folder
+              </button>
+            </div>
           </div>
 
-          <div style="display:flex; gap:0.5rem; align-items:center; justify-content:flex-end; flex-wrap:wrap; margin-left:auto;">
-            {% include "partials/category_super_select.html" %}
-            <a href="/admin/instances/{{ instance.id }}/picker?target_category_id={{ cat.sourceId or cat.id }}&tab=subcategories" class="btn btn-outlined" style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;" title="Import Central Items into this Folder">
-              📥 Import Central Data
-            </a>
-            <button type="button" class="btn btn-outlined" style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;" onclick="openCreateFolderModal('subcategory', '{{ cat.sourceId or cat.id }}')">
-              + Add Sub-folder
-            </button>
-            <button type="button" class="btn btn-destructive" style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;" onclick="detachCategoryFolder('{{ cat.id }}', '{{ cat.name }}')">
-              Detach Folder
-            </button>
-          </div>
-        </div>
-
-        <!-- Nested Sub-folders in this Category -->
-        <div style="margin-top:0.75rem; padding-left:1.5rem; border-left:2px solid var(--md-sys-color-surface-container-high);">
-          <div style="font-size:0.8rem; font-weight:600; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.5rem; text-transform:uppercase; letter-spacing:0.5px;">
-            Sub-folders in {{ cat.name }}
-          </div>
-          {% set cat_source_id = cat.sourceId or cat.id %}
-          {% set matching_subs = [] %}
-          {% for sub in all_subcategories %}
+          <!-- Nested Sub-folders in this Category -->
+          <div
+            style="margin-top:0.75rem; padding-left:1.5rem; border-left:2px solid var(--md-sys-color-surface-container-high);">
+            <div
+              style="font-size:0.8rem; font-weight:600; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.5rem; text-transform:uppercase; letter-spacing:0.5px;">
+              Sub-folders in {{ cat.name }}
+            </div>
+            {% set cat_source_id = cat.sourceId or cat.id %}
+            {% set matching_subs = [] %}
+            {% for sub in all_subcategories %}
             {% if sub.categoryId == cat_source_id or sub.categoryId == cat.id %}
-              {% set _ = matching_subs.append(sub) %}
+            {% set _ = matching_subs.append(sub) %}
             {% endif %}
-          {% endfor %}
+            {% endfor %}
 
-          {% if matching_subs|length > 0 %}
-            <div class="grid admin-sub-grid{% if matching_subs|length > 4 %} subs-collapsed{% endif %}" data-parent-cat-id="{{ cat.sourceId or cat.id }}" style="grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:0.75rem;">
+            {% if matching_subs|length > 0 %}
+            <div class="grid admin-sub-grid{% if matching_subs|length > 4 %} subs-collapsed{% endif %}"
+              data-parent-cat-id="{{ cat.sourceId or cat.id }}"
+              style="grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:0.75rem;">
               {% for sub in matching_subs %}
-                <div class="card admin-sub-card" data-sub-id="{{ sub.id }}" draggable="true" style="padding:0.75rem; background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant); display:flex; flex-direction:row; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:0.5rem; cursor:grab;">
-                  <div style="display:flex; align-items:center; gap:0.5rem; flex:1 1 auto; min-width:0;">
-                    <span class="sub-drag-handle" style="cursor:grab; font-size:1.15rem; color:var(--md-sys-color-on-surface-variant); padding:0 2px; user-select:none;" title="Drag to reorder sub-folder">⠿</span>
-                    <div style="width:36px; height:36px; border-radius:var(--radius-sm); overflow:hidden; background:var(--md-sys-color-surface); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-                      {% if sub.thumbnail_url or sub.thumbnailUrl or sub.image_url %}
-                        <img loading="lazy" src="{{ sub.thumbnail_url or sub.thumbnailUrl or sub.image_url }}" alt="{{ sub.name }}" style="width:100%; height:100%; object-fit:cover;">
-                      {% else %}
-                        <span style="font-size:1.1rem;">📂</span>
-                      {% endif %}
-                    </div>
-                    <div style="min-width:0;">
-                      <div style="display:flex; align-items:center; gap:0.35rem;">
-                        <strong style="font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{{ sub.name }}">{{ sub.name }}</strong>
-                        <span class="badge badge-secondary admin-sub-seq-badge" style="font-size:0.7rem;">#{{ loop.index }}</span>
-                      </div>
-                      <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">
-                        🖼️ {{ sub.assets_count | default(0) }} Assets
-                      </div>
-                    </div>
+              <div class="card admin-sub-card" data-sub-id="{{ sub.id }}" draggable="true"
+                style="padding:0.75rem; background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant); display:flex; flex-direction:row; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:0.5rem; cursor:grab;">
+                <div style="display:flex; align-items:center; gap:0.5rem; flex:1 1 auto; min-width:0;">
+                  <span class="sub-drag-handle"
+                    style="cursor:grab; font-size:1.15rem; color:var(--md-sys-color-on-surface-variant); padding:0 2px; user-select:none;"
+                    title="Drag to reorder sub-folder">⠿</span>
+                  <div
+                    style="width:36px; height:36px; border-radius:var(--radius-sm); overflow:hidden; background:var(--md-sys-color-surface); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                    {% if sub.thumbnail_url or sub.thumbnailUrl or sub.image_url %}
+                    <img loading="lazy" src="{{ sub.thumbnail_url or sub.thumbnailUrl or sub.image_url }}"
+                      alt="{{ sub.name }}" style="width:100%; height:100%; object-fit:cover;">
+                    {% else %}
+                    <span style="font-size:1.1rem;">📂</span>
+                    {% endif %}
                   </div>
-
-                  <div style="display:flex; gap:0.35rem; align-items:center; flex-shrink:0; margin-left:auto;">
-                    <a href="/admin/instances/{{ instance.id }}/picker?target_category_id={{ cat.sourceId or cat.id }}&target_sub_category_id={{ sub.sourceId or sub.id }}&tab=assets" class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;" title="Import into Sub-folder">
-                      📥 Import
-                    </a>
-                    <button type="button" class="btn btn-destructive" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;" onclick="detachSubcategoryFolder('{{ sub.id }}', '{{ sub.name }}')">
-                      Detach
-                    </button>
+                  <div style="min-width:0;">
+                    <div style="display:flex; align-items:center; gap:0.35rem;">
+                      <strong style="font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
+                        title="{{ sub.name }}">{{ sub.name }}</strong>
+                      <span class="badge badge-secondary admin-sub-seq-badge" style="font-size:0.7rem;">#{{ loop.index
+                        }}</span>
+                    </div>
+                    <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">
+                      🖼️ {{ sub.assets_count | default(0) }} Assets
+                    </div>
                   </div>
                 </div>
+
+                <div style="display:flex; gap:0.35rem; align-items:center; flex-shrink:0; margin-left:auto;">
+                  <a href="/admin/instances/{{ instance.id }}/picker?target_category_id={{ cat.sourceId or cat.id }}&target_sub_category_id={{ sub.sourceId or sub.id }}&tab=assets"
+                    class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;"
+                    title="Import into Sub-folder">
+                    📥 Import
+                  </a>
+                  <button type="button" class="btn btn-destructive"
+                    style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;"
+                    onclick="detachSubcategoryFolder('{{ sub.id }}', '{{ sub.name }}')">
+                    Detach
+                  </button>
+                </div>
+              </div>
               {% endfor %}
             </div>
             {% if matching_subs|length > 4 %}
-            <button type="button" class="btn btn-outlined" style="margin-top:0.6rem; min-height:30px; font-size:0.8rem;" data-more="Show More ({{ matching_subs|length - 4 }})" onclick="const g = this.previousElementSibling; this.textContent = g.classList.toggle('subs-collapsed') ? this.dataset.more : 'Show Less';">Show More ({{ matching_subs|length - 4 }})</button>
-          {% endif %}
-          {% else %}
+            <button type="button" class="btn btn-outlined" style="margin-top:0.6rem; min-height:30px; font-size:0.8rem;"
+              data-more="Show More ({{ matching_subs|length - 4 }})"
+              onclick="const g = this.previousElementSibling; this.textContent = g.classList.toggle('subs-collapsed') ? this.dataset.more : 'Show Less';">Show
+              More ({{ matching_subs|length - 4 }})</button>
+            {% endif %}
+            {% else %}
             <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); padding:0.5rem 0;">
               No sub-folders in this category yet.
-              <a href="javascript:void(0)" onclick="openCreateFolderModal('subcategory', '{{ cat.sourceId or cat.id }}')" style="color:var(--md-sys-color-primary); margin-left:0.25rem;">
+              <a href="javascript:void(0)"
+                onclick="openCreateFolderModal('subcategory', '{{ cat.sourceId or cat.id }}')"
+                style="color:var(--md-sys-color-primary); margin-left:0.25rem;">
                 + Add a sub-folder
               </a>
             </div>
-          {% endif %}
+            {% endif %}
+          </div>
         </div>
+        {% if sc_size > 1 and (loop.last or loop.nextitem.superCategoryId != sc_id) %}
       </div>
-{% if sc_size > 1 and (loop.last or loop.nextitem.superCategoryId != sc_id) %}
-  </div>
-</details>
-{% endif %}
+    </details>
+    {% endif %}
     {% endfor %}
     {% elif folder_cat or folder_search or folder_super %}
-      <div class="card" style="padding:3rem; text-align:center; color:var(--md-sys-color-on-surface-variant);">
-        <div style="font-size:2.5rem; margin-bottom:0.75rem;">🔍</div>
-        <h3 style="margin:0 0 0.5rem 0;">No matching categories or subcategories found</h3>
-        <p style="margin:0 0 1.25rem 0; font-size:0.9rem;">
-          Try adjusting your search query or category filter.
-        </p>
-        <a href="/admin/instances/{{ instance.id }}/content?tab=folders" class="btn btn-outlined">
-          Clear Filters
+    <div class="card" style="padding:3rem; text-align:center; color:var(--md-sys-color-on-surface-variant);">
+      <div style="font-size:2.5rem; margin-bottom:0.75rem;">🔍</div>
+      <h3 style="margin:0 0 0.5rem 0;">No matching categories or subcategories found</h3>
+      <p style="margin:0 0 1.25rem 0; font-size:0.9rem;">
+        Try adjusting your search query or category filter.
+      </p>
+      <a href="/admin/instances/{{ instance.id }}/content?tab=folders" class="btn btn-outlined">
+        Clear Filters
+      </a>
+    </div>
+    {% else %}
+    <div class="card" style="padding:3rem; text-align:center; color:var(--md-sys-color-on-surface-variant);">
+      <div style="font-size:2.5rem; margin-bottom:0.75rem;">📁</div>
+      <h3 style="margin:0 0 0.5rem 0;">No folders created in this app instance</h3>
+      <p style="margin:0 0 1.25rem 0; font-size:0.9rem;">
+        Create dedicated folders or import existing folders from the central library.
+      </p>
+      <div style="display:flex; justify-content:center; gap:0.75rem;">
+        <button type="button" class="btn btn-primary" onclick="openCreateFolderModal()">
+          📁 Create Folder
+        </button>
+        <a href="/admin/instances/{{ instance.id }}/picker" class="btn btn-outlined">
+          ⚡ Import Central Folder
         </a>
       </div>
-    {% else %}
-      <div class="card" style="padding:3rem; text-align:center; color:var(--md-sys-color-on-surface-variant);">
-        <div style="font-size:2.5rem; margin-bottom:0.75rem;">📁</div>
-        <h3 style="margin:0 0 0.5rem 0;">No folders created in this app instance</h3>
-        <p style="margin:0 0 1.25rem 0; font-size:0.9rem;">
-          Create dedicated folders or import existing folders from the central library.
-        </p>
-        <div style="display:flex; justify-content:center; gap:0.75rem;">
-          <button type="button" class="btn btn-primary" onclick="openCreateFolderModal()">
-            📁 Create Folder
-          </button>
-          <a href="/admin/instances/{{ instance.id }}/picker" class="btn btn-outlined">
-            ⚡ Import Central Folder
-          </a>
-        </div>
-      </div>
+    </div>
     {% endif %}
   </div>
 </div>
@@ -270,51 +329,70 @@
 <div id="sectionAssets" style="display:{% if is_assets_tab %}block{% else %}none{% endif %};">
   <!-- Filters & Search (Referenced Assets) -->
   <div class="card search-filter-card" style="padding:0.85rem 1rem; margin-bottom:1.5rem; overflow-x:auto;">
-    <form id="instanceFilterForm" method="GET" action="/admin/instances/{{ instance.id }}/content" onsubmit="handleAssetSearchSubmit(event)" class="search-filter-form" autocomplete="off" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem; width:100%;">
+    <form id="instanceFilterForm" method="GET" action="/admin/instances/{{ instance.id }}/content"
+      onsubmit="handleAssetSearchSubmit(event)" class="search-filter-form" autocomplete="off"
+      style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem; width:100%;">
       <input type="hidden" name="tab" value="assets">
 
-      <div class="filter-group-left" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; flex-shrink:0; white-space:nowrap;">
-        <select name="categoryId" id="categoryFilter" class="select" autocomplete="off" style="max-width:200px;" onchange="handleCategoryFilterChange(this.value)">
+      <div class="filter-group-left"
+        style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; flex-shrink:0; white-space:nowrap;">
+        <select name="categoryId" id="categoryFilter" class="select" autocomplete="off" style="max-width:200px;"
+          onchange="handleCategoryFilterChange(this.value)">
           <option value="">All Categories</option>
           {% for cat in all_categories %}
-            <option value="{{ cat.id }}" data-source-id="{{ cat.sourceId or cat.id }}" {% if selected_cat == (cat.id|string) or selected_cat == (cat.sourceId|string) %}selected{% endif %}>{{ cat.name }}</option>
+          <option value="{{ cat.id }}" data-source-id="{{ cat.sourceId or cat.id }}" {% if selected_cat==(cat.id|string)
+            or selected_cat==(cat.sourceId|string) %}selected{% endif %}>{{ cat.name }}</option>
           {% endfor %}
         </select>
 
-        <select name="subCategoryId" id="subCategoryFilter" class="select" autocomplete="off" style="max-width:200px;" onchange="handleSubCategoryFilterChange(this)">
+        <select name="subCategoryId" id="subCategoryFilter" class="select" autocomplete="off" style="max-width:200px;"
+          onchange="handleSubCategoryFilterChange(this)">
           <option value="">All Subcategories</option>
           {% for sub in all_subcategories %}
-            <option value="{{ sub.id }}" data-category-id="{{ sub.canonicalCategoryId or sub.categoryId }}" {% if selected_subcat == (sub.id|string) or selected_subcat == (sub.sourceId|string) %}selected{% endif %}>{{ sub.name }}</option>
+          <option value="{{ sub.id }}" data-category-id="{{ sub.canonicalCategoryId or sub.categoryId }}" {% if
+            selected_subcat==(sub.id|string) or selected_subcat==(sub.sourceId|string) %}selected{% endif %}>{{ sub.name
+            }}</option>
           {% endfor %}
         </select>
 
-        <select name="type" id="typeFilter" class="select" style="min-width:130px; max-width:160px;" onchange="applyAssetFilters()">
+        <select name="type" id="typeFilter" class="select" style="min-width:130px; max-width:160px;"
+          onchange="applyAssetFilters()">
           <option value="">All Types</option>
-          <option value="images" {% if selected_type == 'images' %}selected{% endif %}>Images</option>
-          <option value="videos" {% if selected_type == 'videos' %}selected{% endif %}>Videos</option>
-          <option value="audios" {% if selected_type == 'audios' %}selected{% endif %}>Audios</option>
-          <option value="json" {% if selected_type == 'json' %}selected{% endif %}>JSON</option>
-          <option value="frames" {% if selected_type == 'frames' %}selected{% endif %}>Frames</option>
-          <option value="html" {% if selected_type == 'html' %}selected{% endif %}>HTML</option>
-          <option value="file" {% if selected_type == 'file' or selected_type == 'files' %}selected{% endif %}>Files / Docs</option>
+          <option value="images" {% if selected_type=='images' %}selected{% endif %}>Images</option>
+          <option value="videos" {% if selected_type=='videos' %}selected{% endif %}>Videos</option>
+          <option value="audios" {% if selected_type=='audios' %}selected{% endif %}>Audios</option>
+          <option value="json" {% if selected_type=='json' %}selected{% endif %}>JSON</option>
+          <option value="frames" {% if selected_type=='frames' %}selected{% endif %}>Frames</option>
+          <option value="html" {% if selected_type=='html' %}selected{% endif %}>HTML</option>
+          <option value="file" {% if selected_type=='file' or selected_type=='files' %}selected{% endif %}>Files / Docs
+          </option>
         </select>
 
-        <select name="sort" id="assetSortSelect" class="select" style="min-width:160px; max-width:190px;" onchange="applyAssetFilters()">
-          <option value="sequence" {% if current_sort == 'sequence' or not current_sort %}selected{% endif %}>Sequence / Custom</option>
-          <option value="name" {% if current_sort == 'name' %}selected{% endif %}>By Name</option>
-          <option value="newest" {% if current_sort == 'newest' %}selected{% endif %}>Newest First</option>
-          <option value="most_viewed" {% if current_sort == 'most_viewed' %}selected{% endif %}>Most Viewed</option>
-          <option value="most_downloaded" {% if current_sort == 'most_downloaded' %}selected{% endif %}>Most Downloaded</option>
-          <option value="oldest" {% if current_sort == 'oldest' %}selected{% endif %}>Oldest First</option>
+        <select name="sort" id="assetSortSelect" class="select" style="min-width:160px; max-width:190px;"
+          onchange="applyAssetFilters()">
+          <option value="sequence" {% if current_sort=='sequence' or not current_sort %}selected{% endif %}>Sequence /
+            Custom</option>
+          <option value="name" {% if current_sort=='name' %}selected{% endif %}>By Name</option>
+          <option value="newest" {% if current_sort=='newest' %}selected{% endif %}>Newest First</option>
+          <option value="most_viewed" {% if current_sort=='most_viewed' %}selected{% endif %}>Most Viewed</option>
+          <option value="most_downloaded" {% if current_sort=='most_downloaded' %}selected{% endif %}>Most Downloaded
+          </option>
+          <option value="oldest" {% if current_sort=='oldest' %}selected{% endif %}>Oldest First</option>
         </select>
 
-        <a href="javascript:void(0)" id="assetFilterClearBtn" onclick="handleClearAssetFilters(event, 'filters')" class="btn btn-outlined btn-filter" style="display:{% if selected_cat or selected_subcat or selected_type or (current_sort and current_sort not in ('sequence', '')) %}inline-flex{% else %}none{% endif %};">Clear</a>
+        <a href="javascript:void(0)" id="assetFilterClearBtn" onclick="handleClearAssetFilters(event, 'filters')"
+          class="btn btn-outlined btn-filter"
+          style="display:{% if selected_cat or selected_subcat or selected_type or (current_sort and current_sort not in ('sequence', '')) %}inline-flex{% else %}none{% endif %};">Clear</a>
       </div>
 
-      <div class="search-group-right" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; margin-left:auto; white-space:nowrap; flex-shrink:0;">
-        <input type="text" name="q" id="assetSearchInput" class="input" placeholder="Search asset name..." value="{{ search }}" style="max-width:260px;">
+      <div class="search-group-right"
+        style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; margin-left:auto; white-space:nowrap; flex-shrink:0;">
+        <input type="text" name="q" id="assetSearchInput" class="input" placeholder="Search asset name..."
+          value="{{ search }}" style="max-width:260px;">
         <button type="submit" class="btn btn-outlined btn-filter">Search</button>
-        <a href="javascript:void(0)" id="assetSearchClearBtn" onclick="handleClearAssetFilters(event, 'search')" class="btn btn-outlined btn-filter" style="display:{% if search %}inline-flex{% else %}none{% endif %};">Clear</a>
+        <a href="javascript:void(0)" id="assetSearchClearBtn" onclick="handleClearAssetFilters(event, 'search')"
+          class="btn btn-outlined btn-filter"
+          style="display:{% if search %}inline-flex{% else %}none{% endif %};">Clear</a>
       </div>
     </form>
   </div>
@@ -325,28 +403,79 @@
         table-layout: auto;
         width: 100%;
       }
+
       .instance-assets-table th,
       .instance-assets-table td {
         padding: 0.45rem 0.35rem !important;
         font-size: 0.83rem;
         vertical-align: middle;
       }
+
       .instance-assets-table th {
         font-size: 0.76rem;
         letter-spacing: 0.03em;
         white-space: nowrap;
       }
-      .instance-assets-table .col-drag { width: 28px; min-width: 28px; text-align: center; }
-      .instance-assets-table .col-seq { width: 48px; min-width: 48px; text-align: center; }
-      .instance-assets-table .col-thumb { width: 44px; min-width: 44px; text-align: center; }
-      .instance-assets-table .col-name { min-width: 130px; max-width: 200px; }
-      .instance-assets-table .col-cat { width: 100px; max-width: 110px; }
-      .instance-assets-table .col-subcat { width: 100px; max-width: 110px; }
-      .instance-assets-table .col-stat { width: 50px; min-width: 46px; text-align: center; white-space: nowrap; }
-      .instance-assets-table .col-toggle { width: 46px; min-width: 42px; text-align: center; }
-      .instance-assets-table .col-credits { width: 52px; min-width: 48px; text-align: center; }
-      .instance-assets-table .col-actions { width: 130px; min-width: 115px; text-align: right; white-space: nowrap; }
-      
+
+      .instance-assets-table .col-drag {
+        width: 28px;
+        min-width: 28px;
+        text-align: center;
+      }
+
+      .instance-assets-table .col-seq {
+        width: 48px;
+        min-width: 48px;
+        text-align: center;
+      }
+
+      .instance-assets-table .col-thumb {
+        width: 44px;
+        min-width: 44px;
+        text-align: center;
+      }
+
+      .instance-assets-table .col-name {
+        min-width: 130px;
+        max-width: 200px;
+      }
+
+      .instance-assets-table .col-cat {
+        width: 100px;
+        max-width: 110px;
+      }
+
+      .instance-assets-table .col-subcat {
+        width: 100px;
+        max-width: 110px;
+      }
+
+      .instance-assets-table .col-stat {
+        width: 50px;
+        min-width: 46px;
+        text-align: center;
+        white-space: nowrap;
+      }
+
+      .instance-assets-table .col-toggle {
+        width: 46px;
+        min-width: 42px;
+        text-align: center;
+      }
+
+      .instance-assets-table .col-credits {
+        width: 52px;
+        min-width: 48px;
+        text-align: center;
+      }
+
+      .instance-assets-table .col-actions {
+        width: 130px;
+        min-width: 115px;
+        text-align: right;
+        white-space: nowrap;
+      }
+
       .instance-assets-table .asset-name-text {
         font-weight: 600;
         font-size: 0.85rem;
@@ -356,6 +485,7 @@
         display: block;
         max-width: 185px;
       }
+
       .instance-assets-table .asset-desc-text {
         font-size: 0.74rem;
         color: var(--md-sys-color-on-surface-variant);
@@ -365,6 +495,7 @@
         display: block;
         max-width: 185px;
       }
+
       .instance-assets-table .badge-ellipsis {
         display: inline-block;
         max-width: 95px;
@@ -373,6 +504,7 @@
         white-space: nowrap;
         vertical-align: middle;
       }
+
       .instance-assets-table .table-thumb {
         width: 36px;
         height: 36px;
@@ -385,37 +517,41 @@
 
     <!-- Referenced Assets Table -->
     <div class="table-responsive card" style="padding:0; margin-bottom:2rem;">
-    <div style="padding:0.75rem 1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center;">
-      <h3 style="margin:0; font-size:1.05rem;">Referenced Creative Assets ({{ assets|length }})</h3>
-      <span style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
-        Overrides apply exclusively to this instance context.
-      </span>
-    </div>
+      <div
+        style="padding:0.75rem 1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="margin:0; font-size:1.05rem;">Referenced Creative Assets ({{ assets|length }})</h3>
+        <span style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
+          Overrides apply exclusively to this instance context.
+        </span>
+      </div>
 
-    <table class="data-table instance-assets-table" id="reorderableTable">
-      <thead>
-        <tr>
-          <th class="col-drag"></th>
-          <th class="col-seq">Seq</th>
-          <th class="col-thumb">Thumb</th>
-          <th class="col-name">Asset Name</th>
-          <th class="col-cat">Category</th>
-          <th class="col-subcat">Subcategory</th>
-          <th class="col-stat">Views</th>
-          <th class="col-stat">Downloads</th>
-          <th class="col-toggle">Enabled</th>
-          <th class="col-toggle">Premium</th>
-          <th class="col-toggle">Rewarded</th>
-          <th class="col-toggle">Priced</th>
-          <th class="col-credits">Credits</th>
-          <th class="col-actions">Actions</th>
-        </tr>
-      </thead>
-      <tbody id="reorderableTbody">
-        {% for asset in assets %}
+      <table class="data-table instance-assets-table" id="reorderableTable">
+        <thead>
+          <tr>
+            <th class="col-drag"></th>
+            <th class="col-seq">Seq</th>
+            <th class="col-thumb">Thumb</th>
+            <th class="col-name">Asset Name</th>
+            <th class="col-cat">Category</th>
+            <th class="col-subcat">Subcategory</th>
+            <th class="col-stat">Views</th>
+            <th class="col-stat">Downloads</th>
+            <th class="col-toggle">Enabled</th>
+            <th class="col-toggle">Premium</th>
+            <th class="col-toggle">Rewarded</th>
+            <th class="col-toggle">Priced</th>
+            <th class="col-credits">Credits</th>
+            <th class="col-actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="reorderableTbody">
+          {% for asset in assets %}
           <tr data-asset-id="{{ asset.id }}" class="asset-drag-row" style="transition:background-color 0.15s ease;">
-            <td class="asset-drag-handle col-drag" style="cursor:grab; color:var(--md-sys-color-on-surface-variant); user-select:none;" title="Drag to reorder">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; pointer-events:none;">
+            <td class="asset-drag-handle col-drag"
+              style="cursor:grab; color:var(--md-sys-color-on-surface-variant); user-select:none;"
+              title="Drag to reorder">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; pointer-events:none;">
                 <circle cx="9" cy="6" r="1.2"></circle>
                 <circle cx="9" cy="12" r="1.2"></circle>
                 <circle cx="9" cy="18" r="1.2"></circle>
@@ -424,97 +560,128 @@
                 <circle cx="15" cy="18" r="1.2"></circle>
               </svg>
             </td>
-            <td data-label="Seq" class="col-seq" style="font-weight:600; font-size:0.82rem; color:var(--md-sys-color-on-surface-variant); text-align:center;">
-              <input type="number" class="input asset-seq-input" min="1" max="{{ assets|length }}" value="{{ loop.index }}" style="width:44px; min-height:28px; padding:2px 2px; text-align:center; font-weight:600; font-size:0.8rem;" onchange="handleAssetSeqChange('{{ asset.id }}', parseInt(this.value))">
+            <td data-label="Seq" class="col-seq"
+              style="font-weight:600; font-size:0.82rem; color:var(--md-sys-color-on-surface-variant); text-align:center;">
+              <input type="number" class="input asset-seq-input" min="1" max="{{ assets|length }}"
+                value="{{ loop.index }}"
+                style="width:44px; min-height:28px; padding:2px 2px; text-align:center; font-weight:600; font-size:0.8rem;"
+                onchange="handleAssetSeqChange('{{ asset.id }}', parseInt(this.value))">
             </td>
             <td data-label="Thumb" class="col-thumb">
               {% if asset.thumbnailUrl or asset.thumbnail_url %}
-                <img loading="lazy" src="{{ asset.thumbnailUrl or asset.thumbnail_url }}" alt="{{ asset.name }}" class="table-thumb" style="cursor:pointer;" onclick="openAssetPreviewModal('{{ asset.source_id or asset.sourceId or asset.id }}')" title="Click to preview asset details">
+              <img loading="lazy" src="{{ asset.thumbnailUrl or asset.thumbnail_url }}" alt="{{ asset.name }}"
+                class="table-thumb" style="cursor:pointer;"
+                onclick="openAssetPreviewModal('{{ asset.source_id or asset.sourceId or asset.id }}')"
+                title="Click to preview asset details">
               {% else %}
-                <div class="table-thumb" style="display:flex; align-items:center; justify-content:center; background:var(--md-sys-color-surface-container); cursor:pointer;" onclick="openAssetPreviewModal('{{ asset.source_id or asset.sourceId or asset.id }}')" title="Click to preview asset details">🖼️</div>
+              <div class="table-thumb"
+                style="display:flex; align-items:center; justify-content:center; background:var(--md-sys-color-surface-container); cursor:pointer;"
+                onclick="openAssetPreviewModal('{{ asset.source_id or asset.sourceId or asset.id }}')"
+                title="Click to preview asset details">🖼️</div>
               {% endif %}
             </td>
             <td data-label="Name" class="col-name">
               <div style="display:flex; align-items:center; gap:0.35rem;">
                 <span class="asset-name-text" title="{{ asset.name }}">{{ asset.name }}</span>
                 {% if asset.isOverridden %}
-                  <span class="badge badge-warning" style="font-size:0.68rem; padding:0.1rem 0.3rem;" title="Has local overrides">Mod</span>
+                <span class="badge badge-warning" style="font-size:0.68rem; padding:0.1rem 0.3rem;"
+                  title="Has local overrides">Mod</span>
                 {% endif %}
               </div>
               {% if asset.description %}
-                <span class="asset-desc-text" title="{{ asset.description }}">{{ asset.description }}</span>
+              <span class="asset-desc-text" title="{{ asset.description }}">{{ asset.description }}</span>
               {% endif %}
             </td>
             <td data-label="Category" class="col-cat">
-              <span class="badge badge-neutral badge-ellipsis" style="font-size:0.78rem; font-weight:500;" title="{{ asset.category_name or asset.categoryName or '—' }}">
+              <span class="badge badge-neutral badge-ellipsis" style="font-size:0.78rem; font-weight:500;"
+                title="{{ asset.category_name or asset.categoryName or '—' }}">
                 {{ asset.category_name or asset.categoryName or "—" }}
               </span>
             </td>
             <td data-label="Subcategory" class="col-subcat">
-              <span class="badge badge-neutral badge-ellipsis" style="font-size:0.78rem; font-weight:500;" title="{{ asset.subcategory_name or asset.subCategoryName or '—' }}">
+              <span class="badge badge-neutral badge-ellipsis" style="font-size:0.78rem; font-weight:500;"
+                title="{{ asset.subcategory_name or asset.subCategoryName or '—' }}">
                 {{ asset.subcategory_name or asset.subCategoryName or "—" }}
               </span>
             </td>
-            <td data-label="Views" class="col-stat" style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
+            <td data-label="Views" class="col-stat"
+              style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
               {{ asset.views | default(0) }}
             </td>
-            <td data-label="Downloads" class="col-stat" style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
+            <td data-label="Downloads" class="col-stat"
+              style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
               {{ asset.downloads | default(0) }}
             </td>
             <td data-label="Enabled" class="col-toggle">
-              <input type="checkbox" {% if asset.isEnabled is not defined or asset.isEnabled %}checked{% endif %} onchange="updateAssetOverride('{{ asset.id }}', 'is_enabled', this.checked)">
+              <input type="checkbox" {% if asset.isEnabled is not defined or asset.isEnabled %}checked{% endif %}
+                onchange="updateAssetOverride('{{ asset.id }}', 'is_enabled', this.checked)">
             </td>
             <td data-label="Premium" class="col-toggle">
-              <input type="checkbox" {% if asset.isPremium %}checked{% endif %} onchange="updateAssetOverride('{{ asset.id }}', 'is_premium', this.checked)">
+              <input type="checkbox" {% if asset.isPremium %}checked{% endif %}
+                onchange="updateAssetOverride('{{ asset.id }}', 'is_premium', this.checked)">
             </td>
             <td data-label="Rewarded" class="col-toggle">
-              <input type="checkbox" id="rewarded-{{ asset.id }}" {% if asset.isRewarded or asset.is_rewarded %}checked{% endif %} onchange="updateAssetOverride('{{ asset.id }}', 'is_rewarded', this.checked)">
+              <input type="checkbox" id="rewarded-{{ asset.id }}" {% if asset.isRewarded or asset.is_rewarded
+                %}checked{% endif %} onchange="updateAssetOverride('{{ asset.id }}', 'is_rewarded', this.checked)">
             </td>
             <td data-label="Priced" class="col-toggle">
-              <input type="checkbox" id="priced-{{ asset.id }}" {% if asset.isPriced or asset.is_priced %}checked{% endif %} onchange="handlePricedToggle('{{ asset.id }}', this.checked)">
+              <input type="checkbox" id="priced-{{ asset.id }}" {% if asset.isPriced or asset.is_priced %}checked{%
+                endif %} onchange="handlePricedToggle('{{ asset.id }}', this.checked)">
             </td>
             <td data-label="Credits" class="col-credits">
               {% set is_priced = (asset.isPriced or asset.is_priced) %}
-              <input type="number" id="credits-{{ asset.id }}" min="0" value="{{ asset.rewardedCredits if asset.rewardedCredits is defined else (asset.rewarded_credits if asset.rewarded_credits is defined else 5) }}" class="input" style="width:48px; min-height:28px; padding:2px 2px; text-align:center; font-weight:600; font-size:0.8rem; {% if not is_priced %}opacity:0.4; pointer-events:none;{% endif %}" {% if not is_priced %}disabled{% endif %} onchange="handleCreditsChange('{{ asset.id }}', this.value)">
+              <input type="number" id="credits-{{ asset.id }}" min="0"
+                value="{{ asset.rewardedCredits if asset.rewardedCredits is defined else (asset.rewarded_credits if asset.rewarded_credits is defined else 5) }}"
+                class="input"
+                style="width:48px; min-height:28px; padding:2px 2px; text-align:center; font-weight:600; font-size:0.8rem; {% if not is_priced %}opacity:0.4; pointer-events:none;{% endif %}"
+                {% if not is_priced %}disabled{% endif %} onchange="handleCreditsChange('{{ asset.id }}', this.value)">
             </td>
             <td data-label="Actions" class="col-actions">
               <div style="display:inline-flex; gap:0.35rem; justify-content:flex-end;">
-                <button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.45rem; font-size:0.78rem;" onclick="promptCustomName('{{ asset.id }}', '{{ asset.name|escape }}')">
+                <button type="button" class="btn btn-outlined"
+                  style="min-height:28px; padding:0.15rem 0.45rem; font-size:0.78rem;"
+                  onclick="promptCustomName('{{ asset.id }}', '{{ asset.name|escape }}')">
                   Rename
                 </button>
-                <button type="button" class="btn btn-destructive" style="min-height:28px; padding:0.15rem 0.45rem; font-size:0.78rem;" onclick="removeReference('{{ asset.id }}')">
+                <button type="button" class="btn btn-destructive"
+                  style="min-height:28px; padding:0.15rem 0.45rem; font-size:0.78rem;"
+                  onclick="removeReference('{{ asset.id }}')">
                   Detach
                 </button>
               </div>
             </td>
           </tr>
-        {% else %}
+          {% else %}
           <tr>
             <td colspan="14" style="text-align:center; padding:2.5rem; color:var(--md-sys-color-on-surface-variant);">
               {% if selected_cat or selected_subcat or selected_type or search %}
-                <div style="font-size:1.5rem; margin-bottom:0.5rem;">🔍</div>
-                <div style="font-weight:600; margin-bottom:0.25rem;">No assets match your search/filter criteria</div>
-                <p style="font-size:0.85rem; margin:0 0 0.75rem 0;">Try adjusting or clearing your filters.</p>
-                <a href="javascript:void(0)" onclick="handleClearAssetFilters(event, 'all')" class="btn btn-outlined btn-filter">Clear Filters</a>
+              <div style="font-size:1.5rem; margin-bottom:0.5rem;">🔍</div>
+              <div style="font-weight:600; margin-bottom:0.25rem;">No assets match your search/filter criteria</div>
+              <p style="font-size:0.85rem; margin:0 0 0.75rem 0;">Try adjusting or clearing your filters.</p>
+              <a href="javascript:void(0)" onclick="handleClearAssetFilters(event, 'all')"
+                class="btn btn-outlined btn-filter">Clear Filters</a>
               {% else %}
-                <div style="font-size:1.5rem; margin-bottom:0.5rem;">🖼️</div>
-                No assets referenced in this instance yet. Click "+ Add from Central Library" to link assets.
+              <div style="font-size:1.5rem; margin-bottom:0.5rem;">🖼️</div>
+              No assets referenced in this instance yet. Click "+ Add from Central Library" to link assets.
               {% endif %}
             </td>
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
 <!-- Create Folder Modal -->
-<div id="createFolderModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:9999; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
-  <div class="card" style="width:100%; max-width:480px; margin:1rem; padding:1.5rem; box-shadow:0 12px 36px rgba(0,0,0,0.4); border:1px solid var(--md-sys-color-outline-variant);">
+<div id="createFolderModal"
+  style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:9999; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+  <div class="card"
+    style="width:100%; max-width:480px; margin:1rem; padding:1.5rem; box-shadow:0 12px 36px rgba(0,0,0,0.4); border:1px solid var(--md-sys-color-outline-variant);">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem;">
       <h3 style="margin:0; font-size:1.15rem;">📁 Create Folder in {{ instance.name }}</h3>
-      <button type="button" onclick="closeCreateFolderModal()" style="background:none; border:none; color:var(--md-sys-color-on-surface-variant); cursor:pointer; font-size:1.25rem;">✕</button>
+      <button type="button" onclick="closeCreateFolderModal()"
+        style="background:none; border:none; color:var(--md-sys-color-on-surface-variant); cursor:pointer; font-size:1.25rem;">✕</button>
     </div>
 
     <form id="createFolderForm" onsubmit="handleCreateFolderSubmit(event)">
@@ -541,14 +708,14 @@
         <select id="parentSuperSelect" class="select" style="width:100%;">
           <option value="">— None (ungrouped) —</option>
           {% if super_categories %}<optgroup label="In this app">
-          {% for sc in super_categories %}
+            {% for sc in super_categories %}
             <option value="{{ sc.id }}">{{ sc.name }}</option>
-          {% endfor %}
+            {% endfor %}
           </optgroup>{% endif %}
           {% if available_super_categories %}<optgroup label="Central library (adds it to this app)">
-          {% for sc in available_super_categories %}
+            {% for sc in available_super_categories %}
             <option value="{{ sc.id }}">＋ {{ sc.name }}</option>
-          {% endfor %}
+            {% endfor %}
           </optgroup>{% endif %}
         </select>
       </div>
@@ -557,7 +724,7 @@
         <label class="label" for="parentCategorySelect">Parent Category *</label>
         <select id="parentCategorySelect" class="select" style="width:100%;">
           {% for cat in categories %}
-            <option value="{{ cat.sourceId or cat.id }}">{{ cat.name }}</option>
+          <option value="{{ cat.sourceId or cat.id }}">{{ cat.name }}</option>
           {% endfor %}
         </select>
       </div>
@@ -572,7 +739,8 @@
         <input type="url" id="folderThumbInput" class="input" placeholder="https://example.com/thumb.png">
       </div>
 
-      <div style="display:flex; justify-content:flex-end; gap:0.75rem; border-top:1px solid var(--md-sys-color-outline-variant); padding-top:1rem;">
+      <div
+        style="display:flex; justify-content:flex-end; gap:0.75rem; border-top:1px solid var(--md-sys-color-outline-variant); padding-top:1rem;">
         <button type="button" class="btn btn-outlined" onclick="closeCreateFolderModal()">Cancel</button>
         <button type="submit" id="submitFolderBtn" class="btn btn-primary">Create Folder</button>
       </div>
@@ -581,732 +749,739 @@
 </div>
 
 <script>
-const instanceId = "{{ instance.id }}";
-
-function switchInstanceTab(tab) {
-  document.getElementById('sectionFolders').style.display = tab === 'folders' ? 'block' : 'none';
-  document.getElementById('sectionAssets').style.display = tab === 'assets' ? 'block' : 'none';
-
-  document.getElementById('tabBtnFolders').className = tab === 'folders' ? 'btn btn-primary' : 'btn btn-outlined';
-  document.getElementById('tabBtnAssets').className = tab === 'assets' ? 'btn btn-primary' : 'btn btn-outlined';
-
-  try {
-    sessionStorage.setItem('instance_active_tab_' + instanceId, tab);
-    const url = new URL(window.location.href);
-    url.searchParams.set('tab', tab);
-    window.history.replaceState({}, '', url.toString());
-  } catch (e) {}
-
-  if (tab === 'assets') {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (!urlParams.get('categoryId')) {
-      const catSelect = document.getElementById('categoryFilter');
-      if (catSelect && catSelect.value) {
-        catSelect.value = '';
-        filterSubcategoryOptions('');
-      }
-    }
-    if (!urlParams.get('subCategoryId')) {
-      const subSelect = document.getElementById('subCategoryFilter');
-      if (subSelect && subSelect.value) {
-        subSelect.value = '';
-      }
-    }
-  }
-}
-
-function openCreateFolderModal(folderType = 'category', parentCatId = '', parentSuperId = '') {
-  const modal = document.getElementById('createFolderModal');
-  const typeRadios = document.getElementsByName('folder_type');
-  typeRadios.forEach(r => {
-    r.checked = r.value === folderType;
-  });
-  onFolderTypeChange(folderType);
-
-  const superSelect = document.getElementById('parentSuperSelect');
-  if (superSelect) superSelect.value = parentSuperId || '';
-
-  if (parentCatId) {
-    const pSelect = document.getElementById('parentCategorySelect');
-    if (pSelect) pSelect.value = parentCatId;
-  }
-
-  document.getElementById('folderNameInput').value = '';
-  document.getElementById('folderThumbInput').value = '';
-  modal.style.display = 'flex';
-  document.getElementById('folderNameInput').focus();
-}
-
-function closeCreateFolderModal() {
-  document.getElementById('createFolderModal').style.display = 'none';
-}
-
-function onFolderTypeChange(type) {
-  const parentWrap = document.getElementById('parentCategoryWrap');
-  document.getElementById('parentSuperWrap').style.display = type === 'category' ? 'block' : 'none';
-  parentWrap.style.display = type === 'subcategory' ? 'block' : 'none';
-}
-
-async function handleCreateFolderSubmit(e) {
-  e.preventDefault();
-  const folderType = document.querySelector('input[name="folder_type"]:checked').value;
-  const name = document.getElementById('folderNameInput').value.trim();
-  const parentCategoryId = document.getElementById('parentCategorySelect').value;
-  const thumbnailUrl = document.getElementById('folderThumbInput').value.trim();
-
-  if (!name) return;
-
-  const btn = document.getElementById('submitFolderBtn');
-  btn.disabled = true;
-  btn.textContent = 'Creating...';
-
-  try {
-    const payload = {
-      folder_type: folderType,
-      name: name,
-      parent_category_id: folderType === 'subcategory' ? parentCategoryId : '',
-      parent_super_category_id: folderType === 'category' ? document.getElementById('parentSuperSelect').value : '',
-      thumbnail_url: thumbnailUrl
-    };
-
-    const res = await fetch(`/admin/instances/${instanceId}/folders/create`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Failed to create folder');
-
-    window.location.reload();
-  } catch (err) {
-    alert('Error creating folder: ' + err.message);
-    btn.disabled = false;
-    btn.textContent = 'Create Folder';
-  }
-}
-
-async function detachCategoryFolder(catId, catName) {
-  if (!confirm(`Detach folder "${catName}" and all its referenced sub-folders and assets from this app instance? Central data remains untouched.`)) {
-    return;
-  }
-  try {
-    const res = await fetch(`/admin/instances/${instanceId}/categories/${catId}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error('Failed to detach category folder');
-    window.location.reload();
-  } catch (err) {
-    alert('Error detaching folder: ' + err.message);
-  }
-}
-
-async function detachSubcategoryFolder(subId, subName) {
-  if (!confirm(`Detach sub-folder "${subName}" and its referenced assets from this app instance? Central data remains untouched.`)) {
-    return;
-  }
-  try {
-    const res = await fetch(`/admin/instances/${instanceId}/subcategories/${subId}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error('Failed to detach sub-folder');
-    window.location.reload();
-  } catch (err) {
-    alert('Error detaching sub-folder: ' + err.message);
-  }
-}
-
-async function updateAssetOverride(assetId, field, value) {
-  const payload = {};
-  payload[field] = value;
-  
-  try {
-    const res = await fetch(`/admin/instances/${instanceId}/assets/${assetId}/override`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) throw new Error('Failed to update override');
-  } catch (err) {
-    alert('Error updating override: ' + err.message);
-  }
-}
-
-async function handlePricedToggle(assetId, isChecked) {
-  const creditsInput = document.getElementById(`credits-${assetId}`);
-  if (creditsInput) {
-    if (isChecked) {
-      creditsInput.style.opacity = '1';
-      creditsInput.style.pointerEvents = 'auto';
-      creditsInput.disabled = false;
-      if (!creditsInput.value || parseInt(creditsInput.value) <= 0) {
-        creditsInput.value = 5;
-      }
-    } else {
-      creditsInput.style.opacity = '0.4';
-      creditsInput.style.pointerEvents = 'none';
-      creditsInput.disabled = true;
-    }
-  }
-  const creditsVal = creditsInput ? (parseInt(creditsInput.value) || 5) : 5;
-  const payload = {
-    is_priced: isChecked,
-    rewarded_credits: creditsVal
-  };
-  try {
-    const res = await fetch(`/admin/instances/${instanceId}/assets/${assetId}/override`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) throw new Error('Failed to update priced setting');
-  } catch (err) {
-    alert('Error updating priced setting: ' + err.message);
-  }
-}
-
-async function handleCreditsChange(assetId, val) {
-  const creditsVal = Math.max(0, parseInt(val) || 0);
-  try {
-    const res = await fetch(`/admin/instances/${instanceId}/assets/${assetId}/override`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rewarded_credits: creditsVal })
-    });
-    if (!res.ok) throw new Error('Failed to update credits');
-  } catch (err) {
-    alert('Error updating credits: ' + err.message);
-  }
-}
-
-let currentRenamingAssetId = null;
-
-function promptCustomName(assetId, currentName) {
-  currentRenamingAssetId = assetId;
-  const modal = document.getElementById('renameAssetModal');
-  const input = document.getElementById('renameAssetInput');
-  if (modal && input) {
-    input.value = currentName || '';
-    modal.style.display = 'flex';
-    document.body.style.overflow = 'hidden';
-    setTimeout(() => {
-      input.focus();
-      input.select();
-    }, 50);
-  }
-}
-
-function closeRenameModal() {
-  const modal = document.getElementById('renameAssetModal');
-  if (modal) {
-    modal.style.display = 'none';
-    document.body.style.overflow = '';
-  }
-  currentRenamingAssetId = null;
-}
-
-function handleRenameBackdropClick(e) {
-  if (e.target && e.target.id === 'renameAssetModal') {
-    closeRenameModal();
-  }
-}
-
-async function saveRenameModal() {
-  if (!currentRenamingAssetId) return;
-  const input = document.getElementById('renameAssetInput');
-  const newName = input ? input.value.trim() : '';
-  const saveBtn = document.getElementById('renameAssetSaveBtn');
-  if (saveBtn) {
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Saving...';
-  }
-  try {
-    await updateAssetOverride(currentRenamingAssetId, 'name', newName);
-    closeRenameModal();
-    window.location.reload();
-  } catch (err) {
-    alert('Error renaming asset: ' + err.message);
-    if (saveBtn) {
-      saveBtn.disabled = false;
-      saveBtn.textContent = 'Save Changes';
-    }
-  }
-}
-
-async function removeReference(assetId) {
-  if (!confirm('Remove this asset reference from the current app instance? The central asset will remain untouched.')) {
-    return;
-  }
-  
-  try {
-    const res = await fetch(`/admin/instances/${instanceId}/assets/${assetId}`, {
-      method: 'DELETE'
-    });
-    if (!res.ok) throw new Error('Failed to remove asset reference');
-    window.location.reload();
-  } catch (err) {
-    alert('Error detaching reference: ' + err.message);
-  }
-}
-
-// --- Referenced Assets AJAX Filtering & Subcategory Dynamic Scoping ---
-function filterSubcategoryOptions(selectedCatId) {
-  const subSelect = document.getElementById('subCategoryFilter');
-  if (!subSelect) return;
-  const currentSubVal = subSelect.value;
-  let currentSubValid = false;
-
-  const catSelect = document.getElementById('categoryFilter');
-  let validCatIds = [];
-  if (selectedCatId) {
-    validCatIds.push(selectedCatId);
-    if (catSelect) {
-      const selectedOpt = catSelect.options[catSelect.selectedIndex];
-      if (selectedOpt && selectedOpt.dataset.sourceId) {
-        validCatIds.push(selectedOpt.dataset.sourceId);
-      }
-    }
-  }
-
-  Array.from(subSelect.options).forEach((opt, idx) => {
-    if (idx === 0) return; // Keep "All Subcategories"
-    const catId = opt.dataset.categoryId || opt.dataset.catId || '';
-    if (!selectedCatId || validCatIds.includes(catId)) {
-      opt.hidden = false;
-      opt.style.display = '';
-      if (opt.value === currentSubVal) currentSubValid = true;
-    } else {
-      opt.hidden = true;
-      opt.style.display = 'none';
-    }
-  });
-
-  if (selectedCatId && !currentSubValid) {
-    subSelect.value = '';
-  }
-}
-
-function handleCategoryFilterChange(catId) {
-  filterSubcategoryOptions(catId);
-  applyAssetFilters();
-}
-
-function handleSubCategoryFilterChange(subSelect) {
-  const opt = subSelect.options[subSelect.selectedIndex];
-  const catSelect = document.getElementById('categoryFilter');
-  if (opt && opt.dataset.categoryId && catSelect && !catSelect.value) {
-    catSelect.value = opt.dataset.categoryId;
-    filterSubcategoryOptions(opt.dataset.categoryId);
-  }
-  applyAssetFilters();
-}
-
-function handleAssetSearchSubmit(e) {
-  if (e) e.preventDefault();
-  applyAssetFilters();
-}
-
-function handleClearAssetFilters(e, clearType) {
-  if (e) e.preventDefault();
-  if (clearType === 'search') {
-    const qInp = document.getElementById('assetSearchInput');
-    if (qInp) qInp.value = '';
-  } else if (clearType === 'filters') {
-    const catSelect = document.getElementById('categoryFilter');
-    const subSelect = document.getElementById('subCategoryFilter');
-    const typeSelect = document.getElementById('typeFilter');
-    const sortSelect = document.getElementById('assetSortSelect');
-    if (catSelect) catSelect.value = '';
-    if (subSelect) subSelect.value = '';
-    if (typeSelect) typeSelect.value = '';
-    if (sortSelect) sortSelect.value = 'sequence';
-    filterSubcategoryOptions('');
-  } else {
-    // all
-    const catSelect = document.getElementById('categoryFilter');
-    const subSelect = document.getElementById('subCategoryFilter');
-    const typeSelect = document.getElementById('typeFilter');
-    const sortSelect = document.getElementById('assetSortSelect');
-    const qInp = document.getElementById('assetSearchInput');
-    if (catSelect) catSelect.value = '';
-    if (subSelect) subSelect.value = '';
-    if (typeSelect) typeSelect.value = '';
-    if (sortSelect) sortSelect.value = 'sequence';
-    if (qInp) qInp.value = '';
-    filterSubcategoryOptions('');
-  }
-  applyAssetFilters();
-}
-
-async function applyAssetFilters() {
-  const catSelect = document.getElementById('categoryFilter');
-  const subSelect = document.getElementById('subCategoryFilter');
-  const typeSelect = document.getElementById('typeFilter');
-  const sortSelect = document.getElementById('assetSortSelect');
-  const qInput = document.getElementById('assetSearchInput');
-
-  const selectedCat = catSelect ? catSelect.value : '';
-  const selectedSub = subSelect ? subSelect.value : '';
-  const selectedType = typeSelect ? typeSelect.value : '';
-  const selectedSort = sortSelect ? sortSelect.value : 'sequence';
-  const selectedQ = qInput ? qInput.value.trim() : '';
-
-  const params = new URLSearchParams();
-  params.set('tab', 'assets');
-  if (selectedCat) params.set('categoryId', selectedCat);
-  if (selectedSub) params.set('subCategoryId', selectedSub);
-  if (selectedType) params.set('type', selectedType);
-  if (selectedSort && selectedSort !== 'sequence') params.set('sort', selectedSort);
-  if (selectedQ) params.set('q', selectedQ);
-
-  const fetchUrl = `${window.location.pathname}?${params.toString()}`;
-  window.history.replaceState({}, '', fetchUrl);
-
-  const filterClearBtn = document.getElementById('assetFilterClearBtn');
-  const hasFilterActive = Boolean(selectedCat || selectedSub || selectedType || (selectedSort && selectedSort !== 'sequence'));
-  if (filterClearBtn) {
-    filterClearBtn.style.display = hasFilterActive ? 'inline-flex' : 'none';
-  }
-
-  const searchClearBtn = document.getElementById('assetSearchClearBtn');
-  if (searchClearBtn) {
-    searchClearBtn.style.display = selectedQ ? 'inline-flex' : 'none';
-  }
-
-  const container = document.getElementById('assetTableContainer');
-  if (container) container.style.opacity = '0.35';
-
-  try {
-    const res = await fetch(fetchUrl);
-    if (!res.ok) throw new Error('Failed to fetch filtered assets');
-    const htmlText = await res.text();
-    const doc = new DOMParser().parseFromString(htmlText, 'text/html');
-
-    const newContainer = doc.getElementById('assetTableContainer');
-    if (newContainer && container) {
-      container.innerHTML = newContainer.innerHTML;
-    }
-
-    const newTabBtn = doc.getElementById('tabBtnAssets');
-    const curTabBtn = document.getElementById('tabBtnAssets');
-    if (newTabBtn && curTabBtn) {
-      curTabBtn.innerHTML = newTabBtn.innerHTML;
-    }
-
-    if (typeof initAssetTableDragDrop === 'function') {
-      initAssetTableDragDrop();
-    }
-  } catch (err) {
-    console.error('Error applying asset filters:', err);
-  } finally {
-    if (container) container.style.opacity = '1';
-  }
-}
-
-// On fresh load without query params, check saved tab in sessionStorage
-const contentParams = new URLSearchParams(window.location.search);
-if (!contentParams.get('categoryId')) {
-  const catFilter = document.getElementById('categoryFilter');
-  if (catFilter) catFilter.value = '';
-}
-if (!contentParams.get('subCategoryId')) {
-  const subFilter = document.getElementById('subCategoryFilter');
-  if (subFilter) subFilter.value = '';
-}
-
-const curCatInit = document.getElementById('categoryFilter');
-if (curCatInit && curCatInit.value) {
-  filterSubcategoryOptions(curCatInit.value);
-} else {
-  filterSubcategoryOptions('');
-}
-
-const savedTab = sessionStorage.getItem('instance_active_tab_' + instanceId);
-if (!contentParams.has('tab') && !contentParams.has('categoryId') && !contentParams.has('subCategoryId') && !contentParams.has('sort') && !contentParams.has('type') && !contentParams.has('q') && !contentParams.has('folder_cat') && !contentParams.has('folder_search') && !contentParams.has('folder_sort')) {
-  if (savedTab === 'assets') {
-    switchInstanceTab('assets');
-  }
-}
-
-// Floating Toast Notification
-function showToast(msg, type = 'info') {
-  let toast = document.getElementById('instanceToast');
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.id = 'instanceToast';
-    toast.style.cssText = 'display:none; position:fixed; bottom:24px; right:24px; z-index:99999; padding:0.75rem 1.25rem; border-radius:8px; font-size:0.875rem; font-weight:600; box-shadow:0 6px 20px rgba(0,0,0,0.4); pointer-events:none; transition:opacity 0.2s ease;';
-    document.body.appendChild(toast);
-  }
-  toast.textContent = msg;
-  toast.style.display = 'block';
-  toast.style.opacity = '1';
-  if (type === 'success') {
-    toast.style.background = '#10b981';
-    toast.style.color = '#ffffff';
-  } else if (type === 'error') {
-    toast.style.background = '#ef4444';
-    toast.style.color = '#ffffff';
-  } else {
-    toast.style.background = '#2563eb';
-    toast.style.color = '#ffffff';
-  }
-  clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => {
-    toast.style.opacity = '0';
-    setTimeout(() => { toast.style.display = 'none'; }, 200);
-  }, 2500);
-}
-
-// Drag & Drop for Referenced Assets Table
-function initAssetTableDragDrop() {
-  const tbody = document.getElementById('reorderableTbody');
-  if (!tbody) return;
-
-  let draggedRow = null;
-
-  tbody.querySelectorAll('.asset-drag-row').forEach(row => {
-    row.setAttribute('draggable', 'true');
-
-    row.addEventListener('dragstart', function(e) {
-      draggedRow = this;
-      this.style.opacity = '0.4';
-      this.style.background = 'var(--md-sys-color-surface-container-high, #334155)';
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', this.dataset.assetId || '');
-    });
-
-    row.addEventListener('dragover', function(e) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      if (!draggedRow || draggedRow === this) return;
-
-      const bounding = this.getBoundingClientRect();
-      const offset = bounding.y + (bounding.height / 2);
-      if (e.clientY - offset > 0) {
-        this.after(draggedRow);
-      } else {
-        this.before(draggedRow);
-      }
-    });
-
-    row.addEventListener('dragend', function() {
-      this.style.opacity = '1';
-      this.style.background = '';
-      draggedRow = null;
-
-      // Update sequence inputs to natural 1, 2, 3...
-      const rows = tbody.querySelectorAll('.asset-drag-row');
-      const orderedIds = [];
-      rows.forEach((r, idx) => {
-        const inp = r.querySelector('.asset-seq-input');
-        if (inp) inp.value = idx + 1;
-        if (r.dataset.assetId) orderedIds.push(r.dataset.assetId);
-      });
-
-      // Persist new order to server
-      saveAssetOrder(orderedIds);
-    });
-  });
-}
-
-async function saveAssetOrder(orderedIds) {
-  if (!orderedIds || orderedIds.length === 0) return;
-  showToast('Saving sequence order...', 'info');
-  try {
-    const res = await fetch(`/admin/instances/${instanceId}/reorder`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: 'asset',
-        ordered_ids: orderedIds
-      })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Failed to save reorder');
-    showToast('✓ Sequence order updated (1, 2, 3...)', 'success');
-  } catch (err) {
-    showToast('Error saving order: ' + err.message, 'error');
-  }
-}
-
-// Handle typing sequence number directly into Seq input
-window.handleAssetSeqChange = function(assetId, newPosition) {
-  const tbody = document.getElementById('reorderableTbody');
-  if (!tbody) return;
-  const rows = Array.from(tbody.querySelectorAll('.asset-drag-row'));
-  const fromIndex = rows.findIndex(r => r.dataset.assetId === assetId);
-  if (fromIndex === -1) return;
-
-  const targetIndex = Math.max(0, Math.min(newPosition - 1, rows.length - 1));
-  const movingRow = rows[fromIndex];
-  const targetRow = rows[targetIndex];
-
-  if (fromIndex < targetIndex) {
-    targetRow.after(movingRow);
-  } else if (fromIndex > targetIndex) {
-    targetRow.before(movingRow);
-  }
-
-  // Renumber all rows to 1, 2, 3...
-  const newRows = tbody.querySelectorAll('.asset-drag-row');
-  const orderedIds = [];
-  newRows.forEach((r, idx) => {
-    const inp = r.querySelector('.asset-seq-input');
-    if (inp) inp.value = idx + 1;
-    if (r.dataset.assetId) orderedIds.push(r.dataset.assetId);
-  });
-
-  saveAssetOrder(orderedIds);
-};
-
-// Drag & Drop for Category Folders
-function initFolderDragDrop() {
-  const container = document.getElementById('folderCardsContainer');
-  if (!container) return;
-
-  let draggedCard = null;
-
-  container.querySelectorAll('.folder-card').forEach(card => {
-    card.setAttribute('draggable', 'true');
-
-    card.addEventListener('dragstart', function(e) {
-      draggedCard = this;
-      this.style.opacity = '0.4';
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', this.dataset.catId || '');
-    });
-
-    card.addEventListener('dragover', function(e) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      if (!draggedCard || draggedCard === this) return;
-
-      const bounding = this.getBoundingClientRect();
-      const offset = bounding.y + (bounding.height / 2);
-      if (e.clientY - offset > 0) {
-        this.after(draggedCard);
-      } else {
-        this.before(draggedCard);
-      }
-    });
-
-    card.addEventListener('dragend', async function() {
-      this.style.opacity = '1';
-      draggedCard = null;
-
-      // Update folder sequence badges to #1, #2, #3...
-      const cards = container.querySelectorAll('.folder-card');
-      const orderedIds = [];
-      cards.forEach((c, idx) => {
-        const badge = c.querySelector('.folder-seq-badge');
-        if (badge) badge.textContent = `#${idx + 1}`;
-        if (c.dataset.catId) orderedIds.push(c.dataset.catId);
-      });
-
-      if (orderedIds.length > 0) {
-        showToast('Saving folder order...', 'info');
-        try {
-          const res = await fetch(`/admin/instances/${instanceId}/reorder`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'category',
-              ordered_ids: orderedIds
-            })
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.message || 'Failed to save folder order');
-          showToast('✓ Folder order updated', 'success');
-        } catch (err) {
-          showToast('Error saving folder order: ' + err.message, 'error');
+  const instanceId = "{{ instance.id }}";
+
+  function switchInstanceTab(tab) {
+    document.getElementById('sectionFolders').style.display = tab === 'folders' ? 'block' : 'none';
+    document.getElementById('sectionAssets').style.display = tab === 'assets' ? 'block' : 'none';
+
+    document.getElementById('tabBtnFolders').className = tab === 'folders' ? 'btn btn-primary' : 'btn btn-outlined';
+    document.getElementById('tabBtnAssets').className = tab === 'assets' ? 'btn btn-primary' : 'btn btn-outlined';
+
+    try {
+      sessionStorage.setItem('instance_active_tab_' + instanceId, tab);
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', tab);
+      window.history.replaceState({}, '', url.toString());
+    } catch (e) { }
+
+    if (tab === 'assets') {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (!urlParams.get('categoryId')) {
+        const catSelect = document.getElementById('categoryFilter');
+        if (catSelect && catSelect.value) {
+          catSelect.value = '';
+          filterSubcategoryOptions('');
         }
       }
+      if (!urlParams.get('subCategoryId')) {
+        const subSelect = document.getElementById('subCategoryFilter');
+        if (subSelect && subSelect.value) {
+          subSelect.value = '';
+        }
+      }
+    }
+  }
+
+  function openCreateFolderModal(folderType = 'category', parentCatId = '', parentSuperId = '') {
+    const modal = document.getElementById('createFolderModal');
+    const typeRadios = document.getElementsByName('folder_type');
+    typeRadios.forEach(r => {
+      r.checked = r.value === folderType;
     });
-  });
-}
+    onFolderTypeChange(folderType);
 
-// Drag & Drop for Subcategory Folders within Category
-function initSubcategoryDragDrop() {
-  document.querySelectorAll('.admin-sub-grid').forEach(grid => {
-    let draggedSub = null;
+    const superSelect = document.getElementById('parentSuperSelect');
+    if (superSelect) superSelect.value = parentSuperId || '';
 
-    grid.querySelectorAll('.admin-sub-card').forEach(card => {
-      card.setAttribute('draggable', 'true');
+    if (parentCatId) {
+      const pSelect = document.getElementById('parentCategorySelect');
+      if (pSelect) pSelect.value = parentCatId;
+    }
 
-      card.addEventListener('dragstart', function(e) {
-        draggedSub = this;
+    document.getElementById('folderNameInput').value = '';
+    document.getElementById('folderThumbInput').value = '';
+    modal.style.display = 'flex';
+    document.getElementById('folderNameInput').focus();
+  }
+
+  function closeCreateFolderModal() {
+    document.getElementById('createFolderModal').style.display = 'none';
+  }
+
+  function onFolderTypeChange(type) {
+    const parentWrap = document.getElementById('parentCategoryWrap');
+    document.getElementById('parentSuperWrap').style.display = type === 'category' ? 'block' : 'none';
+    parentWrap.style.display = type === 'subcategory' ? 'block' : 'none';
+  }
+
+  async function handleCreateFolderSubmit(e) {
+    e.preventDefault();
+    const folderType = document.querySelector('input[name="folder_type"]:checked').value;
+    const name = document.getElementById('folderNameInput').value.trim();
+    const parentCategoryId = document.getElementById('parentCategorySelect').value;
+    const thumbnailUrl = document.getElementById('folderThumbInput').value.trim();
+
+    if (!name) return;
+
+    const btn = document.getElementById('submitFolderBtn');
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
+
+    try {
+      const payload = {
+        folder_type: folderType,
+        name: name,
+        parent_category_id: folderType === 'subcategory' ? parentCategoryId : '',
+        parent_super_category_id: folderType === 'category' ? document.getElementById('parentSuperSelect').value : '',
+        thumbnail_url: thumbnailUrl
+      };
+
+      const res = await fetch(`/admin/instances/${instanceId}/folders/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Failed to create folder');
+
+      window.location.reload();
+    } catch (err) {
+      alert('Error creating folder: ' + err.message);
+      btn.disabled = false;
+      btn.textContent = 'Create Folder';
+    }
+  }
+
+  async function detachCategoryFolder(catId, catName) {
+    if (!confirm(`Detach folder "${catName}" and all its referenced sub-folders and assets from this app instance? Central data remains untouched.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/admin/instances/${instanceId}/categories/${catId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to detach category folder');
+      window.location.reload();
+    } catch (err) {
+      alert('Error detaching folder: ' + err.message);
+    }
+  }
+
+  async function detachSubcategoryFolder(subId, subName) {
+    if (!confirm(`Detach sub-folder "${subName}" and its referenced assets from this app instance? Central data remains untouched.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/admin/instances/${instanceId}/subcategories/${subId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to detach sub-folder');
+      window.location.reload();
+    } catch (err) {
+      alert('Error detaching sub-folder: ' + err.message);
+    }
+  }
+
+  async function updateAssetOverride(assetId, field, value) {
+    const payload = {};
+    payload[field] = value;
+
+    try {
+      const res = await fetch(`/admin/instances/${instanceId}/assets/${assetId}/override`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error('Failed to update override');
+    } catch (err) {
+      alert('Error updating override: ' + err.message);
+    }
+  }
+
+  async function handlePricedToggle(assetId, isChecked) {
+    const creditsInput = document.getElementById(`credits-${assetId}`);
+    if (creditsInput) {
+      if (isChecked) {
+        creditsInput.style.opacity = '1';
+        creditsInput.style.pointerEvents = 'auto';
+        creditsInput.disabled = false;
+        if (!creditsInput.value || parseInt(creditsInput.value) <= 0) {
+          creditsInput.value = 5;
+        }
+      } else {
+        creditsInput.style.opacity = '0.4';
+        creditsInput.style.pointerEvents = 'none';
+        creditsInput.disabled = true;
+      }
+    }
+    const creditsVal = creditsInput ? (parseInt(creditsInput.value) || 5) : 5;
+    const payload = {
+      is_priced: isChecked,
+      rewarded_credits: creditsVal
+    };
+    try {
+      const res = await fetch(`/admin/instances/${instanceId}/assets/${assetId}/override`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error('Failed to update priced setting');
+    } catch (err) {
+      alert('Error updating priced setting: ' + err.message);
+    }
+  }
+
+  async function handleCreditsChange(assetId, val) {
+    const creditsVal = Math.max(0, parseInt(val) || 0);
+    try {
+      const res = await fetch(`/admin/instances/${instanceId}/assets/${assetId}/override`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rewarded_credits: creditsVal })
+      });
+      if (!res.ok) throw new Error('Failed to update credits');
+    } catch (err) {
+      alert('Error updating credits: ' + err.message);
+    }
+  }
+
+  let currentRenamingAssetId = null;
+
+  function promptCustomName(assetId, currentName) {
+    currentRenamingAssetId = assetId;
+    const modal = document.getElementById('renameAssetModal');
+    const input = document.getElementById('renameAssetInput');
+    if (modal && input) {
+      input.value = currentName || '';
+      modal.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+      setTimeout(() => {
+        input.focus();
+        input.select();
+      }, 50);
+    }
+  }
+
+  function closeRenameModal() {
+    const modal = document.getElementById('renameAssetModal');
+    if (modal) {
+      modal.style.display = 'none';
+      document.body.style.overflow = '';
+    }
+    currentRenamingAssetId = null;
+  }
+
+  function handleRenameBackdropClick(e) {
+    if (e.target && e.target.id === 'renameAssetModal') {
+      closeRenameModal();
+    }
+  }
+
+  async function saveRenameModal() {
+    if (!currentRenamingAssetId) return;
+    const input = document.getElementById('renameAssetInput');
+    const newName = input ? input.value.trim() : '';
+    const saveBtn = document.getElementById('renameAssetSaveBtn');
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+    }
+    try {
+      await updateAssetOverride(currentRenamingAssetId, 'name', newName);
+      closeRenameModal();
+      window.location.reload();
+    } catch (err) {
+      alert('Error renaming asset: ' + err.message);
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Changes';
+      }
+    }
+  }
+
+  async function removeReference(assetId) {
+    if (!confirm('Remove this asset reference from the current app instance? The central asset will remain untouched.')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/admin/instances/${instanceId}/assets/${assetId}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) throw new Error('Failed to remove asset reference');
+      window.location.reload();
+    } catch (err) {
+      alert('Error detaching reference: ' + err.message);
+    }
+  }
+
+  // --- Referenced Assets AJAX Filtering & Subcategory Dynamic Scoping ---
+  function filterSubcategoryOptions(selectedCatId) {
+    const subSelect = document.getElementById('subCategoryFilter');
+    if (!subSelect) return;
+    const currentSubVal = subSelect.value;
+    let currentSubValid = false;
+
+    const catSelect = document.getElementById('categoryFilter');
+    let validCatIds = [];
+    if (selectedCatId) {
+      validCatIds.push(selectedCatId);
+      if (catSelect) {
+        const selectedOpt = catSelect.options[catSelect.selectedIndex];
+        if (selectedOpt && selectedOpt.dataset.sourceId) {
+          validCatIds.push(selectedOpt.dataset.sourceId);
+        }
+      }
+    }
+
+    Array.from(subSelect.options).forEach((opt, idx) => {
+      if (idx === 0) return; // Keep "All Subcategories"
+      const catId = opt.dataset.categoryId || opt.dataset.catId || '';
+      if (!selectedCatId || validCatIds.includes(catId)) {
+        opt.hidden = false;
+        opt.style.display = '';
+        if (opt.value === currentSubVal) currentSubValid = true;
+      } else {
+        opt.hidden = true;
+        opt.style.display = 'none';
+      }
+    });
+
+    if (selectedCatId && !currentSubValid) {
+      subSelect.value = '';
+    }
+  }
+
+  function handleCategoryFilterChange(catId) {
+    filterSubcategoryOptions(catId);
+    applyAssetFilters();
+  }
+
+  function handleSubCategoryFilterChange(subSelect) {
+    const opt = subSelect.options[subSelect.selectedIndex];
+    const catSelect = document.getElementById('categoryFilter');
+    if (opt && opt.dataset.categoryId && catSelect && !catSelect.value) {
+      catSelect.value = opt.dataset.categoryId;
+      filterSubcategoryOptions(opt.dataset.categoryId);
+    }
+    applyAssetFilters();
+  }
+
+  function handleAssetSearchSubmit(e) {
+    if (e) e.preventDefault();
+    applyAssetFilters();
+  }
+
+  function handleClearAssetFilters(e, clearType) {
+    if (e) e.preventDefault();
+    if (clearType === 'search') {
+      const qInp = document.getElementById('assetSearchInput');
+      if (qInp) qInp.value = '';
+    } else if (clearType === 'filters') {
+      const catSelect = document.getElementById('categoryFilter');
+      const subSelect = document.getElementById('subCategoryFilter');
+      const typeSelect = document.getElementById('typeFilter');
+      const sortSelect = document.getElementById('assetSortSelect');
+      if (catSelect) catSelect.value = '';
+      if (subSelect) subSelect.value = '';
+      if (typeSelect) typeSelect.value = '';
+      if (sortSelect) sortSelect.value = 'sequence';
+      filterSubcategoryOptions('');
+    } else {
+      // all
+      const catSelect = document.getElementById('categoryFilter');
+      const subSelect = document.getElementById('subCategoryFilter');
+      const typeSelect = document.getElementById('typeFilter');
+      const sortSelect = document.getElementById('assetSortSelect');
+      const qInp = document.getElementById('assetSearchInput');
+      if (catSelect) catSelect.value = '';
+      if (subSelect) subSelect.value = '';
+      if (typeSelect) typeSelect.value = '';
+      if (sortSelect) sortSelect.value = 'sequence';
+      if (qInp) qInp.value = '';
+      filterSubcategoryOptions('');
+    }
+    applyAssetFilters();
+  }
+
+  async function applyAssetFilters() {
+    const catSelect = document.getElementById('categoryFilter');
+    const subSelect = document.getElementById('subCategoryFilter');
+    const typeSelect = document.getElementById('typeFilter');
+    const sortSelect = document.getElementById('assetSortSelect');
+    const qInput = document.getElementById('assetSearchInput');
+
+    const selectedCat = catSelect ? catSelect.value : '';
+    const selectedSub = subSelect ? subSelect.value : '';
+    const selectedType = typeSelect ? typeSelect.value : '';
+    const selectedSort = sortSelect ? sortSelect.value : 'sequence';
+    const selectedQ = qInput ? qInput.value.trim() : '';
+
+    const params = new URLSearchParams();
+    params.set('tab', 'assets');
+    if (selectedCat) params.set('categoryId', selectedCat);
+    if (selectedSub) params.set('subCategoryId', selectedSub);
+    if (selectedType) params.set('type', selectedType);
+    if (selectedSort && selectedSort !== 'sequence') params.set('sort', selectedSort);
+    if (selectedQ) params.set('q', selectedQ);
+
+    const fetchUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, '', fetchUrl);
+
+    const filterClearBtn = document.getElementById('assetFilterClearBtn');
+    const hasFilterActive = Boolean(selectedCat || selectedSub || selectedType || (selectedSort && selectedSort !== 'sequence'));
+    if (filterClearBtn) {
+      filterClearBtn.style.display = hasFilterActive ? 'inline-flex' : 'none';
+    }
+
+    const searchClearBtn = document.getElementById('assetSearchClearBtn');
+    if (searchClearBtn) {
+      searchClearBtn.style.display = selectedQ ? 'inline-flex' : 'none';
+    }
+
+    const container = document.getElementById('assetTableContainer');
+    if (container) container.style.opacity = '0.35';
+
+    try {
+      const res = await fetch(fetchUrl);
+      if (!res.ok) throw new Error('Failed to fetch filtered assets');
+      const htmlText = await res.text();
+      const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+
+      const newContainer = doc.getElementById('assetTableContainer');
+      if (newContainer && container) {
+        container.innerHTML = newContainer.innerHTML;
+      }
+
+      const newTabBtn = doc.getElementById('tabBtnAssets');
+      const curTabBtn = document.getElementById('tabBtnAssets');
+      if (newTabBtn && curTabBtn) {
+        curTabBtn.innerHTML = newTabBtn.innerHTML;
+      }
+
+      if (typeof initAssetTableDragDrop === 'function') {
+        initAssetTableDragDrop();
+      }
+    } catch (err) {
+      console.error('Error applying asset filters:', err);
+    } finally {
+      if (container) container.style.opacity = '1';
+    }
+  }
+
+  // On fresh load without query params, check saved tab in sessionStorage
+  const contentParams = new URLSearchParams(window.location.search);
+  if (!contentParams.get('categoryId')) {
+    const catFilter = document.getElementById('categoryFilter');
+    if (catFilter) catFilter.value = '';
+  }
+  if (!contentParams.get('subCategoryId')) {
+    const subFilter = document.getElementById('subCategoryFilter');
+    if (subFilter) subFilter.value = '';
+  }
+
+  const curCatInit = document.getElementById('categoryFilter');
+  if (curCatInit && curCatInit.value) {
+    filterSubcategoryOptions(curCatInit.value);
+  } else {
+    filterSubcategoryOptions('');
+  }
+
+  const savedTab = sessionStorage.getItem('instance_active_tab_' + instanceId);
+  if (!contentParams.has('tab') && !contentParams.has('categoryId') && !contentParams.has('subCategoryId') && !contentParams.has('sort') && !contentParams.has('type') && !contentParams.has('q') && !contentParams.has('folder_cat') && !contentParams.has('folder_search') && !contentParams.has('folder_sort')) {
+    if (savedTab === 'assets') {
+      switchInstanceTab('assets');
+    }
+  }
+
+  // Floating Toast Notification
+  function showToast(msg, type = 'info') {
+    let toast = document.getElementById('instanceToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'instanceToast';
+      toast.style.cssText = 'display:none; position:fixed; bottom:24px; right:24px; z-index:99999; padding:0.75rem 1.25rem; border-radius:8px; font-size:0.875rem; font-weight:600; box-shadow:0 6px 20px rgba(0,0,0,0.4); pointer-events:none; transition:opacity 0.2s ease;';
+      document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.display = 'block';
+    toast.style.opacity = '1';
+    if (type === 'success') {
+      toast.style.background = '#10b981';
+      toast.style.color = '#ffffff';
+    } else if (type === 'error') {
+      toast.style.background = '#ef4444';
+      toast.style.color = '#ffffff';
+    } else {
+      toast.style.background = '#2563eb';
+      toast.style.color = '#ffffff';
+    }
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => {
+      toast.style.opacity = '0';
+      setTimeout(() => { toast.style.display = 'none'; }, 200);
+    }, 2500);
+  }
+
+  // Drag & Drop for Referenced Assets Table
+  function initAssetTableDragDrop() {
+    const tbody = document.getElementById('reorderableTbody');
+    if (!tbody) return;
+
+    let draggedRow = null;
+
+    tbody.querySelectorAll('.asset-drag-row').forEach(row => {
+      row.setAttribute('draggable', 'true');
+
+      row.addEventListener('dragstart', function (e) {
+        draggedRow = this;
         this.style.opacity = '0.4';
+        this.style.background = 'var(--md-sys-color-surface-container-high, #334155)';
         e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', this.dataset.subId || '');
+        e.dataTransfer.setData('text/plain', this.dataset.assetId || '');
       });
 
-      card.addEventListener('dragover', function(e) {
+      row.addEventListener('dragover', function (e) {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
-        if (!draggedSub || draggedSub === this) return;
+        if (!draggedRow || draggedRow === this) return;
 
         const bounding = this.getBoundingClientRect();
         const offset = bounding.y + (bounding.height / 2);
         if (e.clientY - offset > 0) {
-          this.after(draggedSub);
+          this.after(draggedRow);
         } else {
-          this.before(draggedSub);
+          this.before(draggedRow);
         }
       });
 
-      card.addEventListener('dragend', async function() {
+      row.addEventListener('dragend', function () {
         this.style.opacity = '1';
-        draggedSub = null;
+        this.style.background = '';
+        draggedRow = null;
 
-        const cards = grid.querySelectorAll('.admin-sub-card');
+        // Update sequence inputs to natural 1, 2, 3...
+        const rows = tbody.querySelectorAll('.asset-drag-row');
+        const orderedIds = [];
+        rows.forEach((r, idx) => {
+          const inp = r.querySelector('.asset-seq-input');
+          if (inp) inp.value = idx + 1;
+          if (r.dataset.assetId) orderedIds.push(r.dataset.assetId);
+        });
+
+        // Persist new order to server
+        saveAssetOrder(orderedIds);
+      });
+    });
+  }
+
+  async function saveAssetOrder(orderedIds) {
+    if (!orderedIds || orderedIds.length === 0) return;
+    showToast('Saving sequence order...', 'info');
+    try {
+      const res = await fetch(`/admin/instances/${instanceId}/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'asset',
+          ordered_ids: orderedIds
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to save reorder');
+      showToast('✓ Sequence order updated (1, 2, 3...)', 'success');
+    } catch (err) {
+      showToast('Error saving order: ' + err.message, 'error');
+    }
+  }
+
+  // Handle typing sequence number directly into Seq input
+  window.handleAssetSeqChange = function (assetId, newPosition) {
+    const tbody = document.getElementById('reorderableTbody');
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll('.asset-drag-row'));
+    const fromIndex = rows.findIndex(r => r.dataset.assetId === assetId);
+    if (fromIndex === -1) return;
+
+    const targetIndex = Math.max(0, Math.min(newPosition - 1, rows.length - 1));
+    const movingRow = rows[fromIndex];
+    const targetRow = rows[targetIndex];
+
+    if (fromIndex < targetIndex) {
+      targetRow.after(movingRow);
+    } else if (fromIndex > targetIndex) {
+      targetRow.before(movingRow);
+    }
+
+    // Renumber all rows to 1, 2, 3...
+    const newRows = tbody.querySelectorAll('.asset-drag-row');
+    const orderedIds = [];
+    newRows.forEach((r, idx) => {
+      const inp = r.querySelector('.asset-seq-input');
+      if (inp) inp.value = idx + 1;
+      if (r.dataset.assetId) orderedIds.push(r.dataset.assetId);
+    });
+
+    saveAssetOrder(orderedIds);
+  };
+
+  // Drag & Drop for Category Folders
+  function initFolderDragDrop() {
+    const container = document.getElementById('folderCardsContainer');
+    if (!container) return;
+
+    let draggedCard = null;
+
+    container.querySelectorAll('.folder-card').forEach(card => {
+      card.setAttribute('draggable', 'true');
+
+      card.addEventListener('dragstart', function (e) {
+        draggedCard = this;
+        this.style.opacity = '0.4';
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', this.dataset.catId || '');
+      });
+
+      card.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (!draggedCard || draggedCard === this) return;
+
+        const bounding = this.getBoundingClientRect();
+        const offset = bounding.y + (bounding.height / 2);
+        if (e.clientY - offset > 0) {
+          this.after(draggedCard);
+        } else {
+          this.before(draggedCard);
+        }
+      });
+
+      card.addEventListener('dragend', async function () {
+        this.style.opacity = '1';
+        draggedCard = null;
+
+        // Update folder sequence badges to #1, #2, #3...
+        const cards = container.querySelectorAll('.folder-card');
         const orderedIds = [];
         cards.forEach((c, idx) => {
-          const badge = c.querySelector('.admin-sub-seq-badge');
+          const badge = c.querySelector('.folder-seq-badge');
           if (badge) badge.textContent = `#${idx + 1}`;
-          if (c.dataset.subId) orderedIds.push(c.dataset.subId);
+          if (c.dataset.catId) orderedIds.push(c.dataset.catId);
         });
 
         if (orderedIds.length > 0) {
-          showToast('Saving sub-folder order...', 'info');
+          showToast('Saving folder order...', 'info');
           try {
             const res = await fetch(`/admin/instances/${instanceId}/reorder`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                type: 'subcategory',
+                type: 'category',
                 ordered_ids: orderedIds
               })
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.message || 'Failed to save sub-folder order');
-            showToast('✓ Sub-folder order updated', 'success');
+            if (!res.ok) throw new Error(data.message || 'Failed to save folder order');
+            showToast('✓ Folder order updated', 'success');
           } catch (err) {
-            showToast('Error saving sub-folder order: ' + err.message, 'error');
+            showToast('Error saving folder order: ' + err.message, 'error');
           }
         }
       });
     });
-  });
-}
+  }
 
-// Initialize on page load
-initAssetTableDragDrop();
-initFolderDragDrop();
-initSubcategoryDragDrop();
+  // Drag & Drop for Subcategory Folders within Category
+  function initSubcategoryDragDrop() {
+    document.querySelectorAll('.admin-sub-grid').forEach(grid => {
+      let draggedSub = null;
+
+      grid.querySelectorAll('.admin-sub-card').forEach(card => {
+        card.setAttribute('draggable', 'true');
+
+        card.addEventListener('dragstart', function (e) {
+          draggedSub = this;
+          this.style.opacity = '0.4';
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', this.dataset.subId || '');
+        });
+
+        card.addEventListener('dragover', function (e) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          if (!draggedSub || draggedSub === this) return;
+
+          const bounding = this.getBoundingClientRect();
+          const offset = bounding.y + (bounding.height / 2);
+          if (e.clientY - offset > 0) {
+            this.after(draggedSub);
+          } else {
+            this.before(draggedSub);
+          }
+        });
+
+        card.addEventListener('dragend', async function () {
+          this.style.opacity = '1';
+          draggedSub = null;
+
+          const cards = grid.querySelectorAll('.admin-sub-card');
+          const orderedIds = [];
+          cards.forEach((c, idx) => {
+            const badge = c.querySelector('.admin-sub-seq-badge');
+            if (badge) badge.textContent = `#${idx + 1}`;
+            if (c.dataset.subId) orderedIds.push(c.dataset.subId);
+          });
+
+          if (orderedIds.length > 0) {
+            showToast('Saving sub-folder order...', 'info');
+            try {
+              const res = await fetch(`/admin/instances/${instanceId}/reorder`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: 'subcategory',
+                  ordered_ids: orderedIds
+                })
+              });
+              const data = await res.json();
+              if (!res.ok) throw new Error(data.message || 'Failed to save sub-folder order');
+              showToast('✓ Sub-folder order updated', 'success');
+            } catch (err) {
+              showToast('Error saving sub-folder order: ' + err.message, 'error');
+            }
+          }
+        });
+      });
+    });
+  }
+
+  // Initialize on page load
+  initAssetTableDragDrop();
+  initFolderDragDrop();
+  initSubcategoryDragDrop();
 </script>
 
 <!-- Rename Asset Modal -->
-<div id="renameAssetModal" class="asset-preview-modal-backdrop" style="display:none;" onclick="handleRenameBackdropClick(event)">
-  <div class="card" role="dialog" aria-modal="true" style="width:100%; max-width:440px; margin:auto; padding:1.5rem; border-radius:14px; background:var(--md-sys-color-surface, #1e1e2e); border:1px solid var(--md-sys-color-outline-variant, #313244); box-shadow:0 12px 36px rgba(0,0,0,0.5);" onclick="event.stopPropagation()">
+<div id="renameAssetModal" class="asset-preview-modal-backdrop" style="display:none;"
+  onclick="handleRenameBackdropClick(event)">
+  <div class="card" role="dialog" aria-modal="true"
+    style="width:100%; max-width:440px; margin:auto; padding:1.5rem; border-radius:14px; background:var(--md-sys-color-surface, #1e1e2e); border:1px solid var(--md-sys-color-outline-variant, #313244); box-shadow:0 12px 36px rgba(0,0,0,0.5);"
+    onclick="event.stopPropagation()">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem;">
       <h3 style="margin:0; font-size:1.1rem; font-weight:600;">Rename Asset</h3>
-      <button type="button" class="btn-icon" onclick="closeRenameModal()" style="background:none; border:none; cursor:pointer; font-size:1.3rem; line-height:1; color:var(--md-sys-color-on-surface-variant);">&times;</button>
+      <button type="button" class="btn-icon" onclick="closeRenameModal()"
+        style="background:none; border:none; cursor:pointer; font-size:1.3rem; line-height:1; color:var(--md-sys-color-on-surface-variant);">&times;</button>
     </div>
     <p style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); margin-top:0; margin-bottom:1rem;">
       Set a custom display name for this asset in this app instance.
     </p>
     <div class="form-group" style="margin-bottom:1.25rem;">
-      <label for="renameAssetInput" style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.4rem;">Display Name</label>
-      <input type="text" id="renameAssetInput" class="input" style="width:100%;" onkeydown="if(event.key==='Enter'){saveRenameModal();}">
+      <label for="renameAssetInput"
+        style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.4rem;">Display Name</label>
+      <input type="text" id="renameAssetInput" class="input" style="width:100%;"
+        onkeydown="if(event.key==='Enter'){saveRenameModal();}">
     </div>
     <div style="display:flex; justify-content:flex-end; gap:0.5rem;">
       <button type="button" class="btn btn-outlined" onclick="closeRenameModal()">Cancel</button>
-      <button type="button" id="renameAssetSaveBtn" class="btn btn-primary" onclick="saveRenameModal()">Save Changes</button>
+      <button type="button" id="renameAssetSaveBtn" class="btn btn-primary" onclick="saveRenameModal()">Save
+        Changes</button>
     </div>
   </div>
 </div>
@@ -1314,4 +1489,3 @@ initSubcategoryDragDrop();
 {% include "partials/asset_preview_modal.html" %}
 
 {% endblock %}
-
