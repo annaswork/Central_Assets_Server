@@ -106,6 +106,18 @@
   <div id="folderCardsContainer" style="display:flex; flex-direction:column; gap:1.25rem;">
     {% if categories and categories|length > 0 %}
     {% for cat in categories %}
+{# A super category with 2+ categories here shows as one collapsible block (controller keeps them adjacent) #}
+{% set sc_id = cat.superCategoryId %}
+{% set sc_size = (categories|selectattr('superCategoryId', 'equalto', sc_id)|list|length) if sc_id else 0 %}
+{% if sc_size > 1 and (loop.first or loop.previtem.superCategoryId != sc_id) %}
+<details class="super-group"{% if folder_super %} open{% endif %} style="border:1px solid var(--md-sys-color-primary); border-radius:var(--radius-lg); background:var(--md-sys-color-surface-container-low); padding:0.85rem 1.25rem;">
+  <summary style="cursor:pointer; font-weight:600;">
+    ⭐ {{ cat.super_category_name }}
+    <span class="badge badge-secondary" style="font-size:0.75rem; margin-left:0.4rem;">{{ sc_size }} Categories</span>
+    <span style="font-size:0.75rem; font-weight:400; margin-left:0.4rem; color:var(--md-sys-color-on-surface-variant);">Click to expand</span>
+  </summary>
+  <div style="display:flex; flex-direction:column; gap:1.25rem; margin-top:0.85rem;">
+{% endif %}
       <div class="card folder-card" data-cat-id="{{ cat.id }}" style="padding:1.25rem; border:1px solid var(--md-sys-color-outline-variant);">
         <!-- Category Folder Header -->
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; padding-bottom:0.75rem; border-bottom:1px solid var(--md-sys-color-outline-variant);">
@@ -218,6 +230,10 @@
           {% endif %}
         </div>
       </div>
+{% if sc_size > 1 and (loop.last or loop.nextitem.superCategoryId != sc_id) %}
+  </div>
+</details>
+{% endif %}
     {% endfor %}
     {% elif folder_cat or folder_search or folder_super %}
       <div class="card" style="padding:3rem; text-align:center; color:var(--md-sys-color-on-surface-variant);">

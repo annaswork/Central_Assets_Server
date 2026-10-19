@@ -259,6 +259,12 @@ async def build_instance_content(
         key, reverse = folder_sort_keys[folder_sort.strip().lower()]
         displayed_categories.sort(key=key, reverse=reverse)
 
+    # Keep each super category's categories together (at its first member's spot) so the page can show one block
+    first_pos: dict[Any, int] = {}
+    for i, c in enumerate(displayed_categories):
+        first_pos.setdefault(c.get("superCategoryId") or id(c), i)
+    displayed_categories.sort(key=lambda c: first_pos[c.get("superCategoryId") or id(c)])
+
     return {
         "categories": displayed_categories,
         "all_categories": categories,

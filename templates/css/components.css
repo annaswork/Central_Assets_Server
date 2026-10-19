@@ -239,8 +239,9 @@ input[type="button"].btn {
 }
 
 /* Instance sub-folder grids: only the first 4 until "Show More" */
-.subs-collapsed > :nth-child(n+5) {
-  display: none !important; /* beats the cards' inline display:flex */
+.subs-collapsed> :nth-child(n+5) {
+  /* !important is required: sub-folder cards set display:flex inline, which beats any plain rule */
+  display: none !important;
 }
 
 .grid-2 {
@@ -844,6 +845,7 @@ input[type="button"].btn {
   .asset-edit-grid {
     grid-template-columns: 1fr;
   }
+
   .asset-edit-col-left {
     position: static;
   }
@@ -1216,7 +1218,7 @@ input[type="button"].btn {
   font-weight: 600;
   padding: 0.15rem 0.4rem;
   border-radius: 4px;
-  background: var(--md-sys-color-surface-container-highest, rgba(0,0,0,0.06));
+  background: var(--md-sys-color-surface-container-highest, rgba(0, 0, 0, 0.06));
   color: var(--md-sys-color-on-surface-variant);
   letter-spacing: 0.02em;
   user-select: none;
@@ -1232,7 +1234,7 @@ input[type="button"].btn {
   background: var(--md-sys-color-surface-container-high, #ffffff);
   border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0,0,0,0.06);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.06);
   max-height: 480px;
   overflow-y: auto;
   z-index: 1000;
@@ -1244,6 +1246,7 @@ input[type="button"].btn {
     opacity: 0;
     transform: translateY(-6px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -1676,19 +1679,23 @@ input[type="button"].btn {
 
 /* Explicit 5 to 8 items per row selectors */
 @media (min-width: 1200px) {
+
   .asset-grid.grid-cols-5,
   .manager-asset-grid.grid-cols-5 {
     grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
   }
+
   .asset-grid.grid-cols-6,
   .manager-asset-grid.grid-cols-6 {
     grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
   }
+
   .asset-grid.grid-cols-7,
   .manager-asset-grid.grid-cols-7 {
     grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
     gap: 0.75rem !important;
   }
+
   .asset-grid.grid-cols-8,
   .manager-asset-grid.grid-cols-8 {
     grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
@@ -1699,6 +1706,7 @@ input[type="button"].btn {
   .grid-cols-8 .asset-card-title {
     font-size: 0.82rem !important;
   }
+
   .grid-cols-7 .asset-card-actions,
   .grid-cols-8 .asset-card-actions {
     padding: 0.25rem 0.4rem !important;
@@ -1706,10 +1714,12 @@ input[type="button"].btn {
 }
 
 @media (min-width: 900px) and (max-width: 1199px) {
+
   .asset-grid.grid-cols-5,
   .manager-asset-grid.grid-cols-5 {
     grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
   }
+
   .asset-grid.grid-cols-6,
   .asset-grid.grid-cols-7,
   .asset-grid.grid-cols-8,
@@ -1722,6 +1732,7 @@ input[type="button"].btn {
 }
 
 @media (max-width: 640px) {
+
   .asset-grid,
   .manager-asset-grid {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important;
@@ -2616,6 +2627,7 @@ body.is-swipe-selecting {
     opacity: 0;
     transform: scale(0.96) translateY(8px);
   }
+
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
@@ -3287,9 +3299,11 @@ body.is-swipe-selecting {
 .morefields-tab-bar::-webkit-scrollbar {
   height: 3px;
 }
+
 .morefields-tab-bar::-webkit-scrollbar-track {
   background: transparent;
 }
+
 .morefields-tab-bar::-webkit-scrollbar-thumb {
   background: var(--md-sys-color-outline);
   border-radius: 4px;
@@ -3371,8 +3385,15 @@ body.is-swipe-selecting {
 }
 
 @keyframes mfPanelFadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Panel Header (inside each tab panel) */
@@ -3596,10 +3617,12 @@ body.is-swipe-selecting {
   .morefields-scroll-item {
     flex-direction: column;
   }
+
   .morefields-scroll-preview {
     width: 100%;
     min-height: 160px;
   }
+
   .morefields-scroll-meta {
     border-left: none;
     border-top: 1px solid var(--md-sys-color-outline-variant);
@@ -3719,7 +3742,7 @@ body.is-swipe-selecting {
   padding: 0.15rem 0.4rem;
   border-radius: 4px;
   z-index: 2;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 .pill-gif {
@@ -3961,6 +3984,7 @@ body.is-swipe-selecting {
     opacity: 0;
     transform: translateY(16px) scale(0.96);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -3995,8 +4019,17 @@ body.is-swipe-selecting {
 }
 
 @keyframes bgUploadPulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.2); opacity: 0.8; }
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
 }
 
 .bg-upload-header-title {
@@ -4144,8 +4177,13 @@ body.is-swipe-selecting {
 }
 
 @keyframes bgUploadShimmer {
-  0% { background-position: 100% 0; }
-  100% { background-position: -100% 0; }
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
 }
 
 .bg-upload-progress-fill.done {
@@ -4202,6 +4240,7 @@ body.is-swipe-selecting {
     opacity: 0;
     transform: scale(0.85);
   }
+
   to {
     opacity: 1;
     transform: scale(1);
@@ -4226,9 +4265,11 @@ body.is-swipe-selecting {
   0% {
     box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7);
   }
+
   70% {
     box-shadow: 0 0 0 8px rgba(56, 189, 248, 0);
   }
+
   100% {
     box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
   }
@@ -4254,8 +4295,15 @@ body.is-swipe-selecting {
 }
 
 @keyframes cropperFadeIn {
-  from { opacity: 0; transform: scale(0.98); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .media-cropper-container {
@@ -4385,7 +4433,9 @@ body.is-swipe-selecting {
 }
 
 @keyframes cropperSpin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .media-cropper-footer {
@@ -4531,6 +4581,7 @@ body.is-swipe-selecting {
   transform: translateX(-50%);
   background: #22c55e;
 }
+
 .audio-track-handle-start::after {
   background: #14532d;
 }
@@ -4539,6 +4590,7 @@ body.is-swipe-selecting {
   transform: translateX(-50%);
   background: #f59e0b;
 }
+
 .audio-track-handle-end::after {
   background: #78350f;
 }
