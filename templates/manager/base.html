@@ -60,6 +60,12 @@
             Central Data (Read-Only)
           </li>
           <li>
+            <a href="/manager/super-categories" class="nav-link {% if active_tab == 'super_categories' %}active{% endif %}" title="Browse Super Categories">
+              <span class="nav-icon">⭐</span>
+              <span class="nav-text">Super Categories</span>
+            </a>
+          </li>
+          <li>
             <a href="/manager/categories" class="nav-link {% if active_tab == 'categories' %}active{% endif %}" title="Browse Categories">
               <span class="nav-icon">📁</span>
               <span class="nav-text">Categories</span>
@@ -175,6 +181,7 @@
         {% endif %}
 
         <a href="/manager/dashboard" title="Dashboard" class="nav-link {% if active_tab == 'dashboard' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📊</a>
+        <a href="/manager/super-categories" title="Super Categories" class="nav-link {% if active_tab == 'super_categories' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">⭐</a>
         <a href="/manager/categories" title="Categories" class="nav-link {% if active_tab == 'categories' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📁</a>
         <a href="/manager/subcategories" title="Subcategories" class="nav-link {% if active_tab == 'subcategories' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📂</a>
         <a href="/manager/assets" title="Assets" class="nav-link {% if active_tab == 'assets' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">🖼️</a>

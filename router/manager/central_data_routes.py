@@ -11,6 +11,7 @@ from controller.asset_controller import list_assets
 from controller.category_controller import list_categories
 from controller.manager_controller import get_manager_by_id
 from controller.subcategory_controller import get_subcategory, list_subcategories
+from controller.super_category_controller import list_super_categories
 from database.collections import ASSETS, SUBCATEGORIES
 from router.deps import get_db
 from utils.datetimes import format_datetime_display
@@ -32,6 +33,7 @@ async def manager_categories(
     search: str | None = None,
     sort: str = Query(default="sequence"),
     order: str = Query(default="asc"),
+    superCategoryId: str | None = None,
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     """Read-only view of central categories."""
@@ -64,7 +66,8 @@ async def manager_categories(
         current_sort = "sequence"
 
     categories_page = await list_categories(
-        db, page=page, page_size=effective_page_size, search=search, sort_by=sort_by, sort_order=sort_order
+        db, page=page, page_size=effective_page_size, search=search, sort_by=sort_by, sort_order=sort_order,
+        super_category_id=superCategoryId or None,
     )
 
     items = categories_page.get("items", [])
@@ -97,6 +100,31 @@ async def manager_categories(
             "sort": current_sort,
             "order": sort_order,
             "active_tab": "categories",
+        },
+    )
+
+
+@router.get("/super-categories")
+async def manager_super_categories(
+    request: Request,
+    search: str | None = None,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Read-only view of central super categories (reuses the Admin list template)."""
+    session = get_current_manager_session(request)
+    if not session:
+        return RedirectResponse(url="/manager/login", status_code=303)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="super_categories/list.html",
+        context={
+            "session": session,
+            "manager": await get_manager_by_id(db, session["user_id"]),
+            "items": await list_super_categories(db, search=search),
+            "search": search or "",
+            "read_only": True,
+            "active_tab": "super_categories",
         },
     )
 

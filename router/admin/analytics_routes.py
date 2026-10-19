@@ -29,6 +29,7 @@ router = APIRouter(prefix="/analytics", tags=["Admin Analytics"])
 async def admin_analytics_dashboard(
     request: Request,
     hours: int = Query(default=24),
+    app: str | None = Query(default=None),
     msg: str | None = Query(default=None),
     error: str | None = Query(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
@@ -39,7 +40,7 @@ async def admin_analytics_dashboard(
 
     now = datetime.now(timezone.utc)
     start = now - timedelta(hours=max(1, hours))
-    summary = await get_dashboard_summary(db, from_dt=start, to_dt=now)
+    summary = await get_dashboard_summary(db, from_dt=start, to_dt=now, app_instance_id=app or None)
 
     # Fetch app instance mapping for clear display in tables
     instances_cursor = db[APP_INSTANCES].find({}, {"name": 1})
@@ -53,6 +54,7 @@ async def admin_analytics_dashboard(
             "session": session,
             "summary": summary,
             "hours": hours,
+            "app": app or "",
             "msg": msg,
             "error": error,
             "app_names_map": app_names_map,
@@ -104,6 +106,7 @@ async def admin_delete_analytics_event(
 async def admin_clear_error_analytics(
     request: Request,
     hours: int = Form(default=0),
+    app: str = Form(default=""),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -111,7 +114,7 @@ async def admin_clear_error_analytics(
         return RedirectResponse(url="/admin/login", status_code=303)
 
     window_hours = hours if hours > 0 else None
-    res = await clear_analytics_errors(db, hours=window_hours)
+    res = await clear_analytics_errors(db, app_instance_ids=[app] if app else None, hours=window_hours)
     count = res.get("deleted_count", 0)
     return RedirectResponse(
         url=f"/admin/analytics?msg=Successfully+deleted+{count}+error+records",

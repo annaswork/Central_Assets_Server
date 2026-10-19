@@ -43,11 +43,19 @@
       <option value="168" {% if hours==168 %}selected{% endif %}>Last 7 Days</option>
       <option value="720" {% if hours==720 %}selected{% endif %}>Last 30 Days</option>
     </select>
+    <label for="adminAppSelect" style="font-size:0.85rem; font-weight:500; color:var(--md-sys-color-on-surface-variant);">App:</label>
+    <select id="adminAppSelect" name="app" class="select" onchange="this.form.submit()" style="min-width:200px;">
+      <option value="">All Apps</option>
+      {% for app_id, app_name in app_names_map|dictsort(by='value') %}
+      <option value="{{ app_id }}" {% if app == app_id %}selected{% endif %}>{{ app_name }}</option>
+      {% endfor %}
+    </select>
   </form>
 
   {% if summary.error_analytics and summary.error_analytics.total_errors > 0 %}
   <form method="POST" action="/admin/analytics/clear-errors" onsubmit="return confirm('Are you sure you want to purge all error records in this window? This cannot be undone.');" style="margin:0;">
     <input type="hidden" name="hours" value="{{ hours }}">
+    <input type="hidden" name="app" value="{{ app }}">
     <button type="submit" class="btn btn-outlined btn-sm" style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);">
       🗑️ Clear Error Records ({{ summary.error_analytics.total_errors }})
     </button>
