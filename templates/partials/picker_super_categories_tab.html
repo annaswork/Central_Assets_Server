@@ -10,7 +10,7 @@
       <div style="display:flex; gap:0.75rem; align-items:center; margin-bottom:0.75rem;">
         <div style="width:54px; height:54px; border-radius:var(--radius-sm); overflow:hidden; background:var(--md-sys-color-surface-container-low); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
           {% if sc.thumbnail_url or sc.image_url %}
-          <img src="{{ sc.thumbnail_url or sc.image_url }}" alt="{{ sc.name }}" style="width:100%; height:100%; object-fit:cover;">
+          <img loading="lazy" src="{{ sc.thumbnail_url or sc.image_url }}" alt="{{ sc.name }}" style="width:100%; height:100%; object-fit:cover;">
           {% else %}<span style="font-size:1.5rem;">⭐</span>{% endif %}
         </div>
         <div>

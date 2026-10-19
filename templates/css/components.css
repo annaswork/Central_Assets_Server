@@ -238,6 +238,11 @@ input[type="button"].btn {
   width: 100%;
 }
 
+/* Instance sub-folder grids: only the first 4 until "Show More" */
+.subs-collapsed > :nth-child(n+5) {
+  display: none;
+}
+
 .grid-2 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -329,6 +334,16 @@ input[type="button"].btn {
 .badge-source-deleted {
   background-color: var(--app-badge-source-deleted-bg);
   color: var(--app-badge-source-deleted);
+}
+
+.badge-primary {
+  background-color: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.badge-secondary {
+  background-color: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 .badge-success {

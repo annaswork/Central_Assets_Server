@@ -2,7 +2,7 @@
    JS from instance_super_categories.html. Focus disables the card's drag so the dropdown opens normally. #}
 {% if super_categories or available_super_categories %}
 <select class="select" title="Super Category" draggable="false"
-  style="min-height:34px; max-width:200px; font-size:0.8rem; padding:0.2rem 0.5rem;"
+  style="width:auto; min-height:34px; max-width:200px; font-size:0.8rem; padding:0.2rem 0.5rem;"
   onfocus="setCardDraggable(this, false)" onblur="setCardDraggable(this, true)"
   onchange="moveCategoryToSuper('{{ cat.id }}', this.value)">
   <option value="" {% if not cat.superCategoryId %}selected{% endif %}>⭐ No super category</option>

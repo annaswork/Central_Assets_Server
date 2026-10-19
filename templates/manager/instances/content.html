@@ -105,7 +105,7 @@
               <span class="cat-drag-handle" style="cursor:grab; font-size:1.25rem; color:var(--md-sys-color-on-surface-variant); padding:2px; user-select:none;" title="Drag to reorder folder">⠿</span>
               <div style="width:44px; height:44px; border-radius:8px; overflow:hidden; background:var(--md-sys-color-surface-container); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
                 {% if cat.thumbnail_url %}
-                  <img src="{{ cat.thumbnail_url }}" alt="{{ cat.name }}" style="width:100%; height:100%; object-fit:cover;">
+                  <img loading="lazy" src="{{ cat.thumbnail_url }}" alt="{{ cat.name }}" style="width:100%; height:100%; object-fit:cover;">
                 {% else %}
                   <span style="font-size:1.4rem;">📁</span>
                 {% endif %}
@@ -120,11 +120,13 @@
                   <span>📂 {{ cat.subcategories_count | default(0) }} Sub-folders</span>
                   <span>•</span>
                   <span>🖼️ {{ cat.assets_count | default(0) }} Assets</span>
+                  <span>•</span>
+                  <span title="Category ID used by the app">ID: <code style="user-select:all;">{{ cat.id }}</code></span>
                 </div>
               </div>
             </div>
 
-            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+            <div style="display:flex; gap:0.5rem; align-items:center; justify-content:flex-end; flex-wrap:wrap; margin-left:auto;">
               {% include "partials/category_super_select.html" %}
               <a href="/manager/instances/{{ instance.id }}/picker?target_category_id={{ cat.sourceId or cat.id }}&tab=subcategories" class="btn btn-outlined" style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;" title="Import Central Items into this Folder">
                 📥 Import Central Data
@@ -152,14 +154,14 @@
             {% endfor %}
 
             {% if matching_subs|length > 0 %}
-              <div class="subcategories-grid" data-parent-cat-id="{{ cat.id }}" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:0.75rem;">
+              <div class="subcategories-grid{% if matching_subs|length > 4 %} subs-collapsed{% endif %}" data-parent-cat-id="{{ cat.id }}" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:0.75rem;">
                 {% for sub in matching_subs %}
-                  <div class="card manager-sub-card" data-sub-id="{{ sub.id }}" draggable="true" style="padding:0.75rem 1rem; background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center; gap:0.5rem; cursor:grab;">
-                    <div style="display:flex; align-items:center; gap:0.65rem;">
+                  <div class="card manager-sub-card" data-sub-id="{{ sub.id }}" draggable="true" style="padding:0.75rem 1rem; background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant); display:flex; flex-direction:row; justify-content:space-between; align-items:center; gap:0.5rem; cursor:grab;">
+                    <div style="display:flex; align-items:center; gap:0.65rem; min-width:0;">
                       <span class="sub-drag-handle" style="cursor:grab; font-size:1.15rem; color:var(--md-sys-color-on-surface-variant); padding:0 2px; user-select:none;" title="Drag to reorder sub-folder">⠿</span>
                       <div style="width:36px; height:36px; border-radius:6px; overflow:hidden; background:var(--md-sys-color-surface); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
                         {% if sub.thumbnail_url %}
-                          <img src="{{ sub.thumbnail_url }}" alt="{{ sub.name }}" style="width:100%; height:100%; object-fit:cover;">
+                          <img loading="lazy" src="{{ sub.thumbnail_url }}" alt="{{ sub.name }}" style="width:100%; height:100%; object-fit:cover;">
                         {% else %}
                           <span style="font-size:1.15rem;">📂</span>
                         {% endif %}
@@ -175,7 +177,7 @@
                       </div>
                     </div>
 
-                    <div style="display:flex; align-items:center; gap:0.35rem;">
+                    <div style="display:flex; align-items:center; gap:0.35rem; flex-shrink:0;">
                       <a href="/manager/instances/{{ instance.id }}/picker?target_category_id={{ cat.sourceId or cat.id }}&target_sub_category_id={{ sub.sourceId or sub.id }}&tab=assets" class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;" title="Import into Sub-folder">
                         📥 Import
                       </a>
@@ -186,6 +188,9 @@
                   </div>
                 {% endfor %}
               </div>
+            {% if matching_subs|length > 4 %}
+              <button type="button" class="btn btn-outlined" style="margin-top:0.6rem; min-height:30px; font-size:0.8rem;" data-more="Show More ({{ matching_subs|length - 4 }})" onclick="const g = this.previousElementSibling; this.textContent = g.classList.toggle('subs-collapsed') ? this.dataset.more : 'Show Less';">Show More ({{ matching_subs|length - 4 }})</button>
+            {% endif %}
             {% else %}
               <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); padding:0.35rem 0;">
                 No sub-folders in this category yet.
@@ -388,7 +393,7 @@
               <td class="col-thumb">
                 <div style="width:36px; height:36px; border-radius:4px; overflow:hidden; background:var(--md-sys-color-surface-container); display:flex; align-items:center; justify-content:center; margin:0 auto; cursor:pointer;" onclick="openAssetPreviewModal('{{ asset.source_id or asset.sourceId or asset.id }}')" title="Click to preview asset details">
                   {% if asset.thumbnail_url or asset.thumbnailUrl %}
-                    <img src="{{ asset.thumbnail_url or asset.thumbnailUrl }}" alt="{{ asset.name }}" style="width:100%; height:100%; object-fit:cover;">
+                    <img loading="lazy" src="{{ asset.thumbnail_url or asset.thumbnailUrl }}" alt="{{ asset.name }}" style="width:100%; height:100%; object-fit:cover;">
                   {% else %}
                     <span style="font-size:0.9rem;">🖼️</span>
                   {% endif %}

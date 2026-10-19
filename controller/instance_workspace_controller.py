@@ -40,39 +40,19 @@ def _clean(val: str | None) -> str | None:
     return val.strip() if val and val.strip() else None
 
 
-async def _fallback_count(
-    db: AsyncIOMotorDatabase,
-    inst_oid: ObjectId,
-    folder_coll: str,
-    item_coll: str,
-    field: str,
-    ids: list[str],
-) -> int:
-    """Count items under a folder by every id form they may be stored as (_id/source_id, ObjectId/str)."""
-    oids = [to_object_id(i) for i in ids if i]
-    folder = await db[folder_coll].find_one(
-        {"app_instance_id": inst_oid, "$or": [{"_id": {"$in": oids}}, {"source_id": {"$in": oids}}]}
-    )
-    if not folder:
-        return 0
-    keys = [folder["_id"]] + ([folder["source_id"]] if folder.get("source_id") else [])
-    return await db[item_coll].count_documents(
-        {"app_instance_id": inst_oid, field: {"$in": keys + [str(k) for k in keys]}, "deleted_at": None}
-    )
+async def _group_counts(db: AsyncIOMotorDatabase, coll: str, match: dict[str, Any], field: str) -> dict[str, int]:
+    """Count docs per `field` in one aggregation, keyed by str(value) (ObjectId and str forms merge)."""
+    counts: dict[str, int] = defaultdict(int)
+    async for row in db[coll].aggregate([{"$match": match}, {"$group": {"_id": f"${field}", "n": {"$sum": 1}}}]):
+        if row["_id"] is not None:
+            counts[str(row["_id"])] += row["n"]
+    return counts
 
 
-async def _live_count(
-    db: AsyncIOMotorDatabase,
-    inst_oid: ObjectId,
-    counts: dict[str, int],
-    folder_coll: str,
-    item_coll: str,
-    field: str,
-    fid: str,
-    src: str,
-) -> int:
+def _live_count(counts: dict[str, int], raw: dict[str, int], fid: str, src: str) -> int:
+    """Resolved count by id/sourceId, else the raw stored count under either id form."""
     n = counts.get(fid, 0) or (counts.get(src, 0) if src else 0)
-    return n or await _fallback_count(db, inst_oid, folder_coll, item_coll, field, [fid, src])
+    return n or raw.get(fid, 0) + (raw.get(src, 0) if src and src != fid else 0)
 
 
 def _name_map(docs: list[dict[str, Any]]) -> dict[str, Any]:
@@ -133,22 +113,21 @@ async def build_instance_content(
         if s.get("categoryId"):
             cat_sub_counts[str(s["categoryId"])] += 1
 
+    live = {"app_instance_id": inst_oid, "deleted_at": None}
+    raw_cat_subs = await _group_counts(db, INSTANCE_SUBCATEGORIES, live, "category_id")
+    raw_cat_assets = await _group_counts(db, INSTANCE_ASSETS, live, "category_id")
+    raw_sub_assets = await _group_counts(db, INSTANCE_ASSETS, live, "sub_category_id")
+
     for cat in categories:
         cid = str(cat.get("id") or "")
         c_src = str(cat.get("sourceId") or cat.get("source_id") or "")
-        cat["subcategories_count"] = await _live_count(
-            db, inst_oid, cat_sub_counts, INSTANCE_CATEGORIES, INSTANCE_SUBCATEGORIES, "category_id", cid, c_src
-        )
-        cat["assets_count"] = await _live_count(
-            db, inst_oid, cat_asset_counts, INSTANCE_CATEGORIES, INSTANCE_ASSETS, "category_id", cid, c_src
-        )
+        cat["subcategories_count"] = _live_count(cat_sub_counts, raw_cat_subs, cid, c_src)
+        cat["assets_count"] = _live_count(cat_asset_counts, raw_cat_assets, cid, c_src)
 
     for sub in all_subcategories:
         sid = str(sub.get("id") or "")
         s_src = str(sub.get("sourceId") or sub.get("source_id") or "")
-        sub["assets_count"] = await _live_count(
-            db, inst_oid, sub_asset_counts, INSTANCE_SUBCATEGORIES, INSTANCE_ASSETS, "sub_category_id", sid, s_src
-        )
+        sub["assets_count"] = _live_count(sub_asset_counts, raw_sub_assets, sid, s_src)
 
     # Category alias map: both cat["id"] and cat["sourceId"] resolve to cat["id"]
     cat_alias_map: dict[str, str] = {}
@@ -324,10 +303,13 @@ async def picker_categories(db: AsyncIOMotorDatabase, instance_id: str, q: str |
         await db[INSTANCE_CATEGORIES].distinct("source_id", {"app_instance_id": inst_oid, "deleted_at": None})
     )
     items = (await list_categories(db, search=_clean(q), page=1, page_size=200)).get("items", [])
-    for cat in items:
-        c_oid = to_object_id(cat["id"])
-        cat["subcategory_count"] = await db[SUBCATEGORIES].count_documents({"category_id": c_oid, "deleted_at": None})
-        cat["asset_count"] = await db[ASSETS].count_documents({"category_id": c_oid, "deleted_at": None})
+    oids = [to_object_id(c["id"]) for c in items]
+    match = {"category_id": {"$in": oids}, "deleted_at": None}
+    sub_counts = await _group_counts(db, SUBCATEGORIES, match, "category_id")
+    asset_counts = await _group_counts(db, ASSETS, match, "category_id")
+    for cat, c_oid in zip(items, oids):
+        cat["subcategory_count"] = sub_counts.get(str(c_oid), 0)
+        cat["asset_count"] = asset_counts.get(str(c_oid), 0)
         cat["already_added"] = c_oid in active_ids
     return items
 
@@ -352,9 +334,12 @@ async def picker_subcategories(
     items = (
         await list_subcategories(db, category_id=_clean(category_id), search=_clean(q), page=1, page_size=500)
     ).get("items", [])
-    for sub in items:
-        s_oid = to_object_id(sub["id"])
-        sub["asset_count"] = await db[ASSETS].count_documents({"sub_category_id": s_oid, "deleted_at": None})
+    oids = [to_object_id(sub["id"]) for sub in items]
+    asset_counts = await _group_counts(
+        db, ASSETS, {"sub_category_id": {"$in": oids}, "deleted_at": None}, "sub_category_id"
+    )
+    for sub, s_oid in zip(items, oids):
+        sub["asset_count"] = asset_counts.get(str(s_oid), 0)
         sub["already_added"] = s_oid in active_ids
         sub["already_in_target"] = s_oid in target_ids
     return items
