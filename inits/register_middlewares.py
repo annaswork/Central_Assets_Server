@@ -1,6 +1,7 @@
 """Registers request middlewares in strict canonical order."""
 
 from fastapi import FastAPI
+from starlette.middleware.gzip import GZipMiddleware
 
 from middlewares.analytics_middleware import AnalyticsMiddleware
 from middlewares.authorization_middleware import AuthorizationMiddleware
@@ -20,3 +21,5 @@ def register_middlewares(app: FastAPI) -> None:
     app.add_middleware(AnalyticsMiddleware)
     setup_cors_middleware(app)
     app.add_middleware(RequestIdMiddleware)
+    # Outermost: compresses the final HTML/JSON/JS (~7x on the instance page); images, video and 206s are skipped
+    app.add_middleware(GZipMiddleware, minimum_size=1024)

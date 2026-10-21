@@ -12,6 +12,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from controller.asset_controller import asset_has_type, list_assets
 from controller.catalog_controller import (
+    get_asset_index,
     get_resolved_assets,
     get_resolved_categories,
     get_resolved_subcategories,
@@ -93,22 +94,24 @@ async def build_instance_content(
     all_subcategories = await get_resolved_subcategories(db, app_instance_id=instance_id)
     s_order = sort or "sequence"
 
-    # Fetch all instance assets so folder asset badges reflect true counts across all folders
-    all_instance_assets = await get_resolved_assets(db, app_instance_id=instance_id, sort=s_order)
-    if category_id or sub_category_id:
-        assets = await get_resolved_assets(
-            db,
-            app_instance_id=instance_id,
-            category_id=category_id,
-            sub_category_id=sub_category_id,
-            sort=s_order,
+    clean_type = (asset_type or "").strip().lower()
+    # Type and text search read resolved fields (more_fields, names, tags), so those views resolve every asset.
+    # Otherwise a light pass (ids + resolved folders, display order) gives badge counts and the page slice,
+    # and only the page actually shown is fully resolved.
+    needs_payload = bool(clean_type or search_query)
+    list_assets_fn = get_resolved_assets if needs_payload else get_asset_index
+    all_index = await list_assets_fn(db, app_instance_id=instance_id, sort=s_order)
+    index = (
+        await list_assets_fn(
+            db, app_instance_id=instance_id, category_id=category_id, sub_category_id=sub_category_id, sort=s_order
         )
-    else:
-        assets = all_instance_assets
+        if category_id or sub_category_id
+        else all_index
+    )
 
     sub_asset_counts: dict[str, int] = defaultdict(int)
     cat_asset_counts: dict[str, int] = defaultdict(int)
-    for a in all_instance_assets:
+    for a in all_index:
         if a.get("subCategoryId"):
             sub_asset_counts[str(a["subCategoryId"])] += 1
         if a.get("categoryId"):
@@ -182,7 +185,7 @@ async def build_instance_content(
         if not selected_subcat_val:
             selected_subcat_val = str(sub_category_id)
 
-    clean_type = (asset_type or "").strip().lower()
+    assets = index
     if clean_type:
         assets = [
             a for a in assets
@@ -199,17 +202,20 @@ async def build_instance_content(
     # In-memory name fallback for instant display
     cat_map = _name_map(categories + (extra_name_categories or []))
     sub_map = _name_map(all_subcategories + (extra_name_subcategories or []))
-    for a in assets:
-        c_id = str(a.get("categoryId") or "")
-        s_id = str(a.get("subCategoryId") or "")
-        if not a.get("category_name") or a["category_name"] == "—":
-            a["category_name"] = cat_map.get(c_id) or a.get("category_name") or "—"
-        a["categoryName"] = a["category_name"]
-        if not a.get("subcategory_name") or a["subcategory_name"] == "—":
-            a["subcategory_name"] = sub_map.get(s_id) or a.get("subcategory_name") or "—"
-        a["subCategoryName"] = a["subcategory_name"]
+
+    def fill_names(rows: list[dict[str, Any]]) -> None:
+        for a in rows:
+            c_id = str(a.get("categoryId") or "")
+            s_id = str(a.get("subCategoryId") or "")
+            if not a.get("category_name") or a["category_name"] == "—":
+                a["category_name"] = cat_map.get(c_id) or a.get("category_name") or "—"
+            a["categoryName"] = a["category_name"]
+            if not a.get("subcategory_name") or a["subcategory_name"] == "—":
+                a["subcategory_name"] = sub_map.get(s_id) or a.get("subcategory_name") or "—"
+            a["subCategoryName"] = a["subcategory_name"]
 
     if search_query:
+        fill_names(assets)
         sq = search_query.lower()
         assets = [
             a for a in assets
@@ -219,13 +225,19 @@ async def build_instance_content(
             or any(sq in str(t).lower() for t in a.get("tags", []))
         ]
 
-    # ponytail: paginates the resolved list in memory (saves rendering, not the fetch); push skip/limit
-    # into get_resolved_assets if instances grow to tens of thousands of assets
     page_size = page_size if page_size in ASSET_PAGE_SIZES else ASSET_PAGE_SIZES[0]
     total_assets = len(assets)
     page = max(1, min(page, (total_assets + page_size - 1) // page_size or 1))
     asset_offset = (page - 1) * page_size
     assets = assets[asset_offset : asset_offset + page_size]
+    if not needs_payload:
+        page_ids = [a["id"] for a in assets]
+        by_id = {
+            a["id"]: a
+            for a in await get_resolved_assets(db, app_instance_id=instance_id, sort=s_order, asset_ids=page_ids)
+        }
+        assets = [by_id[i] for i in page_ids if i in by_id]
+    fill_names(assets)
 
     # Super categories (optional top level) with live category counts and names on each category
     super_categories = await get_resolved_super_categories(db, app_instance_id=instance_id)

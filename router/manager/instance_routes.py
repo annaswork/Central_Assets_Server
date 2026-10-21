@@ -210,10 +210,6 @@ async def manager_instance_content(
     sub_id = sub_category_id or subCategoryId
     search_query = (q or search or "").strip()
 
-    # Central library categories & subcategories for the import picker modal
-    central_cats = await picker_categories(db, instance_id)
-    central_subs = await picker_subcategories(db, instance_id)
-
     ctx = await build_instance_content(
         db,
         instance_id,
@@ -229,8 +225,6 @@ async def manager_instance_content(
         super_category_id=superCategoryId,
         page=page,
         page_size=page_size,
-        extra_name_categories=central_cats,
-        extra_name_subcategories=central_subs,
     )
 
     # Auto-select active section
@@ -248,8 +242,6 @@ async def manager_instance_content(
             "manager": manager,
             "instance": instance,
             "is_owner": is_owner,
-            "central_categories": central_cats,
-            "central_subcategories": central_subs,
             "active_section": active_section,
             "selected_category_id": ctx["selected_cat"],
             "selected_subcategory_id": ctx["selected_subcat"],
