@@ -48,6 +48,9 @@
           <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">📁 {{ sc.categories_count }} Categories</div>
         </div>
       </a>
+      <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.4rem;">
+        <span title="Super Category ID used by the app">ID: <code style="user-select:all;">{{ sc.id }}</code></span>
+      </div>
       <div style="display:flex; gap:0.35rem; flex-wrap:wrap; margin-top:0.6rem;">
         <a href="{{ portal_base }}/instances/{{ instance.id }}/picker?target_super_category_id={{ sc.id }}&tab=categories" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.72rem;">📥 Import Categories</a>
         <button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.72rem;" onclick="openCreateFolderModal('category', '', '{{ sc.id }}')">+ Category</button>
