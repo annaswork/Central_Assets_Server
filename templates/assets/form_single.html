@@ -76,7 +76,16 @@
         <input type="checkbox" name="bulk_data_type" value="image" checked onchange="onDataTypeChange()" style="accent-color:var(--md-sys-color-primary); width:16px; height:16px;">
         <div>
           <div style="font-weight:600; font-size:0.85rem; display:flex; align-items:center; gap:0.3rem;">🖼️ Image</div>
-          <div style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant);">PNG, JPG, WEBP, SVG, GIF</div>
+          <div style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant);">PNG, JPG, WEBP, GIF</div>
+        </div>
+      </label>
+
+      <!-- SVG Checkbox -->
+      <label class="data-type-card" id="card_type_svg" style="display:flex; align-items:center; gap:0.6rem; padding:0.65rem 0.85rem; border:1.5px solid var(--md-sys-color-primary); border-radius:var(--radius-sm); background:var(--md-sys-color-surface-container); cursor:pointer; transition:all 0.15s ease;">
+        <input type="checkbox" name="bulk_data_type" value="svg" checked onchange="onDataTypeChange()" style="accent-color:var(--md-sys-color-primary); width:16px; height:16px;">
+        <div>
+          <div style="font-weight:600; font-size:0.85rem; display:flex; align-items:center; gap:0.3rem;">✒️ SVG</div>
+          <div style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant);">Vector graphics (.svg)</div>
         </div>
       </label>
 
@@ -244,8 +253,14 @@ const DATA_TYPE_CONFIG = {
   image: {
     label: 'Image',
     icon: '🖼️',
-    extensions: ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif', '.bmp', '.avif'],
-    mimes: ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/gif', 'image/bmp', 'image/avif']
+    extensions: ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.avif'],
+    mimes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/bmp', 'image/avif']
+  },
+  svg: {
+    label: 'SVG',
+    icon: '✒️',
+    extensions: ['.svg'],
+    mimes: ['image/svg+xml']
   },
   videos: {
     label: 'Videos',
@@ -369,6 +384,10 @@ function classifyFile(file, activeTypes) {
 
   if (isHtml) {
     return activeTypes.includes('html') ? 'html' : null;
+  }
+  // Checked before isImage: an SVG's mime is image/svg+xml
+  if (ext === '.svg' || mime === 'image/svg+xml') {
+    return activeTypes.includes('svg') ? 'svg' : null;
   }
   if (isAudio) {
     return activeTypes.includes('audio') ? 'audio' : null;
@@ -839,6 +858,7 @@ function renderDataTypeCell(item, idx, activeTypes) {
   
   const BADGES = {
     image: '<span class="badge badge-primary" style="font-size:0.75rem;">🖼️ Image</span>',
+    svg: '<span class="badge badge-primary" style="font-size:0.75rem;">✒️ SVG</span>',
     videos: '<span class="badge" style="background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container); font-size:0.75rem;">🎬 Video</span>',
     video: '<span class="badge" style="background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container); font-size:0.75rem;">🎬 Video</span>',
     audio: '<span class="badge" style="background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container); font-size:0.75rem;">🎵 Audio</span>',
@@ -1204,7 +1224,7 @@ async function startBulkUpload() {
     btn.textContent = 'All Uploaded! Redirecting...';
     showToast('All assets uploaded successfully!', 'success');
     setTimeout(() => {
-      const returnUrl = "{{ return_url or '' }}" || (function() {
+      const returnUrl = {{ (return_url or '') | tojson }} || (function() {
         try {
           const saved = sessionStorage.getItem('admin_assets_filter_url');
           if (saved && saved.startsWith('/admin/assets')) return saved;

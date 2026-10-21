@@ -4,6 +4,8 @@ import io
 
 from PIL import Image
 
+from utils.file_utils import sniff_mime_type
+
 
 def get_image_dimensions(image_bytes: bytes) -> tuple[int, int]:
     """Extract width and height from image bytes without loading entire image into memory."""
@@ -45,8 +47,10 @@ def generate_scaled_thumbnail(
 ) -> tuple[bytes, str]:
     """Generate a thumbnail scaled down by scale_factor (e.g. 1/3rd of original width and height).
 
-    Returns a tuple of (thumbnail_bytes, extension).
+    Returns a tuple of (thumbnail_bytes, extension). An SVG is vector, so it is returned unchanged as its own thumbnail.
     """
+    if sniff_mime_type(image_bytes) == "image/svg+xml":
+        return image_bytes, "svg"
     with Image.open(io.BytesIO(image_bytes)) as img:
         orig_w, orig_h = img.width, img.height
         new_w = max(1, round(orig_w * scale_factor))

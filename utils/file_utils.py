@@ -19,6 +19,29 @@ def sanitize_filename(filename: str) -> str:
     return sanitized.strip("._") or "file"
 
 
+# Anything that can run script or pull in non-image content. href/src may only point at #fragments,
+# embedded raster data, or http(s) images; that also blocks entity-obfuscated javascript: URLs.
+_SVG_UNSAFE = re.compile(
+    rb"<script|<foreignobject|<iframe|<embed|<object|<!entity|javascript:|\son[a-z]+\s*="
+    rb"|(?:href|src)\s*=\s*[\"']\s*(?!#|data:image/(?:png|jpe?g|gif|webp);|https?://)"
+    rb"|<(?:set|animate)\b[^>]*attributename\s*=\s*[\"']?(?:xlink:)?href",
+    re.IGNORECASE,
+)
+
+
+def is_safe_svg(content: bytes) -> bool:
+    """True for a UTF-8 SVG without scripts, event handlers, embedded HTML or non-image links.
+
+    ponytail: regex screen, not a full XML sanitizer. The CSP header on served .svg files
+    (inits/register_static.py) is the backstop; swap in a real sanitizer if users need complex SVGs.
+    """
+    try:
+        content.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return b"<svg" in content.lower() and not _SVG_UNSAFE.search(content)
+
+
 def sniff_mime_type(content: bytes, filename: str = "") -> str:
     """Sniff MIME type from initial magic bytes, falling back to extension."""
     if len(content) >= 8:
@@ -56,6 +79,9 @@ def sniff_mime_type(content: bytes, filename: str = "") -> str:
     # Check for HTML content
     stripped_head = content[:512].lstrip()
     stripped_head_lower = stripped_head.lower()
+    # SVG is XML, so it must be caught before the generic XML check (may follow an <?xml ?>, comment or doctype)
+    if b"<svg" in content[:2048].lower() and not stripped_head_lower.startswith((b"<!doctype html", b"<html")):
+        return "image/svg+xml"
     if (
         stripped_head_lower.startswith(b"<!doctype html")
         or stripped_head_lower.startswith(b"<html")
@@ -86,6 +112,7 @@ def sniff_mime_type(content: bytes, filename: str = "") -> str:
         "jpeg": "image/jpeg",
         "webp": "image/webp",
         "gif": "image/gif",
+        "svg": "image/svg+xml",
         "mp3": "audio/mpeg",
         "wav": "audio/wav",
         "aac": "audio/aac",

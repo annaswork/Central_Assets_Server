@@ -191,6 +191,7 @@
         <select id="newBlockTypeSelect" class="select"
           style="min-height:34px; padding:0.2rem 0.5rem; max-width:160px; font-size:0.82rem;">
           <option value="image">Image Block</option>
+          <option value="svg">SVG Block</option>
           <option value="audio">Audio Block</option>
           <option value="video">Video Block</option>
           <option value="html">HTML Block</option>
@@ -1119,8 +1120,10 @@
 
       const isAudio = key.toLowerCase().includes('audio') || block.some(it => it && ((it.mime && it.mime.startsWith('audio/')) || (it.url && /\.(mp3|wav|ogg|aac|m4a)$/i.test(it.url))));
       const isVideo = key.toLowerCase().includes('video') || block.some(it => it && ((it.mime && it.mime.startsWith('video/')) || (it.url && /\.(mp4|webm|mov)$/i.test(it.url))));
+      const isSvg = key.toLowerCase().includes('svg') || (block.length > 0 && block.every(it => it && /\.svg(\?|$)/i.test(typeof it === 'string' ? it : (it.url || it.filename || ''))));
       let inferredType = 'image';
-      if (isAudio) inferredType = 'audio';
+      if (isSvg) inferredType = 'svg';
+      else if (isAudio) inferredType = 'audio';
       else if (isVideo) inferredType = 'video';
 
       existingMoreFields[key] = {
@@ -1195,7 +1198,7 @@
       block.items = block.items.map(it => String(it).trim()).filter(Boolean);
       return;
     }
-    if (['image', 'image_list', 'audio', 'audio_list', 'video', 'video_list', 'html', 'html_list', 'file', 'file_list', 'document', 'document_list'].includes(t)) {
+    if (['image', 'image_list', 'svg', 'audio', 'audio_list', 'video', 'video_list', 'html', 'html_list', 'file', 'file_list', 'document', 'document_list'].includes(t)) {
       block._isDirectArray = true;
       if (!Array.isArray(block.items)) {
         block.items = [];
@@ -1266,6 +1269,12 @@
         typeIcon = '🖼️';
         acceptTypes = 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml';
         acceptHint = 'PNG, JPG, WEBP, GIF, SVG';
+      } else if (bType === 'svg') {
+        isMediaBlock = true;
+        typeBadgeLabel = 'SVG';
+        typeIcon = '✒️';
+        acceptTypes = 'image/svg+xml,.svg';
+        acceptHint = 'SVG (vector)';
       } else if (bType === 'audio' || bType === 'audio_list') {
         isMediaBlock = true;
         typeBadgeLabel = 'Audio';
@@ -1325,7 +1334,7 @@
       let bodyHtml = '';
 
       if (isMediaBlock) {
-        const isNonCroppable = ['html', 'html_list', 'file', 'file_list', 'document', 'document_list'].includes(bType);
+        const isNonCroppable = ['svg', 'html', 'html_list', 'file', 'file_list', 'document', 'document_list'].includes(bType);
         const items = Array.isArray(block.items) ? block.items : [];
         let itemsListHtml = '';
         if (items.length > 0) {
@@ -1345,7 +1354,7 @@
             if (item.duration_ms) metaParts.push(`${(item.duration_ms / 1000).toFixed(1)}s`);
 
             let previewHtml = '';
-            if (bType === 'image' || bType === 'image_list') {
+            if (bType === 'image' || bType === 'image_list' || bType === 'svg') {
               previewHtml = `<div class="morefields-item-preview"><img src="${itemUrl}" alt="${itemName}"></div>`;
             } else if (bType === 'audio' || bType === 'audio_list') {
               previewHtml = `
@@ -2057,7 +2066,7 @@
           c = Math.max(0, c - 1);
         }
         count += c;
-      } else if (['image', 'image_list', 'audio', 'audio_list', 'video', 'video_list', 'html', 'html_list', 'file', 'file_list', 'document', 'document_list'].includes(bType) || Array.isArray(block.items)) {
+      } else if (['image', 'image_list', 'svg', 'audio', 'audio_list', 'video', 'video_list', 'html', 'html_list', 'file', 'file_list', 'document', 'document_list'].includes(bType) || Array.isArray(block.items)) {
         const items = Array.isArray(block.items) ? block.items : [];
         let c = items.length;
         if (key === excludeKey && excludeIndex !== undefined && excludeIndex !== null) {
@@ -2115,7 +2124,7 @@
         const b = existingMoreFields[bKey];
         if (!b) continue;
         const bType = b.type || '';
-        const isImg = bType === 'image' || bType === 'image_list' || bKey.toLowerCase().includes('image');
+        const isImg = bType === 'image' || bType === 'image_list' || bType === 'svg' || bKey.toLowerCase().includes('image');
         if (Array.isArray(b.items)) {
           const found = b.items.find(it => {
             if (!it || !it.url) return false;
@@ -2219,6 +2228,8 @@
     let initialData = {};
     if (type === 'image') {
       initialData = { type: 'image', url: '', urls: [], items: [], _isDirectArray: true };
+    } else if (type === 'svg') {
+      initialData = { type: 'svg', url: '', urls: [], items: [], _isDirectArray: true };
     } else if (type === 'audio') {
       initialData = { type: 'audio', url: '', urls: [], items: [], _isDirectArray: true };
     } else if (type === 'video') {
@@ -3190,7 +3201,7 @@
       }
 
       // === STANDARDIZED OUTPUT: All media blocks → direct arrays of objects ===
-      const isMediaType = ['image', 'image_list', 'audio', 'audio_list', 'video', 'video_list', 'html', 'html_list', 'file', 'file_list', 'document', 'document_list'].includes(block.type);
+      const isMediaType = ['image', 'image_list', 'svg', 'audio', 'audio_list', 'video', 'video_list', 'html', 'html_list', 'file', 'file_list', 'document', 'document_list'].includes(block.type);
       if (isMediaType && Array.isArray(block.items)) {
         finalPayload[key] = block.items.map(it => {
           const itemObj = {

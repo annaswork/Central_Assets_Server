@@ -28,7 +28,7 @@ from config.paths import (
     get_subcategory_dir,
 )
 from utils.errors import ConflictError, ValidationError
-from utils.file_utils import compute_sha256, sanitize_filename, sniff_mime_type
+from utils.file_utils import compute_sha256, is_safe_svg, sanitize_filename, sniff_mime_type
 from utils.image_utils import extract_first_frame_thumbnail, generate_scaled_thumbnail
 from utils.media_prober import probe_file_metadata
 
@@ -55,6 +55,10 @@ async def handle_upload(
     ext = Path(filename).suffix.lower().lstrip(".")
     if ext not in ALLOWED_EXTENSIONS:
         raise ValidationError(f"File extension '.{ext}' is not supported")
+    if ext == "svg" and not is_safe_svg(file_bytes):
+        raise ValidationError(
+            "SVG rejected: it contains scripts, event handlers, embedded HTML or non-image links"
+        )
 
     sha256 = compute_sha256(file_bytes)
     safe_name = sanitize_filename(filename)
@@ -184,7 +188,11 @@ async def handle_upload(
             thumb_url = None if is_video else public_url
     else:
         # Static image: generate scaled thumbnail if not already a thumbnail
-        if not safe_name.lower().startswith(("thumb_", "thumbnail_")) and mime_type.startswith("image/"):
+        if (
+            not safe_name.lower().startswith(("thumb_", "thumbnail_"))
+            and mime_type.startswith("image/")
+            and mime_type != "image/svg+xml"  # Pillow can't rasterize SVG; it is its own thumbnail
+        ):
             try:
                 scaled_bytes, thumb_ext = await anyio.to_thread.run_sync(
                     generate_scaled_thumbnail, file_bytes, 1 / 3, "WEBP", 85

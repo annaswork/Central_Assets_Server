@@ -36,7 +36,7 @@ MAX_JSON_BLOCK_BYTES: int = 256 * 1024  # 256 KB
 MAX_JSON_DEPTH: int = 8
 
 # Allowed MIME and file extensions
-ALLOWED_IMAGE_EXTENSIONS: set[str] = {"png", "jpg", "jpeg", "webp", "gif"}
+ALLOWED_IMAGE_EXTENSIONS: set[str] = {"png", "jpg", "jpeg", "webp", "gif", "svg"}
 ALLOWED_AUDIO_EXTENSIONS: set[str] = {"mp3", "aac", "wav", "m4a", "ogg"}
 ALLOWED_VIDEO_EXTENSIONS: set[str] = {"mp4", "webm", "mov"}
 ALLOWED_JSON_EXTENSIONS: set[str] = {"json"}

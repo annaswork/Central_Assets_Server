@@ -347,7 +347,7 @@ function promptDeleteAsset(id, name) {
           const rInp = document.createElement('input');
           rInp.type = 'hidden';
           rInp.name = 'return_url';
-          rInp.value = '{{ return_url or "" }}';
+          rInp.value = {{ (return_url or '') | tojson }};
           form.appendChild(rInp);
           document.body.appendChild(form);
         }
@@ -364,7 +364,7 @@ function promptDeleteAsset(id, name) {
         const rInp = document.createElement('input');
         rInp.type = 'hidden';
         rInp.name = 'return_url';
-        rInp.value = '{{ return_url or "" }}';
+        rInp.value = {{ (return_url or '') | tojson }};
         form.appendChild(rInp);
         document.body.appendChild(form);
       }

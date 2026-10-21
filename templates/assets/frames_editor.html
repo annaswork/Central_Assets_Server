@@ -238,7 +238,7 @@ async function saveFrames() {
     if (!res.ok) throw new Error(json.message || 'Failed to update asset frames');
     
     alert('Frame placeholders saved successfully!');
-    const returnUrlParam = {% if return_url %}'?return_url=' + encodeURIComponent('{{ return_url }}'){% else %}''{% endif %};
+    const returnUrlParam = {% if return_url %}'?return_url=' + encodeURIComponent({{ return_url | tojson }}){% else %}''{% endif %};
     window.location.href = `/admin/assets/${assetData.id}/edit${returnUrlParam}`;
   } catch (err) {
     alert('Failed to save frames: ' + err.message);
