@@ -1,0 +1,38 @@
+{# List / Block switch for an app instance's assets. Needs `asset_container_id`: the AJAX-refreshed container that
+   holds both the table (.instance-list-view) and the cards (.instance-block-view). The choice is a class on that
+   container, so it survives filter/page refreshes that replace its contents. #}
+<style>
+  #{{ asset_container_id }}.view-block .instance-list-view.has-assets { display: none; }
+  #{{ asset_container_id }}:not(.view-block) .instance-block-view { display: none; }
+</style>
+<div style="display:flex; justify-content:flex-end; margin-bottom:0.75rem;">
+  <div class="view-toggle-container">
+    <button type="button" class="view-toggle-btn active" data-asset-view="list" onclick="setInstanceAssetView('list')" title="List View">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line>
+        <line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line>
+      </svg>
+      <span>List</span>
+    </button>
+    <button type="button" class="view-toggle-btn" data-asset-view="block" onclick="setInstanceAssetView('block')" title="Block View">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect>
+        <rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>
+      </svg>
+      <span>Block</span>
+    </button>
+  </div>
+</div>
+<script>
+  function setInstanceAssetView(mode) {
+    const container = document.getElementById({{ asset_container_id | tojson }});
+    if (container) container.classList.toggle('view-block', mode === 'block');
+    document.querySelectorAll('[data-asset-view]').forEach(b => b.classList.toggle('active', b.dataset.assetView === mode));
+    try { localStorage.setItem('instance_asset_view', mode); } catch (e) {}
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    let saved = 'list';
+    try { saved = localStorage.getItem('instance_asset_view') || 'list'; } catch (e) {}
+    setInstanceAssetView(saved);
+  });
+</script>

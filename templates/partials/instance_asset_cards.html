@@ -1,0 +1,32 @@
+{# Block view of an app instance's assets (admin + manager). Rendered inside the AJAX-refreshed asset container;
+   shown instead of the table when that container has .view-block (see instance_asset_view_toggle.html). #}
+{% if assets %}
+<div class="asset-grid instance-block-view">
+  {% for asset in assets %}
+  {% set preview_id = asset.source_id or asset.sourceId or asset.id %}
+  {% set thumb = asset.thumbnail_url or asset.thumbnailUrl %}
+  <div class="asset-card{% if asset.is_enabled == False %} card-disabled{% endif %}">
+    <div class="asset-card-img-wrapper" onclick="openAssetPreviewModal('{{ preview_id }}')" style="cursor:pointer;" title="Click to preview asset">
+      {% if thumb %}
+      <img src="{{ thumb }}" alt="{{ asset.name }}" class="asset-card-img" loading="lazy" draggable="false">
+      {% else %}
+      <div class="asset-card-placeholder">🖼️</div>
+      {% endif %}
+      <div class="asset-card-hover-stats">
+        <span class="hover-stat-item"><span class="hover-stat-icon">👁</span> {{ asset.views | default(0) }}</span>
+        <span class="hover-stat-item"><span class="hover-stat-icon">⬇</span> {{ asset.downloads | default(0) }}</span>
+      </div>
+    </div>
+    <div class="asset-card-body">
+      <a href="javascript:void(0)" onclick="openAssetPreviewModal('{{ preview_id }}')" class="asset-card-title" title="{{ asset.name }}">{{ asset.name }}</a>
+      <div class="asset-card-meta">
+        <span class="asset-card-category">{{ (asset.category_name or '—') | upper }}</span>
+        {% if asset.is_premium %}<span class="asset-card-premium-pill">PREMIUM</span>{% endif %}
+        {% if asset.is_enabled == False %}<span class="asset-card-disabled-pill">DISABLED</span>{% endif %}
+        <span class="asset-card-sub">· {{ asset.subcategory_name or '—' }}</span>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

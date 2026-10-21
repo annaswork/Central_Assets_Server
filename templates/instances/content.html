@@ -408,6 +408,7 @@
     </form>
   </div>
 
+  {% with asset_container_id = 'assetTableContainer' %}{% include "partials/instance_asset_view_toggle.html" %}{% endwith %}
   <div id="assetTableContainer">
     <style>
       .instance-assets-table {
@@ -527,7 +528,7 @@
     </style>
 
     <!-- Referenced Assets Table -->
-    <div class="table-responsive card" style="padding:0; margin-bottom:2rem;">
+    <div class="table-responsive card instance-list-view{% if assets %} has-assets{% endif %}" style="padding:0; margin-bottom:2rem;">
       <div
         style="padding:0.75rem 1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center;">
         <h3 style="margin:0; font-size:1.05rem;">Referenced Creative Assets ({{ asset_pagination.total }})</h3>
@@ -624,11 +625,11 @@
               {{ asset.downloads | default(0) }}
             </td>
             <td data-label="Enabled" class="col-toggle">
-              <input type="checkbox" {% if asset.isEnabled is not defined or asset.isEnabled %}checked{% endif %}
+              <input type="checkbox" {% if asset.is_enabled %}checked{% endif %}
                 onchange="updateAssetOverride('{{ asset.id }}', 'is_enabled', this.checked)">
             </td>
             <td data-label="Premium" class="col-toggle">
-              <input type="checkbox" {% if asset.isPremium %}checked{% endif %}
+              <input type="checkbox" {% if asset.is_premium %}checked{% endif %}
                 onchange="updateAssetOverride('{{ asset.id }}', 'is_premium', this.checked)">
             </td>
             <td data-label="Rewarded" class="col-toggle">
@@ -681,6 +682,7 @@
         </tbody>
       </table>
     </div>
+    {% include "partials/instance_asset_cards.html" %}
     {% with pagination = asset_pagination %}{% include "partials/pagination.html" %}{% endwith %}
   </div>
 </div>

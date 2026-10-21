@@ -392,6 +392,7 @@
     </form>
   </div>
 
+  {% with asset_container_id = 'managerAssetTableContainer' %}{% include "partials/instance_asset_view_toggle.html" %}{% endwith %}
   <div id="managerAssetTableContainer">
     {% if assets and assets|length > 0 %}
     <style>
@@ -490,7 +491,7 @@
       }
     </style>
 
-    <div class="table-responsive card"
+    <div class="table-responsive card instance-list-view{% if assets %} has-assets{% endif %}"
       style="padding:0; margin-bottom:2rem; border:1px solid var(--md-sys-color-outline-variant);">
       <div
         style="padding:0.75rem 1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
@@ -613,8 +614,7 @@
               </span>
             </td>
             <td class="col-toggle">
-              <input type="checkbox" {% if asset.isEnabled is not defined or asset.isEnabled or (asset.is_enabled is not
-                defined or asset.is_enabled) %}checked{% endif %}
+              <input type="checkbox" {% if asset.is_enabled %}checked{% endif %}
                 onchange="updateAssetOverride('{{ asset.id }}', 'is_enabled', this.checked)">
             </td>
             <td class="col-toggle">
@@ -685,6 +685,7 @@
       </button>
     </div>
     {% endif %}
+    {% include "partials/instance_asset_cards.html" %}
     {% with pagination = asset_pagination %}{% include "partials/pagination.html" %}{% endwith %}
   </div>
 </div>
