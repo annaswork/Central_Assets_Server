@@ -32,8 +32,12 @@ async def list_subcategories(
     search: str | None = None,
     sort_by: str = "sequence",
     sort_order: str = "asc",
+    category_ids: list[str] | None = None,
 ) -> dict[str, Any]:
-    """List central subcategories with pagination, optional category/search filter, and sorting."""
+    """List central subcategories with pagination, optional category/search filter, and sorting.
+
+    `category_ids` (e.g. a super category's categories) applies when no single category_id is given.
+    """
     repo = CentralRepository(db, SUBCATEGORIES)
     query: dict[str, Any] = {}
     if category_id:
@@ -42,6 +46,8 @@ async def list_subcategories(
             query["$or"] = [{"category_id": cat_oid}, {"category_id": str(category_id)}]
         except Exception:
             query["category_id"] = str(category_id)
+    elif category_ids is not None:
+        query["category_id"] = {"$in": [to_object_id(c) for c in category_ids] + list(category_ids)}
     if search and search.strip():
         query["name"] = {"$regex": search.strip(), "$options": "i"}
 

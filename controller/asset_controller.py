@@ -260,12 +260,18 @@ async def list_assets(
     sort_by: str = "sequence",
     sort_order: str = "asc",
     asset_type: str | None = None,
+    category_ids: list[str] | None = None,
 ) -> dict[str, Any]:
-    """List central creative assets with category/subcategory filters, search, type filter, and sorting."""
+    """List central creative assets with category/subcategory filters, search, type filter, and sorting.
+
+    `category_ids` (e.g. a super category's categories) applies when no single category_id is given.
+    """
     repo = CentralRepository(db, ASSETS)
     query: dict[str, Any] = {}
     if category_id:
         query["category_id"] = to_object_id(category_id)
+    elif category_ids is not None:
+        query["category_id"] = {"$in": [to_object_id(c) for c in category_ids]}
     if sub_category_id:
         query["sub_category_id"] = to_object_id(sub_category_id)
     if search and search.strip():

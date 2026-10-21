@@ -19,12 +19,20 @@
 <div class="card search-filter-card" style="padding:0.85rem 1rem; margin-bottom:1.5rem; overflow-x:auto;">
   <form method="GET" action="/manager/categories" class="search-filter-form" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem; width:100%;">
     <div class="filter-group-left" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; flex-shrink:0; white-space:nowrap;">
+      {% if super_categories %}
+      <select name="superCategoryId" id="superCategoryFilter" class="select" style="min-width:150px; max-width:200px;" onchange=" this.form.submit();">
+        <option value="">All Super Categories</option>
+        {% for sc in super_categories %}
+          <option value="{{ sc.id }}" {% if selected_super == sc.id %}selected{% endif %}>⭐ {{ sc.name }}</option>
+        {% endfor %}
+      </select>
+      {% endif %}
       <select name="sort" id="categorySortSelect" class="select" style="min-width:140px; max-width:180px;" onchange="this.form.submit()">
         <option value="sequence" {% if sort == 'sequence' or not sort %}selected{% endif %}>Sequence / Custom</option>
         <option value="newest" {% if sort == 'newest' %}selected{% endif %}>Newest First</option>
         <option value="oldest" {% if sort == 'oldest' %}selected{% endif %}>Oldest First</option>
       </select>
-      {% if (sort and sort in ('newest', 'oldest')) and not search %}
+      {% if ((sort and sort in ('newest', 'oldest')) or selected_super) and not search %}
         <a href="/manager/categories" class="btn btn-outlined btn-filter">Clear</a>
       {% endif %}
     </div>
@@ -39,7 +47,7 @@
         style="max-width:380px;"
       >
       <button type="submit" class="btn btn-outlined btn-filter">Search</button>
-      {% if search or (sort and sort in ('newest', 'oldest')) %}
+      {% if search or selected_super or (sort and sort in ('newest', 'oldest')) %}
         <a href="/manager/categories" class="btn btn-outlined btn-filter">Clear</a>
       {% endif %}
     </div>

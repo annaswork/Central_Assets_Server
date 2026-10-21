@@ -7,9 +7,10 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from authorization.admin_session import get_current_admin_session
 from config.paths import TEMPLATES_DIR
-from controller.category_controller import get_category, list_categories
+from controller.category_controller import get_category, in_super_category, list_categories
 from controller.csv_update_controller import apply_csv_column_updates
 from controller.media_controller import handle_upload, process_subcategory_media_upload
+from controller.super_category_controller import list_super_categories
 from controller.subcategory_controller import (
     bulk_create_subcategories,
     create_subcategory,
@@ -37,6 +38,7 @@ router = APIRouter(prefix="/subcategories", tags=["Admin Subcategories"])
 async def admin_list_subcategories(
     request: Request,
     categoryId: str | None = None,
+    superCategoryId: str | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=500, alias="page_size"),
     limit: int | None = Query(default=None, ge=1, le=500),
@@ -74,6 +76,8 @@ async def admin_list_subcategories(
         sort_order = "asc"
         current_sort = "sequence"
 
+    all_cats = await list_categories(db, page=1, page_size=100)
+    filter_cats = in_super_category(all_cats.get("items", []), superCategoryId)
     data = await list_subcategories(
         db,
         category_id=categoryId,
@@ -82,8 +86,8 @@ async def admin_list_subcategories(
         search=search,
         sort_by=sort_by,
         sort_order=sort_order,
+        category_ids=[c["id"] for c in filter_cats] if superCategoryId else None,
     )
-    all_cats = await list_categories(db, page=1, page_size=100)
 
     # Attach live asset count to each subcategory for critical warning checks
     for item in data.get("items", []):
@@ -119,7 +123,9 @@ async def admin_list_subcategories(
         context={
             "session": session,
             "data": data,
-            "categories": all_cats.get("items", []),
+            "categories": filter_cats,
+            "super_categories": await list_super_categories(db),
+            "selected_super": superCategoryId or "",
             "selected_category_id": categoryId or "",
             "search": search or "",
             "sort": current_sort,

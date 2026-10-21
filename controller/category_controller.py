@@ -72,6 +72,13 @@ async def list_categories(
     return format_page_response(items, total, page, page_size)
 
 
+def in_super_category(categories: list[dict], super_category_id: str | None) -> list[dict]:
+    """Categories belonging to the given super category (all of them when none is given)."""
+    if not super_category_id:
+        return categories
+    return [c for c in categories if str(c.get("super_category_id") or "") == super_category_id]
+
+
 async def get_category(db: AsyncIOMotorDatabase, category_id: str) -> dict[str, Any]:
     """Retrieve a single central category by its ID."""
     repo = CentralRepository(db, CATEGORIES)

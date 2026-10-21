@@ -19,6 +19,14 @@
 <div class="card search-filter-card" style="padding:0.85rem 1rem; margin-bottom:1.5rem; overflow-x:auto;">
   <form method="GET" action="/manager/subcategories" class="search-filter-form" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem; width:100%;">
     <div class="filter-group-left" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; flex-shrink:0; white-space:nowrap;">
+      {% if super_categories %}
+      <select name="superCategoryId" id="superCategoryFilter" class="select" style="min-width:150px; max-width:200px;" onchange="document.getElementById('catFilter').value=''; this.form.submit();">
+        <option value="">All Super Categories</option>
+        {% for sc in super_categories %}
+          <option value="{{ sc.id }}" {% if selected_super == sc.id %}selected{% endif %}>⭐ {{ sc.name }}</option>
+        {% endfor %}
+      </select>
+      {% endif %}
       <select name="categoryId" id="catFilter" class="select" style="max-width:240px;" onchange="this.form.submit()">
         <option value="">All Categories</option>
         {% for cat in categories %}
@@ -32,7 +40,7 @@
         <option value="oldest" {% if sort == 'oldest' %}selected{% endif %}>Oldest First</option>
       </select>
 
-      {% if (selected_category_id or category_id or categoryId) or (sort and sort in ('newest', 'oldest')) %}
+      {% if selected_super or (selected_category_id or category_id or categoryId) or (sort and sort in ('newest', 'oldest')) %}
         <a href="/manager/subcategories{% if search %}?search={{ search }}{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
       {% endif %}
     </div>
@@ -48,7 +56,7 @@
       >
       <button type="submit" class="btn btn-outlined btn-filter">Search</button>
       {% if search %}
-        <a href="/manager/subcategories{% if selected_category_id or category_id or categoryId %}?categoryId={{ selected_category_id or category_id or categoryId }}{% endif %}{% if sort and sort in ('newest', 'oldest') %}{% if selected_category_id or category_id or categoryId %}&{% else %}?{% endif %}sort={{ sort }}{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
+        <a href="/manager/subcategories?{% if selected_super %}superCategoryId={{ selected_super }}&{% endif %}{% if selected_category_id or category_id or categoryId %}categoryId={{ selected_category_id or category_id or categoryId }}&{% endif %}{% if sort and sort in ('newest', 'oldest') %}sort={{ sort }}{% endif %}" class="btn btn-outlined btn-filter">Clear</a>
       {% endif %}
     </div>
   </form>

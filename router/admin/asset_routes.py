@@ -22,9 +22,10 @@ from controller.asset_controller import (
     list_assets,
     update_asset,
 )
-from controller.category_controller import list_categories
+from controller.category_controller import in_super_category, list_categories
 from controller.csv_update_controller import apply_csv_column_updates
 from controller.subcategory_controller import get_subcategory, list_subcategories
+from controller.super_category_controller import list_super_categories
 from database.collections import ASSETS
 from database.models.asset import AssetCreate, AssetUpdate
 from router.deps import get_db
@@ -69,6 +70,7 @@ async def admin_list_assets(
     request: Request,
     categoryId: str | None = None,
     subCategoryId: str | None = None,
+    superCategoryId: str | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=500, alias="page_size"),
     limit: int | None = Query(default=None, ge=1, le=500),
@@ -152,6 +154,9 @@ async def admin_list_assets(
         effective_sort_order = "asc"
         current_sort = "sequence"
 
+    all_cats = await list_categories(db, page=1, page_size=100)
+    filter_cats = in_super_category(all_cats.get("items", []), superCategoryId)
+    super_cat_ids = [c["id"] for c in filter_cats] if superCategoryId else None
     data = await list_assets(
         db,
         category_id=categoryId,
@@ -162,9 +167,11 @@ async def admin_list_assets(
         sort_by=effective_sort_by,
         sort_order=effective_sort_order,
         asset_type=selected_type,
+        category_ids=super_cat_ids,
     )
-    all_cats = await list_categories(db, page=1, page_size=100)
-    all_subs = await list_subcategories(db, category_id=categoryId, page=1, page_size=200)
+    all_subs = await list_subcategories(
+        db, category_id=categoryId, page=1, page_size=200, category_ids=super_cat_ids
+    )
 
     toast_message = (
         f"Asset '{name}' and its storage file were permanently deleted from disk."
@@ -187,7 +194,9 @@ async def admin_list_assets(
             "session": session,
             "data": data,
             "page_size": effective_page_size,
-            "categories": all_cats.get("items", []),
+            "categories": filter_cats,
+            "super_categories": await list_super_categories(db),
+            "selected_super": superCategoryId or "",
             "subcategories": all_subs.get("items", []),
             "category_map": category_map,
             "subcategory_map": subcategory_map,

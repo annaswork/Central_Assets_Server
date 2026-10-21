@@ -8,7 +8,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from authorization.manager_session import get_current_manager_session
 from config.paths import TEMPLATES_DIR
 from controller.asset_controller import list_assets
-from controller.category_controller import list_categories
+from controller.category_controller import in_super_category, list_categories
 from controller.manager_controller import get_manager_by_id
 from controller.subcategory_controller import get_subcategory, list_subcategories
 from controller.super_category_controller import list_super_categories
@@ -99,6 +99,8 @@ async def manager_categories(
             "search": search or "",
             "sort": current_sort,
             "order": sort_order,
+            "super_categories": await list_super_categories(db),
+            "selected_super": superCategoryId or "",
             "active_tab": "categories",
         },
     )
@@ -138,6 +140,7 @@ async def manager_subcategories(
     pageSize: int | None = Query(default=None, ge=1, le=500),
     categoryId: str | None = None,
     category_id: str | None = None,
+    superCategoryId: str | None = None,
     search: str | None = None,
     sort: str = Query(default="sequence"),
     order: str = Query(default="asc"),
@@ -173,6 +176,8 @@ async def manager_subcategories(
         current_sort = "sequence"
 
     manager = await get_manager_by_id(db, session["user_id"])
+    all_categories = await list_categories(db, page=1, page_size=500)
+    filter_categories = in_super_category(all_categories.get("items", []), superCategoryId)
     subcategories_page = await list_subcategories(
         db,
         category_id=effective_cat_id,
@@ -181,8 +186,8 @@ async def manager_subcategories(
         search=search,
         sort_by=sort_by,
         sort_order=sort_order,
+        category_ids=[c["id"] for c in filter_categories] if superCategoryId else None,
     )
-    all_categories = await list_categories(db, page=1, page_size=500)
 
     cat_map = {str(c["id"]): c.get("name", "") for c in all_categories.get("items", [])}
     sub_items = subcategories_page.get("items", [])
@@ -217,7 +222,9 @@ async def manager_subcategories(
             "session": session,
             "manager": manager,
             "subcategories": sub_items,
-            "categories": all_categories.get("items", []),
+            "categories": filter_categories,
+            "super_categories": await list_super_categories(db),
+            "selected_super": superCategoryId or "",
             "categoryId": effective_cat_id or "",
             "category_id": effective_cat_id or "",
             "selected_category_id": effective_cat_id or "",
@@ -242,6 +249,7 @@ async def manager_assets(
     category_id: str | None = None,
     subCategoryId: str | None = None,
     sub_category_id: str | None = None,
+    superCategoryId: str | None = None,
     type: str | None = None,
     q: str | None = None,
     search: str | None = None,
@@ -326,6 +334,10 @@ async def manager_assets(
         effective_sort_order = "asc"
         current_sort = "sequence"
 
+    all_categories = await list_categories(db, page=1, page_size=200)
+    filter_categories = in_super_category(all_categories.get("items", []), superCategoryId)
+    super_cat_ids = [c["id"] for c in filter_categories] if superCategoryId else None
+
     assets_page = await list_assets(
         db,
         category_id=effective_cat,
@@ -336,10 +348,12 @@ async def manager_assets(
         sort_by=effective_sort_by,
         sort_order=effective_sort_order,
         asset_type=selected_type,
+        category_ids=super_cat_ids,
     )
 
-    all_categories = await list_categories(db, page=1, page_size=200)
-    all_subs = await list_subcategories(db, category_id=effective_cat, page=1, page_size=500)
+    all_subs = await list_subcategories(
+        db, category_id=effective_cat, page=1, page_size=500, category_ids=super_cat_ids
+    )
 
     category_map = {str(c["id"]): c.get("name", "") for c in all_categories.get("items", [])}
     if effective_cat:
@@ -365,7 +379,9 @@ async def manager_assets(
             "data": assets_page,
             "pagination": assets_page,
             "page_size": effective_page_size,
-            "categories": all_categories.get("items", []),
+            "categories": filter_categories,
+            "super_categories": await list_super_categories(db),
+            "selected_super": superCategoryId or "",
             "subcategories": all_subs.get("items", []),
             "selected_cat": effective_cat or "",
             "category_id": effective_cat or "",
