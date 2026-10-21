@@ -172,12 +172,13 @@ async def reorder_items(
     app_instance_id: str,
     item_type: str,
     ordered_ids: list[str],
+    start: int = 0,
 ) -> dict[str, Any]:
-    """Assign sequence numbers spaced by 10 according to the provided ordered list of IDs."""
+    """Assign sequence numbers start+1, start+2... according to the provided ordered list of IDs."""
     inst_oid = to_object_id(app_instance_id)
     col_name = _collection_for(item_type)
 
-    reorder_pairs = generate_sequence_reordering(ordered_ids)
+    reorder_pairs = generate_sequence_reordering(ordered_ids, start)
     now = utc_now()
 
     for item_id, seq in reorder_pairs:

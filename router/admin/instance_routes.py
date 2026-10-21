@@ -204,6 +204,9 @@ async def admin_instance_content_view(
     folder_sort: str | None = None,
     folder_search: str | None = None,
     folder_super: str | None = None,
+    superCategoryId: str | None = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=500),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     session = get_current_admin_session(request)
@@ -224,11 +227,14 @@ async def admin_instance_content_view(
         folder_sort=folder_sort,
         folder_search=folder_search,
         folder_super=folder_super,
+        super_category_id=superCategoryId,
+        page=page,
+        page_size=page_size,
     )
     unresolved = await get_unresolved_references(db, app_instance_id=id)
 
     active_tab_selection = tab or (
-        "assets" if (categoryId or subCategoryId or ctx["selected_type"] or search_query) else "folders"
+        "assets" if (categoryId or subCategoryId or superCategoryId or ctx["selected_type"] or search_query) else "folders"
     )
 
     return templates.TemplateResponse(
@@ -483,6 +489,7 @@ async def admin_instance_reorder(
         app_instance_id=id,
         item_type=item_type,
         ordered_ids=ordered_ids,
+        start=max(0, int(body.get("start") or 0)),
     )
     return JSONResponse(status_code=200, content={"success": True, "data": res})
 

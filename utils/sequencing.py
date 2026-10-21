@@ -12,6 +12,6 @@ def compute_next_sequence(current_max: int | None) -> int:
     return current_max + 1
 
 
-def generate_sequence_reordering(ordered_ids: Sequence[str]) -> list[tuple[str, int]]:
-    """Produce (id, sequence) pairs spaced by 1 (1, 2, 3...) for bulk reordering."""
-    return [(item_id, index + 1) for index, item_id in enumerate(ordered_ids)]
+def generate_sequence_reordering(ordered_ids: Sequence[str], start: int = 0) -> list[tuple[str, int]]:
+    """Produce (id, sequence) pairs spaced by 1 (start+1, start+2...) for bulk reordering; start = page offset."""
+    return [(item_id, start + index + 1) for index, item_id in enumerate(ordered_ids)]

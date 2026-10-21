@@ -55,7 +55,7 @@
   </button>
   <button type="button" id="tabBtnAssets" class="btn {% if is_assets_tab %}btn-primary{% else %}btn-outlined{% endif %}"
     onclick="switchInstanceTab('assets')" style="min-height:36px; padding:0.35rem 1rem;">
-    🖼️ Referenced Assets ({{ assets|length }})
+    🖼️ Referenced Assets ({{ asset_pagination.total }})
   </button>
 </div>
 
@@ -228,7 +228,8 @@
               data-parent-cat-id="{{ cat.sourceId or cat.id }}"
               style="grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:0.75rem;">
               {% for sub in matching_subs %}
-              <div class="card admin-sub-card" data-sub-id="{{ sub.id }}" draggable="true"
+              <div class="card admin-sub-card" data-sub-id="{{ sub.id }}" draggable="true" title="View assets in {{ sub.name }}"
+                onclick="if (!event.target.closest('a, button, input, .sub-drag-handle')) window.location.href = '/admin/instances/{{ instance.id }}/content?tab=assets&categoryId={{ cat.id }}&subCategoryId={{ sub.id }}';"
                 style="padding:0.75rem; background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant); display:flex; flex-direction:row; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:0.5rem; cursor:grab;">
                 <div style="display:flex; align-items:center; gap:0.5rem; flex:1 1 auto; min-width:0;">
                   <span class="sub-drag-handle"
@@ -336,11 +337,21 @@
 
       <div class="filter-group-left"
         style="display:flex; gap:0.75rem; align-items:center; flex-wrap:nowrap; flex-shrink:0; white-space:nowrap;">
+        {% if super_categories %}
+        <select id="superAssetFilter" class="select" autocomplete="off" style="min-width:150px; max-width:200px;"
+          onchange="handleSuperFilterChange()">
+          <option value="">All Super Categories</option>
+          {% for sc in super_categories %}
+          <option value="{{ sc.id }}" {% if selected_super == sc.id %}selected{% endif %}>⭐ {{ sc.name }}</option>
+          {% endfor %}
+        </select>
+        {% endif %}
+
         <select name="categoryId" id="categoryFilter" class="select" autocomplete="off" style="max-width:200px;"
           onchange="handleCategoryFilterChange(this.value)">
           <option value="">All Categories</option>
           {% for cat in all_categories %}
-          <option value="{{ cat.id }}" data-source-id="{{ cat.sourceId or cat.id }}" {% if selected_cat==(cat.id|string)
+          <option value="{{ cat.id }}" data-source-id="{{ cat.sourceId or cat.id }}" data-super-id="{{ cat.superCategoryId or '' }}" {% if selected_cat==(cat.id|string)
             or selected_cat==(cat.sourceId|string) %}selected{% endif %}>{{ cat.name }}</option>
           {% endfor %}
         </select>
@@ -382,7 +393,7 @@
 
         <a href="javascript:void(0)" id="assetFilterClearBtn" onclick="handleClearAssetFilters(event, 'filters')"
           class="btn btn-outlined btn-filter"
-          style="display:{% if selected_cat or selected_subcat or selected_type or (current_sort and current_sort not in ('sequence', '')) %}inline-flex{% else %}none{% endif %};">Clear</a>
+          style="display:{% if selected_super or selected_cat or selected_subcat or selected_type or (current_sort and current_sort not in ('sequence', '')) %}inline-flex{% else %}none{% endif %};">Clear</a>
       </div>
 
       <div class="search-group-right"
@@ -519,7 +530,7 @@
     <div class="table-responsive card" style="padding:0; margin-bottom:2rem;">
       <div
         style="padding:0.75rem 1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center;">
-        <h3 style="margin:0; font-size:1.05rem;">Referenced Creative Assets ({{ assets|length }})</h3>
+        <h3 style="margin:0; font-size:1.05rem;">Referenced Creative Assets ({{ asset_pagination.total }})</h3>
         <span style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
           Overrides apply exclusively to this instance context.
         </span>
@@ -544,7 +555,7 @@
             <th class="col-actions">Actions</th>
           </tr>
         </thead>
-        <tbody id="reorderableTbody">
+        <tbody id="reorderableTbody" data-offset="{{ asset_offset }}">
           {% for asset in assets %}
           <tr data-asset-id="{{ asset.id }}" class="asset-drag-row" style="transition:background-color 0.15s ease;">
             <td class="asset-drag-handle col-drag"
@@ -562,8 +573,8 @@
             </td>
             <td data-label="Seq" class="col-seq"
               style="font-weight:600; font-size:0.82rem; color:var(--md-sys-color-on-surface-variant); text-align:center;">
-              <input type="number" class="input asset-seq-input" min="1" max="{{ assets|length }}"
-                value="{{ loop.index }}"
+              <input type="number" class="input asset-seq-input" min="1" max="{{ asset_pagination.total }}"
+                value="{{ asset_offset + loop.index }}"
                 style="width:44px; min-height:28px; padding:2px 2px; text-align:center; font-weight:600; font-size:0.8rem;"
                 onchange="handleAssetSeqChange('{{ asset.id }}', parseInt(this.value))">
             </td>
@@ -654,7 +665,7 @@
           {% else %}
           <tr>
             <td colspan="14" style="text-align:center; padding:2.5rem; color:var(--md-sys-color-on-surface-variant);">
-              {% if selected_cat or selected_subcat or selected_type or search %}
+              {% if selected_super or selected_cat or selected_subcat or selected_type or search %}
               <div style="font-size:1.5rem; margin-bottom:0.5rem;">🔍</div>
               <div style="font-weight:600; margin-bottom:0.25rem;">No assets match your search/filter criteria</div>
               <p style="font-size:0.85rem; margin:0 0 0.75rem 0;">Try adjusting or clearing your filters.</p>
@@ -670,6 +681,7 @@
         </tbody>
       </table>
     </div>
+    {% with pagination = asset_pagination %}{% include "partials/pagination.html" %}{% endwith %}
   </div>
 </div>
 
@@ -1030,11 +1042,17 @@
         }
       }
     }
+    const superSel = document.getElementById('superAssetFilter');
+    const superId = superSel ? superSel.value : '';
+    if (!selectedCatId && superId && catSelect) {
+      Array.from(catSelect.options).forEach((o, i) => { if (i && !o.hidden) validCatIds.push(o.value, o.dataset.sourceId); });
+    }
+    const scoped = Boolean(selectedCatId || superId);
 
     Array.from(subSelect.options).forEach((opt, idx) => {
       if (idx === 0) return; // Keep "All Subcategories"
       const catId = opt.dataset.categoryId || opt.dataset.catId || '';
-      if (!selectedCatId || validCatIds.includes(catId)) {
+      if (!scoped || validCatIds.includes(catId)) {
         opt.hidden = false;
         opt.style.display = '';
         if (opt.value === currentSubVal) currentSubValid = true;
@@ -1044,7 +1062,7 @@
       }
     });
 
-    if (selectedCatId && !currentSubValid) {
+    if (scoped && !currentSubValid) {
       subSelect.value = '';
     }
   }
@@ -1071,6 +1089,11 @@
 
   function handleClearAssetFilters(e, clearType) {
     if (e) e.preventDefault();
+    if (clearType !== 'search') {
+      const superSel = document.getElementById('superAssetFilter');
+      if (superSel) superSel.value = '';
+      filterCategoryOptionsBySuper();
+    }
     if (clearType === 'search') {
       const qInp = document.getElementById('assetSearchInput');
       if (qInp) qInp.value = '';
@@ -1101,6 +1124,30 @@
     applyAssetFilters();
   }
 
+  // Super category scopes the category options (and through them the subcategory options)
+  function filterCategoryOptionsBySuper() {
+    const superSel = document.getElementById('superAssetFilter');
+    const catSelect = document.getElementById('categoryFilter');
+    if (!catSelect) return;
+    const superId = superSel ? superSel.value : '';
+    Array.from(catSelect.options).forEach((opt, idx) => {
+      if (idx === 0) return;
+      const show = !superId || opt.dataset.superId === superId;
+      opt.hidden = !show;
+      opt.style.display = show ? '' : 'none';
+    });
+  }
+
+  function handleSuperFilterChange() {
+    const catSelect = document.getElementById('categoryFilter');
+    const subSelect = document.getElementById('subCategoryFilter');
+    if (catSelect) catSelect.value = '';
+    if (subSelect) subSelect.value = '';
+    filterCategoryOptionsBySuper();
+    filterSubcategoryOptions('');
+    applyAssetFilters();
+  }
+
   async function applyAssetFilters() {
     const catSelect = document.getElementById('categoryFilter');
     const subSelect = document.getElementById('subCategoryFilter');
@@ -1116,7 +1163,12 @@
 
     const params = new URLSearchParams();
     params.set('tab', 'assets');
+    const superSel = document.getElementById('superAssetFilter');
+    const selectedSuper = superSel ? superSel.value : '';
+    if (selectedSuper) params.set('superCategoryId', selectedSuper);
     if (selectedCat) params.set('categoryId', selectedCat);
+    const keepPageSize = new URLSearchParams(window.location.search).get('page_size');
+    if (keepPageSize) params.set('page_size', keepPageSize);
     if (selectedSub) params.set('subCategoryId', selectedSub);
     if (selectedType) params.set('type', selectedType);
     if (selectedSort && selectedSort !== 'sequence') params.set('sort', selectedSort);
@@ -1126,7 +1178,7 @@
     window.history.replaceState({}, '', fetchUrl);
 
     const filterClearBtn = document.getElementById('assetFilterClearBtn');
-    const hasFilterActive = Boolean(selectedCat || selectedSub || selectedType || (selectedSort && selectedSort !== 'sequence'));
+    const hasFilterActive = Boolean(selectedSuper || selectedCat || selectedSub || selectedType || (selectedSort && selectedSort !== 'sequence'));
     if (filterClearBtn) {
       filterClearBtn.style.display = hasFilterActive ? 'inline-flex' : 'none';
     }
@@ -1177,6 +1229,7 @@
     if (subFilter) subFilter.value = '';
   }
 
+  filterCategoryOptionsBySuper();
   const curCatInit = document.getElementById('categoryFilter');
   if (curCatInit && curCatInit.value) {
     filterSubcategoryOptions(curCatInit.value);
@@ -1262,7 +1315,7 @@
         const orderedIds = [];
         rows.forEach((r, idx) => {
           const inp = r.querySelector('.asset-seq-input');
-          if (inp) inp.value = idx + 1;
+          if (inp) inp.value = assetOffset() + idx + 1;
           if (r.dataset.assetId) orderedIds.push(r.dataset.assetId);
         });
 
@@ -1270,6 +1323,12 @@
         saveAssetOrder(orderedIds);
       });
     });
+  }
+
+  // Rows on page N continue the sequence of earlier pages
+  function assetOffset() {
+    const tbody = document.getElementById('reorderableTbody');
+    return parseInt((tbody && tbody.dataset.offset) || '0', 10);
   }
 
   async function saveAssetOrder(orderedIds) {
@@ -1281,6 +1340,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'asset',
+          start: assetOffset(),
           ordered_ids: orderedIds
         })
       });
@@ -1300,7 +1360,7 @@
     const fromIndex = rows.findIndex(r => r.dataset.assetId === assetId);
     if (fromIndex === -1) return;
 
-    const targetIndex = Math.max(0, Math.min(newPosition - 1, rows.length - 1));
+    const targetIndex = Math.max(0, Math.min(newPosition - 1 - assetOffset(), rows.length - 1));
     const movingRow = rows[fromIndex];
     const targetRow = rows[targetIndex];
 
@@ -1315,7 +1375,7 @@
     const orderedIds = [];
     newRows.forEach((r, idx) => {
       const inp = r.querySelector('.asset-seq-input');
-      if (inp) inp.value = idx + 1;
+      if (inp) inp.value = assetOffset() + idx + 1;
       if (r.dataset.assetId) orderedIds.push(r.dataset.assetId);
     });
 

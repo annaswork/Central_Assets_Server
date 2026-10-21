@@ -36,6 +36,9 @@ from utils.ids import to_object_id
 from utils.sequencing import compute_next_sequence
 
 
+ASSET_PAGE_SIZES = (20, 40, 60, 80, 100)
+
+
 def _clean(val: str | None) -> str | None:
     return val.strip() if val and val.strip() else None
 
@@ -78,6 +81,9 @@ async def build_instance_content(
     folder_sort: str | None = None,
     folder_search: str | None = None,
     folder_super: str | None = None,
+    super_category_id: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
     extra_name_categories: list[dict[str, Any]] | None = None,
     extra_name_subcategories: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
@@ -183,6 +189,13 @@ async def build_instance_content(
             if asset_has_type(a.get("more_fields") or a.get("moreFields"), clean_type, a.get("thumbnail_url"))
         ]
 
+    if super_category_id:
+        super_cat_ids = {
+            str(v) for c in categories if c.get("superCategoryId") == super_category_id
+            for v in (c.get("id"), c.get("sourceId")) if v
+        }
+        assets = [a for a in assets if str(a.get("categoryId") or "") in super_cat_ids]
+
     # In-memory name fallback for instant display
     cat_map = _name_map(categories + (extra_name_categories or []))
     sub_map = _name_map(all_subcategories + (extra_name_subcategories or []))
@@ -205,6 +218,14 @@ async def build_instance_content(
             or sq in (a.get("subcategory_name") or "").lower()
             or any(sq in str(t).lower() for t in a.get("tags", []))
         ]
+
+    # ponytail: paginates the resolved list in memory (saves rendering, not the fetch); push skip/limit
+    # into get_resolved_assets if instances grow to tens of thousands of assets
+    page_size = page_size if page_size in ASSET_PAGE_SIZES else ASSET_PAGE_SIZES[0]
+    total_assets = len(assets)
+    page = max(1, min(page, (total_assets + page_size - 1) // page_size or 1))
+    asset_offset = (page - 1) * page_size
+    assets = assets[asset_offset : asset_offset + page_size]
 
     # Super categories (optional top level) with live category counts and names on each category
     super_categories = await get_resolved_super_categories(db, app_instance_id=instance_id)
@@ -285,6 +306,10 @@ async def build_instance_content(
         "super_categories": super_categories,
         "available_super_categories": available_super_categories,
         "folder_super": folder_super or "",
+        "selected_super": super_category_id or "",
+        "asset_pagination": {"total": total_assets, "page": page, "page_size": page_size},
+        "asset_offset": asset_offset,
+        "page_sizes": ASSET_PAGE_SIZES,
     }
 
 

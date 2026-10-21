@@ -183,6 +183,9 @@ async def manager_instance_content(
     folder_sort: str | None = None,
     folder_search: str | None = None,
     folder_super: str | None = None,
+    superCategoryId: str | None = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=500),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
     """View and manage content imported into this app instance with full folder hierarchy."""
@@ -223,12 +226,15 @@ async def manager_instance_content(
         folder_sort=folder_sort,
         folder_search=folder_search,
         folder_super=folder_super,
+        super_category_id=superCategoryId,
+        page=page,
+        page_size=page_size,
         extra_name_categories=central_cats,
         extra_name_subcategories=central_subs,
     )
 
     # Auto-select active section
-    if request.query_params.get("tab") == "assets" or request.query_params.get("active_section") == "assets" or cat_id or sub_id or ctx["selected_type"] or search_query:
+    if request.query_params.get("tab") == "assets" or request.query_params.get("active_section") == "assets" or cat_id or sub_id or superCategoryId or ctx["selected_type"] or search_query:
         active_section = "assets"
     elif folder_cat or folder_search or (folder_sort and folder_sort not in ("sequence", "")):
         active_section = "folders"
@@ -551,6 +557,7 @@ async def manager_instance_reorder(
         app_instance_id=instance_id,
         item_type=item_type,
         ordered_ids=ordered_ids,
+        start=max(0, int(body.get("start") or 0)),
     )
     return JSONResponse(status_code=200, content={"success": True, "data": res})
 
