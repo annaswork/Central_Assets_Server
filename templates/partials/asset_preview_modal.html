@@ -73,6 +73,33 @@
         </div>
       </div>
 
+      <!-- App-instance settings (shown only when opened from an instance's asset list) -->
+      <div id="previewInstanceFlags" class="asset-preview-prop-table" style="display:none; margin-top:1rem;">
+        <div class="asset-preview-section-title" style="padding:0.6rem 0.85rem 0;">INSTANCE SETTINGS</div>
+        <label class="asset-preview-prop-row" style="cursor:pointer;">
+          <div class="asset-preview-prop-label">Enabled</div>
+          <div class="asset-preview-prop-value"><input type="checkbox" data-flag="is_enabled" onchange="setPreviewInstanceFlag(this)"></div>
+        </label>
+        <label class="asset-preview-prop-row" style="cursor:pointer;">
+          <div class="asset-preview-prop-label">Premium</div>
+          <div class="asset-preview-prop-value"><input type="checkbox" data-flag="is_premium" onchange="setPreviewInstanceFlag(this)"></div>
+        </label>
+        <label class="asset-preview-prop-row" style="cursor:pointer;">
+          <div class="asset-preview-prop-label">Rewarded</div>
+          <div class="asset-preview-prop-value"><input type="checkbox" data-flag="is_rewarded" onchange="setPreviewInstanceFlag(this)"></div>
+        </label>
+        <label class="asset-preview-prop-row" style="cursor:pointer;">
+          <div class="asset-preview-prop-label">Credited</div>
+          <div class="asset-preview-prop-value"><input type="checkbox" data-flag="is_priced" onchange="setPreviewInstanceFlag(this)"></div>
+        </label>
+        <div class="asset-preview-prop-row" id="previewCreditsRow">
+          <div class="asset-preview-prop-label">Credits</div>
+          <div class="asset-preview-prop-value">
+            <input type="number" min="0" class="input" data-flag="rewarded_credits" style="width:80px; min-height:28px; padding:2px 6px;" onchange="setPreviewInstanceFlag(this)">
+          </div>
+        </div>
+      </div>
+
       <!-- More Fields Launcher Card (Opens dedicated media & attributes popup) -->
       <div id="previewMoreFieldsCard" class="asset-preview-morefields-card" onclick="openAssetMoreFieldsModal()">
         <div class="morefields-card-left">

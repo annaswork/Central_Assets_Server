@@ -3,9 +3,43 @@
   let currentPreviewAssetId = null;
   let currentPreviewData = null;
 
-  window.openAssetPreviewModal = async function(assetId) {
+  let instanceFlagsChanged = false;
+
+  // Instance pages pass the row's per-instance flags; render them as editable toggles.
+  function renderInstanceFlags(flags) {
+    const box = document.getElementById('previewInstanceFlags');
+    if (!box) return;
+    box.style.display = flags ? '' : 'none';
+    if (!flags) return;
+    box.querySelectorAll('input[type=checkbox]').forEach(cb => { cb.checked = !!flags[cb.dataset.flag]; });
+    box.querySelector('[data-flag="rewarded_credits"]').value = flags.rewarded_credits ?? 5;
+    document.getElementById('previewCreditsRow').style.display = flags.is_priced ? '' : 'none';
+  }
+
+  window.setPreviewInstanceFlag = async function(input) {
+    const field = input.dataset.flag;
+    const value = input.type === 'checkbox' ? input.checked : Math.max(0, parseInt(input.value) || 0);
+    if (field === 'is_priced') document.getElementById('previewCreditsRow').style.display = value ? '' : 'none';
+    const apiPrefix = window.location.pathname.startsWith('/manager') ? '/manager' : '/admin';
+    try {
+      const res = await fetch(`${apiPrefix}/instances/${instanceId}/assets/${currentPreviewAssetId}/override`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value })
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      instanceFlagsChanged = true;
+      if (typeof showAppToast === 'function') showAppToast('Instance setting saved.', 'success');
+    } catch (err) {
+      if (input.type === 'checkbox') input.checked = !input.checked;
+      if (typeof showAppToast === 'function') showAppToast('Failed to save setting: ' + err.message, 'error');
+    }
+  };
+
+  window.openAssetPreviewModal = async function(assetId, instanceFlags) {
     if (!assetId) return;
     currentPreviewAssetId = assetId;
+    renderInstanceFlags(typeof instanceId !== 'undefined' ? instanceFlags : null);
 
     const modal = document.getElementById('assetPreviewModal');
     if (!modal) return;
@@ -45,7 +79,8 @@
       if (toggleStatusBtn) toggleStatusBtn.style.display = 'none';
     } else {
       if (resetBtn) resetBtn.style.display = '';
-      if (toggleStatusBtn) toggleStatusBtn.style.display = '';
+      // The footer toggle flips the central asset for every instance; on an instance page the toggles above apply instead.
+      if (toggleStatusBtn) toggleStatusBtn.style.display = instanceFlags ? 'none' : '';
     }
 
     // Show modal immediately
@@ -809,6 +844,12 @@
     document.body.style.overflow = '';
     currentPreviewAssetId = null;
     currentPreviewData = null;
+    if (instanceFlagsChanged) {
+      instanceFlagsChanged = false;
+      // Re-render the instance asset list so table checkboxes and card pills match.
+      if (typeof applyAssetFilters === 'function') applyAssetFilters();
+      else if (typeof applyManagerAssetFilters === 'function') applyManagerAssetFilters();
+    }
   };
 
   window.handleAssetPreviewBackdropClick = function(e) {

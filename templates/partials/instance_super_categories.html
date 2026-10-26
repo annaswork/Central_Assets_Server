@@ -36,7 +36,7 @@
   <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:0.75rem; margin-top:0.85rem;">
     {% for sc in super_categories %}
     <div class="card" style="padding:0.75rem; background:var(--md-sys-color-surface-container-low); border:1px solid {{ 'var(--md-sys-color-primary)' if folder_super == sc.id else 'var(--md-sys-color-outline-variant)' }};">
-      <a href="{{ content_url }}&folder_super={{ sc.id }}" style="display:flex; align-items:center; gap:0.6rem; color:inherit; text-decoration:none;">
+      <a href="{{ content_url }}{% if folder_super != sc.id %}&folder_super={{ sc.id }}{% endif %}" title="{{ 'Click again to show all' if folder_super == sc.id else 'Show only this super category' }}" style="display:flex; align-items:center; gap:0.6rem; color:inherit; text-decoration:none;">
         <div style="width:38px; height:38px; border-radius:var(--radius-sm); overflow:hidden; background:var(--md-sys-color-surface); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
           {% if sc.thumbnail_url or sc.image_url %}
           <img src="{{ sc.thumbnail_url or sc.image_url }}" alt="{{ sc.name }}" style="width:100%; height:100%; object-fit:cover;">
@@ -45,6 +45,7 @@
         <div style="min-width:0;">
           <strong style="font-size:0.9rem;">{{ sc.name }}</strong>
           {% if sc.is_enabled == False %}<span class="badge badge-secondary" style="font-size:0.65rem;">Disabled</span>{% endif %}
+          <span class="asset-card-premium-pill" data-premium-tag="{{ sc.id }}"{% if not sc.is_premium %} hidden{% endif %}>Premium</span>
           <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">📁 {{ sc.categories_count }} Categories</div>
         </div>
       </a>
@@ -54,6 +55,7 @@
       <div style="display:flex; gap:0.35rem; flex-wrap:wrap; margin-top:0.6rem;">
         <a href="{{ portal_base }}/instances/{{ instance.id }}/picker?target_super_category_id={{ sc.id }}&tab=categories" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.72rem;">📥 Import Categories</a>
         <button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.72rem;" onclick="openCreateFolderModal('category', '', '{{ sc.id }}')">+ Category</button>
+        {% with folder_type = "super_category", folder = sc %}{% include "partials/instance_folder_controls.html" %}{% endwith %}
         <button type="button" class="btn btn-destructive" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.72rem;" data-name="{{ sc.name }}" onclick="detachSuperCategory('{{ sc.id }}', this.dataset.name, {{ sc.categories_count }})">Detach</button>
       </div>
     </div>
@@ -80,6 +82,21 @@
       window.location.reload();
     } catch (err) {
       alert('Error moving category: ' + err.message);
+    }
+  }
+
+  async function setInstanceFolderPremium(type, id, checkbox) {
+    try {
+      const res = await fetch(`{{ portal_base }}/instances/{{ instance.id }}/folders/${type}/${id}/override`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_premium: checkbox.checked })
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+      document.querySelectorAll(`[data-premium-tag="${id}"]`).forEach(t => { t.hidden = !checkbox.checked; });
+    } catch (err) {
+      checkbox.checked = !checkbox.checked;
+      alert('Error updating premium: ' + err.message);
     }
   }
 

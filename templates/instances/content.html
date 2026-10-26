@@ -175,6 +175,7 @@
                   <span class="badge badge-secondary folder-seq-badge" style="font-size:0.75rem;">#{{ loop.index
                     }}</span>
                   <span class="badge badge-secondary" style="font-size:0.75rem;">Category Folder</span>
+                  <span class="asset-card-premium-pill" data-premium-tag="{{ cat.id }}"{% if not cat.is_premium %} hidden{% endif %}>Premium</span>
                 </h3>
                 <div style="display:flex; gap:0.4rem; font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
                   <span>📂 {{ cat.subcategories_count | default(0) }} Sub-folders</span>
@@ -200,6 +201,7 @@
                 onclick="openCreateFolderModal('subcategory', '{{ cat.sourceId or cat.id }}')">
                 + Add Sub-folder
               </button>
+              {% with folder_type = "category", folder = cat %}{% include "partials/instance_folder_controls.html" %}{% endwith %}
               <button type="button" class="btn btn-destructive"
                 style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;"
                 onclick="detachCategoryFolder('{{ cat.id }}', '{{ cat.name }}')">
@@ -250,6 +252,7 @@
                         title="{{ sub.name }}">{{ sub.name }}</strong>
                       <span class="badge badge-secondary admin-sub-seq-badge" style="font-size:0.7rem;">#{{ loop.index
                         }}</span>
+                      <span class="asset-card-premium-pill" data-premium-tag="{{ sub.id }}"{% if not sub.is_premium %} hidden{% endif %}>Premium</span>
                     </div>
                     <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">
                       🖼️ {{ sub.assets_count | default(0) }} Assets
@@ -257,12 +260,13 @@
                   </div>
                 </div>
 
-                <div style="display:flex; gap:0.35rem; align-items:center; flex-shrink:0; margin-left:auto;">
+                <div style="display:flex; gap:0.35rem; align-items:center; flex-wrap:wrap; justify-content:flex-end; width:100%;">
                   <a href="/admin/instances/{{ instance.id }}/picker?target_category_id={{ cat.sourceId or cat.id }}&target_sub_category_id={{ sub.sourceId or sub.id }}&tab=assets"
                     class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;"
                     title="Import into Sub-folder">
                     📥 Import
                   </a>
+                  {% with folder_type = "subcategory", folder = sub %}{% include "partials/instance_folder_controls.html" %}{% endwith %}
                   <button type="button" class="btn btn-destructive"
                     style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;"
                     onclick="detachSubcategoryFolder('{{ sub.id }}', '{{ sub.name }}')">
@@ -558,6 +562,7 @@
         </thead>
         <tbody id="reorderableTbody" data-offset="{{ asset_offset }}">
           {% for asset in assets %}
+          {% set inst_flags = {"is_enabled": asset.is_enabled != False, "is_premium": asset.is_premium or False, "is_rewarded": asset.isRewarded or asset.is_rewarded or False, "is_priced": asset.isPriced or asset.is_priced or False, "rewarded_credits": asset.rewardedCredits if asset.rewardedCredits is defined else (asset.rewarded_credits if asset.rewarded_credits is defined else 5)} %}
           <tr data-asset-id="{{ asset.id }}" class="asset-drag-row" style="transition:background-color 0.15s ease;">
             <td class="asset-drag-handle col-drag"
               style="cursor:grab; color:var(--md-sys-color-on-surface-variant); user-select:none;"
@@ -583,12 +588,12 @@
               {% if asset.thumbnailUrl or asset.thumbnail_url %}
               <img loading="lazy" src="{{ asset.thumbnailUrl or asset.thumbnail_url }}" alt="{{ asset.name }}"
                 class="table-thumb" style="cursor:pointer;"
-                onclick="openAssetPreviewModal('{{ asset.source_id or asset.sourceId or asset.id }}')"
+                onclick="openAssetPreviewModal('{{ asset.source_id or asset.sourceId or asset.id }}', {{ inst_flags | tojson | forceescape }})"
                 title="Click to preview asset details">
               {% else %}
               <div class="table-thumb"
                 style="display:flex; align-items:center; justify-content:center; background:var(--md-sys-color-surface-container); cursor:pointer;"
-                onclick="openAssetPreviewModal('{{ asset.source_id or asset.sourceId or asset.id }}')"
+                onclick="openAssetPreviewModal('{{ asset.source_id or asset.sourceId or asset.id }}', {{ inst_flags | tojson | forceescape }})"
                 title="Click to preview asset details">🖼️</div>
               {% endif %}
             </td>

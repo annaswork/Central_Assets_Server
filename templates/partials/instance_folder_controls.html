@@ -1,0 +1,9 @@
+{# Rename + Premium controls for one app-instance folder. Needs folder_type ('super_category' | 'category' |
+   'subcategory') and folder (.id, .name, .is_premium). Handlers live in instance_super_categories.html. #}
+<label class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem; gap:0.3rem; cursor:pointer;"
+  title="Premium in this app" onclick="event.stopPropagation()">
+  <input type="checkbox" {% if folder.is_premium %}checked{% endif %}
+    onchange="setInstanceFolderPremium('{{ folder_type }}', '{{ folder.id }}', this)"> Premium
+</label>
+<button type="button" class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;"
+  data-name="{{ folder.name }}" onclick="event.stopPropagation(); promptCustomName('{{ folder.id }}', this.dataset.name, '{{ folder_type }}')">Rename</button>

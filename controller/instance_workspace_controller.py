@@ -532,6 +532,27 @@ def parse_asset_override_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+FOLDER_TYPES = {"super_category", "category", "subcategory"}
+
+
+def parse_folder_override_payload(folder_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a folder override body into update_item_settings_and_overrides kwargs.
+
+    An empty name clears the rename, so the folder shows its original name again.
+    """
+    if folder_type not in FOLDER_TYPES:
+        raise ValidationError(f"Unknown folder type: {folder_type}")
+    kwargs: dict[str, Any] = {
+        "item_type": folder_type,
+        "is_enabled": payload.get("is_enabled"),
+        "sequence": payload.get("sequence"),
+        "is_premium": payload.get("is_premium"),
+    }
+    if "name" in payload:
+        kwargs["overrides"] = {"name": str(payload["name"] or "").strip() or None}
+    return kwargs
+
+
 async def _create_or_restore_folder(
     db: AsyncIOMotorDatabase,
     coll: str,

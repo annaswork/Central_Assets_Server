@@ -17,6 +17,7 @@ from controller.instance_workspace_controller import (
     build_picker_page,
     create_instance_folder,
     parse_asset_override_payload,
+    parse_folder_override_payload,
     parse_reference_payload,
     picker_assets,
     picker_categories,
@@ -499,7 +500,7 @@ async def manager_instance_folder_override(
     folder_id: str,
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
-    """Update sequence or status for categories and subcategories in this instance."""
+    """Rename, reorder, enable or set premium on a super category / category / subcategory in this instance."""
     session = get_current_manager_session(request)
     if not session:
         return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
@@ -512,16 +513,8 @@ async def manager_instance_folder_override(
     except Exception:
         payload = {}
 
-    sequence = payload.get("sequence")
-    is_enabled = payload.get("is_enabled")
-
     res = await update_item_settings_and_overrides(
-        db,
-        app_instance_id=instance_id,
-        item_type=folder_type,
-        item_id=folder_id,
-        is_enabled=is_enabled,
-        sequence=sequence,
+        db, app_instance_id=instance_id, item_id=folder_id, **parse_folder_override_payload(folder_type, payload)
     )
     return JSONResponse(status_code=200, content={"success": True, "data": serialize_mongo_doc(res)})
 

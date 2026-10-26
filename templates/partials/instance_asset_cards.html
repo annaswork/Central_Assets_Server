@@ -5,8 +5,9 @@
   {% for asset in assets %}
   {% set preview_id = asset.source_id or asset.sourceId or asset.id %}
   {% set thumb = asset.thumbnail_url or asset.thumbnailUrl %}
+          {% set inst_flags = {"is_enabled": asset.is_enabled != False, "is_premium": asset.is_premium or False, "is_rewarded": asset.isRewarded or asset.is_rewarded or False, "is_priced": asset.isPriced or asset.is_priced or False, "rewarded_credits": asset.rewardedCredits if asset.rewardedCredits is defined else (asset.rewarded_credits if asset.rewarded_credits is defined else 5)} %}
   <div class="asset-card{% if asset.is_enabled == False %} card-disabled{% endif %}">
-    <div class="asset-card-img-wrapper" onclick="openAssetPreviewModal('{{ preview_id }}')" style="cursor:pointer;" title="Click to preview asset">
+    <div class="asset-card-img-wrapper" onclick="openAssetPreviewModal('{{ preview_id }}', {{ inst_flags | tojson | forceescape }})" style="cursor:pointer;" title="Click to preview asset">
       {% if thumb %}
       <img src="{{ thumb }}" alt="{{ asset.name }}" class="asset-card-img" loading="lazy" draggable="false">
       {% else %}
@@ -18,7 +19,7 @@
       </div>
     </div>
     <div class="asset-card-body">
-      <a href="javascript:void(0)" onclick="openAssetPreviewModal('{{ preview_id }}')" class="asset-card-title" title="{{ asset.name }}">{{ asset.name }}</a>
+      <a href="javascript:void(0)" onclick="openAssetPreviewModal('{{ preview_id }}', {{ inst_flags | tojson | forceescape }})" class="asset-card-title" title="{{ asset.name }}">{{ asset.name }}</a>
       <div class="asset-card-meta">
         <span class="asset-card-category">{{ (asset.category_name or '—') | upper }}</span>
         {% if asset.is_premium %}<span class="asset-card-premium-pill">PREMIUM</span>{% endif %}

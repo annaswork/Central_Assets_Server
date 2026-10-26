@@ -68,6 +68,8 @@ def _top_folder_pipeline(match_filter: dict[str, Any], central_coll: str, extra:
                 "id": {"$toString": "$_id"},
                 **extra,
                 "is_enabled": "$is_enabled",
+                # Instance value once set, else the central folder's flag
+                "is_premium": {"$ifNull": ["$is_premium", {"$ifNull": ["$central.is_premium", False]}]},
                 "sequence": "$sequence",
                 "overrides": {"$ifNull": ["$overrides", {}]},
                 "merged": {
@@ -88,6 +90,7 @@ def _top_folder_pipeline(match_filter: dict[str, Any], central_coll: str, extra:
                 "id": 1,
                 **{k: 1 for k in extra},
                 "is_enabled": 1,
+                "is_premium": 1,
                 "sequence": 1,
                 "overrides": 1,
                 "name": "$merged.name",
@@ -237,6 +240,8 @@ async def get_resolved_subcategories(
                     ]
                 },
                 "is_enabled": "$is_enabled",
+                # Instance value once set, else the central folder's flag
+                "is_premium": {"$ifNull": ["$is_premium", {"$ifNull": ["$central.is_premium", False]}]},
                 "sequence": "$sequence",
                 "overrides": {"$ifNull": ["$overrides", {}]},
                 "merged": {
@@ -257,6 +262,7 @@ async def get_resolved_subcategories(
                 "id": 1,
                 "categoryId": 1,
                 "is_enabled": 1,
+                "is_premium": 1,
                 "sequence": 1,
                 "overrides": 1,
                 "name": "$merged.name",

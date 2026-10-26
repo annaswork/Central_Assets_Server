@@ -96,6 +96,7 @@ class ResolvedCategoryOut(MongoModel):
     thumbnail_url: str | None = None
     image_url: str | None = None
     is_enabled: bool = True
+    is_premium: bool = False
     sequence: int
     overrides: dict[str, Any] = Field(default_factory=dict)
 
@@ -107,6 +108,7 @@ class ResolvedSubcategoryOut(MongoModel):
     thumbnail_url: str | None = None
     image_url: str | None = None
     is_enabled: bool = True
+    is_premium: bool = False
     sequence: int
     overrides: dict[str, Any] = Field(default_factory=dict)
 

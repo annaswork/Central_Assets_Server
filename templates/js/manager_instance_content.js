@@ -506,12 +506,16 @@ async function handlePricedToggle(assetId, isChecked) {
 }
 
 let currentRenamingAssetId = null;
+let currentRenamingFolderType = null;
 
-function promptCustomName(assetId, currentName) {
+// folderType ('super_category' | 'category' | 'subcategory') renames a folder instead of an asset.
+function promptCustomName(assetId, currentName, folderType = null) {
   currentRenamingAssetId = assetId;
+  currentRenamingFolderType = folderType;
   const modal = document.getElementById('renameAssetModal');
   const input = document.getElementById('renameAssetInput');
   if (modal && input) {
+    modal.querySelector('h3').textContent = folderType ? 'Rename Folder' : 'Rename Asset';
     input.value = currentName || '';
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
@@ -547,7 +551,17 @@ async function saveRenameModal() {
     saveBtn.textContent = 'Saving...';
   }
   try {
-    await updateAssetOverride(currentRenamingAssetId, 'name', newName);
+    if (currentRenamingFolderType) {
+      // An empty name clears the rename and restores the original folder name.
+      const res = await fetch(`/manager/instances/${instanceId}/folders/${currentRenamingFolderType}/${currentRenamingAssetId}/override`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+    } else {
+      await updateAssetOverride(currentRenamingAssetId, 'name', newName);
+    }
     closeRenameModal();
     window.location.reload();
   } catch (err) {

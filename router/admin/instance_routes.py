@@ -18,6 +18,7 @@ from controller.instance_workspace_controller import (
     build_picker_page,
     create_instance_folder,
     parse_asset_override_payload,
+    parse_folder_override_payload,
     parse_reference_payload,
     picker_assets,
     picker_categories,
@@ -451,6 +452,30 @@ async def admin_instance_asset_override(
 
     res = await update_item_settings_and_overrides(
         db, app_instance_id=id, item_type="asset", item_id=assetId, **parse_asset_override_payload(payload)
+    )
+    return JSONResponse(status_code=200, content={"success": True, "data": serialize_mongo_doc(res)})
+
+
+@router.patch("/{id}/folders/{folder_type}/{folder_id}/override")
+async def admin_instance_folder_override(
+    request: Request,
+    id: str,
+    folder_type: str,
+    folder_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Rename, reorder, enable or set premium on a super category / category / subcategory in this instance."""
+    session = get_current_admin_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    res = await update_item_settings_and_overrides(
+        db, app_instance_id=id, item_id=folder_id, **parse_folder_override_payload(folder_type, payload)
     )
     return JSONResponse(status_code=200, content={"success": True, "data": serialize_mongo_doc(res)})
 

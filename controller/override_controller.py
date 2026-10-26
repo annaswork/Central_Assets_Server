@@ -84,7 +84,7 @@ async def update_item_settings_and_overrides(
         set_fields["is_enabled"] = bool(is_enabled)
     if sequence is not None:
         set_fields["sequence"] = sequence
-    if is_premium is not None and item_type == "asset":
+    if is_premium is not None:
         set_fields["is_premium"] = bool(is_premium)
     if is_rewarded is not None and item_type == "asset":
         set_fields["is_rewarded"] = bool(is_rewarded)
@@ -210,7 +210,7 @@ async def bulk_update_flags(
     set_fields: dict[str, Any] = {"updated_at": utc_now()}
     if is_enabled is not None:
         set_fields["is_enabled"] = is_enabled
-    if is_premium is not None and item_type == "asset":
+    if is_premium is not None:
         set_fields["is_premium"] = is_premium
 
     oids = [to_object_id(i) for i in ids]
