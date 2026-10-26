@@ -690,7 +690,7 @@
       </button>
     </div>
     {% endif %}
-    {% include "partials/instance_asset_cards.html" %}
+    {% with card_selectable = true %}{% include "partials/instance_asset_cards.html" %}{% endwith %}
     {% with pagination = asset_pagination %}{% include "partials/pagination.html" %}{% endwith %}
   </div>
 </div>
@@ -873,6 +873,8 @@
 </div>
 
 <script>const instanceId = {{ instance.id | tojson }};</script>
+<script src="/admin-assets/js/bulk_actions.js"></script>
+<script src="/admin-assets/js/instance_asset_selection.js"></script>
 <script src="/admin-assets/js/manager_instance_content.js"></script>
 
 <!-- Rename Asset Modal -->

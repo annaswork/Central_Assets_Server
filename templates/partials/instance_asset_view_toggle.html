@@ -2,7 +2,9 @@
    holds both the table (.instance-list-view) and the cards (.instance-block-view). The choice is a class on that
    container, so it survives filter/page refreshes that replace its contents. #}
 <style>
-  #{{ asset_container_id }}.view-block .instance-list-view.has-assets { display: none; }
+  /* Block view keeps the list card's header (title + bulk-actions bar) and hides only its table. */
+  #{{ asset_container_id }}.view-block .instance-list-view.has-assets { margin-bottom: 1rem; }
+  #{{ asset_container_id }}.view-block .instance-list-view.has-assets table { display: none; }
   #{{ asset_container_id }}:not(.view-block) .instance-block-view { display: none; }
 </style>
 <div style="display:flex; justify-content:flex-end; margin-bottom:0.75rem;">
@@ -34,5 +36,8 @@
     let saved = 'list';
     try { saved = localStorage.getItem('instance_asset_view') || 'list'; } catch (e) {}
     setInstanceAssetView(saved);
+    // Click or swipe across card topbars to select (instance_asset_selection.js + bulk_actions.js).
+    initSwipeSelection(document.getElementById({{ asset_container_id | tojson }}), '.asset-card-checkbox',
+      (card, cb, state) => setAssetSelected(cb.value, state));
   });
 </script>

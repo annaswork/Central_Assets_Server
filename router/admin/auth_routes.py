@@ -15,8 +15,10 @@ from authorization.admin_session import (
 )
 from config.paths import TEMPLATES_DIR
 from controller.authorization_controller import login_operator, verify_login_2fa
+from database.collections import ADMIN_USERS
 from router.deps import get_db
 from utils.errors import UnauthorizedError
+from utils.ids import to_object_id
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 router = APIRouter(tags=["Admin Auth"])
@@ -106,7 +108,13 @@ async def login_2fa_submit(
 
 @router.get("/logout")
 @router.post("/logout")
-async def logout(request: Request) -> Response:
+async def logout(request: Request, db: AsyncIOMotorDatabase = Depends(get_db)) -> Response:
+    session = get_current_admin_session(request)
+    if session and session.get("user_id"):
+        # Show offline right away; another device still logged in re-marks online on its next poll.
+        await db[ADMIN_USERS].update_one(
+            {"_id": to_object_id(session["user_id"])}, {"$unset": {"last_seen_at": ""}}
+        )
     response = RedirectResponse(url="/admin/login", status_code=303)
     clear_admin_session_cookie(response)
     clear_admin_pre_auth_cookie(response)

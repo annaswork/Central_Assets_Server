@@ -21,8 +21,10 @@ from controller.manager_controller import (
     verify_manager_login_2fa,
 )
 from database.models.manager_user import ManagerUserCreate
+from database.collections import MANAGERS
 from router.deps import get_db
 from utils.errors import ConflictError, UnauthorizedError, ValidationError
+from utils.ids import to_object_id
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 router = APIRouter(tags=["Manager Auth"])
@@ -170,8 +172,14 @@ async def login_2fa_submit(
 
 @router.get("/logout")
 @router.post("/logout")
-async def logout(request: Request) -> Response:
+async def logout(request: Request, db: AsyncIOMotorDatabase = Depends(get_db)) -> Response:
     """Log out manager and clear cookies."""
+    session = get_current_manager_session(request)
+    if session and session.get("user_id"):
+        # Show offline right away; another device still logged in re-marks online on its next poll.
+        await db[MANAGERS].update_one(
+            {"_id": to_object_id(session["user_id"])}, {"$unset": {"last_seen_at": ""}}
+        )
     response = RedirectResponse(url="/manager/login", status_code=303)
     clear_manager_session_cookie(response)
     clear_manager_pre_auth_cookie(response)

@@ -143,6 +143,22 @@ async function updateAssetOverride(assetId, field, value) {
   }
 }
 
+// ponytail: one PATCH per selected asset (fine for a page of assets); add a bulk route if selections get large.
+async function bulkSetAssetOverride(field, value) {
+  const ids = [...selectedAssetIds];
+  if (!ids.length) return;
+  const results = await Promise.allSettled(ids.map(id =>
+    fetch(`/admin/instances/${instanceId}/assets/${id}/override`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [field]: value })
+    }).then(res => { if (!res.ok) throw new Error(res.status); })
+  ));
+  const failed = results.filter(r => r.status === 'rejected').length;
+  showToast(failed ? `Updated ${ids.length - failed} asset(s), ${failed} failed` : `Updated ${ids.length} asset(s)`, failed ? 'error' : 'success');
+  await applyAssetFilters();
+}
+
 async function handlePricedToggle(assetId, isChecked) {
   const creditsInput = document.getElementById(`credits-${assetId}`);
   if (creditsInput) {
@@ -450,6 +466,8 @@ async function applyAssetFilters() {
     const newContainer = doc.getElementById('assetTableContainer');
     if (newContainer && container) {
       container.innerHTML = newContainer.innerHTML;
+      // Re-mark still-selected assets in the freshly rendered rows/cards.
+      [...selectedAssetIds].forEach(id => setAssetSelected(id, true));
     }
 
     const newTabBtn = doc.getElementById('tabBtnAssets');

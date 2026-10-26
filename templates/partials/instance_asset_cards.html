@@ -1,5 +1,6 @@
 {# Block view of an app instance's assets (admin + manager). Rendered inside the AJAX-refreshed asset container;
-   shown instead of the table when that container has .view-block (see instance_asset_view_toggle.html). #}
+   shown instead of the table when that container has .view-block (see instance_asset_view_toggle.html).
+   `card_selectable` adds a select checkbox per card (click or swipe across topbars to multi-select). #}
 {% if assets %}
 <div class="asset-grid instance-block-view">
   {% for asset in assets %}
@@ -7,6 +8,11 @@
   {% set thumb = asset.thumbnail_url or asset.thumbnailUrl %}
           {% set inst_flags = {"is_enabled": asset.is_enabled != False, "is_premium": asset.is_premium or False, "is_rewarded": asset.isRewarded or asset.is_rewarded or False, "is_priced": asset.isPriced or asset.is_priced or False, "rewarded_credits": asset.rewardedCredits if asset.rewardedCredits is defined else (asset.rewarded_credits if asset.rewarded_credits is defined else 5)} %}
   <div class="asset-card{% if asset.is_enabled == False %} card-disabled{% endif %}">
+    {% if card_selectable %}
+    <div class="asset-card-topbar" title="Click or swipe across to multi-select">
+      <input type="checkbox" class="asset-card-checkbox" value="{{ asset.id }}" title="Select {{ asset.name }}">
+    </div>
+    {% endif %}
     <div class="asset-card-img-wrapper" onclick="openAssetPreviewModal('{{ preview_id }}', {{ inst_flags | tojson | forceescape }})" style="cursor:pointer;" title="Click to preview asset">
       {% if thumb %}
       <img src="{{ thumb }}" alt="{{ asset.name }}" class="asset-card-img" loading="lazy" draggable="false">

@@ -304,6 +304,8 @@ async function applyManagerAssetFilters() {
     const newContainer = doc.getElementById('managerAssetTableContainer');
     if (newContainer && container) {
       container.innerHTML = newContainer.innerHTML;
+      // Re-mark still-selected assets in the freshly rendered rows/cards.
+      [...selectedAssetIds].forEach(id => setAssetSelected(id, true));
     }
 
     const newTabBtn = doc.getElementById('tabBtnAssets');
@@ -592,57 +594,7 @@ async function handleCreditsChange(assetId, val) {
 }
 
 // --- Multiple Asset Selection & Bulk Tag Management ---
-const selectedAssetIds = new Set();
 let targetSingleAssetId = null;
-
-function onAssetCheckboxChange(checkbox) {
-  const assetId = checkbox.value;
-  if (checkbox.checked) {
-    selectedAssetIds.add(assetId);
-  } else {
-    selectedAssetIds.delete(assetId);
-  }
-  updateAssetSelectionUI();
-}
-
-function toggleSelectAllAssets(isChecked) {
-  const checkboxes = document.querySelectorAll('.asset-checkbox');
-  checkboxes.forEach(cb => {
-    cb.checked = isChecked;
-    if (isChecked) {
-      selectedAssetIds.add(cb.value);
-    } else {
-      selectedAssetIds.delete(cb.value);
-    }
-  });
-  updateAssetSelectionUI();
-}
-
-function clearSelectedAssets() {
-  selectedAssetIds.clear();
-  const selectAll = document.getElementById('selectAllAssetsCheckbox');
-  if (selectAll) {
-    selectAll.checked = false;
-    selectAll.indeterminate = false;
-  }
-  document.querySelectorAll('.asset-checkbox').forEach(cb => cb.checked = false);
-  updateAssetSelectionUI();
-}
-
-function updateAssetSelectionUI() {
-  const count = selectedAssetIds.size;
-  const bar = document.getElementById('assetBulkActionsBar');
-  const countSpan = document.getElementById('selectedAssetCount');
-  const selectAll = document.getElementById('selectAllAssetsCheckbox');
-  const allCbs = document.querySelectorAll('.asset-checkbox');
-
-  if (countSpan) countSpan.textContent = count;
-  if (bar) bar.style.display = count > 0 ? 'inline-flex' : 'none';
-  if (selectAll) {
-    selectAll.checked = (allCbs.length > 0 && count === allCbs.length);
-    selectAll.indeterminate = (count > 0 && count < allCbs.length);
-  }
-}
 
 function openBulkTagsModal() {
   targetSingleAssetId = null;

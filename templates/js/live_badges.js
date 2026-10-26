@@ -8,7 +8,8 @@
 
   async function pollNotificationBadges() {
     try {
-      const res = await fetch('/api/notifications/badge-counts', {
+      const portal = location.pathname.startsWith('/manager') ? 'manager' : 'admin';
+      const res = await fetch(`/api/notifications/badge-counts?portal=${portal}`, {
         headers: { 'Accept': 'application/json' },
         cache: 'no-store'
       });
@@ -16,6 +17,14 @@
 
       const data = await res.json();
       if (!data || data.role === 'guest') return;
+
+      // 0. Online presence dots/labels: [data-online-id] gets .is-online while that user is online
+      if (Array.isArray(data.online_ids)) {
+        const online = new Set(data.online_ids);
+        document.querySelectorAll('[data-online-id]').forEach(el => {
+          el.classList.toggle('is-online', online.has(el.dataset.onlineId));
+        });
+      }
 
       const unreadMessages = data.unread_messages || 0;
       const pendingRequests = data.pending_requests || 0;

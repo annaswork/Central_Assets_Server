@@ -433,6 +433,12 @@
         white-space: nowrap;
       }
 
+      .instance-assets-table .col-cb {
+        width: 30px;
+        min-width: 30px;
+        text-align: center;
+      }
+
       .instance-assets-table .col-drag {
         width: 28px;
         min-width: 28px;
@@ -534,16 +540,33 @@
     <!-- Referenced Assets Table -->
     <div class="table-responsive card instance-list-view{% if assets %} has-assets{% endif %}" style="padding:0; margin-bottom:2rem;">
       <div
-        style="padding:0.75rem 1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center;">
-        <h3 style="margin:0; font-size:1.05rem;">Referenced Creative Assets ({{ asset_pagination.total }})</h3>
-        <span style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
-          Overrides apply exclusively to this instance context.
-        </span>
+        style="padding:0.75rem 1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+        <div>
+          <h3 style="margin:0; font-size:1.05rem;">Referenced Creative Assets ({{ asset_pagination.total }})</h3>
+          <span style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
+            Overrides apply exclusively to this instance context.
+          </span>
+        </div>
+        <div id="assetBulkActionsBar"
+          style="display:none; align-items:center; gap:0.5rem; flex-wrap:wrap; background:var(--md-sys-color-surface-container-high, #e2e8f0); padding:0.35rem 0.75rem; border-radius:8px; border:1px solid var(--md-sys-color-primary, #6366f1);">
+          <span style="font-size:0.85rem; font-weight:600; color:var(--md-sys-color-primary, #4338ca);">
+            <span id="selectedAssetCount">0</span> selected
+          </span>
+          <button type="button" class="btn btn-outlined btn-sm" onclick="bulkSetAssetOverride('is_enabled', true)" style="font-size:0.8rem; padding:0.25rem 0.55rem;">Enable</button>
+          <button type="button" class="btn btn-outlined btn-sm" onclick="bulkSetAssetOverride('is_enabled', false)" style="font-size:0.8rem; padding:0.25rem 0.55rem;">Disable</button>
+          <button type="button" class="btn btn-outlined btn-sm" onclick="bulkSetAssetOverride('is_premium', true)" style="font-size:0.8rem; padding:0.25rem 0.55rem;">Premium</button>
+          <button type="button" class="btn btn-outlined btn-sm" onclick="bulkSetAssetOverride('is_premium', false)" style="font-size:0.8rem; padding:0.25rem 0.55rem;">Normal</button>
+          <button type="button" class="btn btn-outlined btn-sm" onclick="clearSelectedAssets()" style="font-size:0.8rem; padding:0.25rem 0.55rem;">Deselect</button>
+        </div>
       </div>
 
       <table class="data-table instance-assets-table" id="reorderableTable">
         <thead>
           <tr>
+            <th class="col-cb">
+              <input type="checkbox" id="selectAllAssetsCheckbox" onchange="toggleSelectAllAssets(this.checked)"
+                title="Select all assets" style="cursor:pointer; width:15px; height:15px;">
+            </th>
             <th class="col-drag"></th>
             <th class="col-seq">Seq</th>
             <th class="col-thumb">Thumb</th>
@@ -564,6 +587,10 @@
           {% for asset in assets %}
           {% set inst_flags = {"is_enabled": asset.is_enabled != False, "is_premium": asset.is_premium or False, "is_rewarded": asset.isRewarded or asset.is_rewarded or False, "is_priced": asset.isPriced or asset.is_priced or False, "rewarded_credits": asset.rewardedCredits if asset.rewardedCredits is defined else (asset.rewarded_credits if asset.rewarded_credits is defined else 5)} %}
           <tr data-asset-id="{{ asset.id }}" class="asset-drag-row" style="transition:background-color 0.15s ease;">
+            <td data-label="Select" class="col-cb">
+              <input type="checkbox" class="asset-checkbox" value="{{ asset.id }}"
+                onchange="onAssetCheckboxChange(this)" style="cursor:pointer; width:15px; height:15px;">
+            </td>
             <td class="asset-drag-handle col-drag"
               style="cursor:grab; color:var(--md-sys-color-on-surface-variant); user-select:none;"
               title="Drag to reorder">
@@ -687,7 +714,7 @@
         </tbody>
       </table>
     </div>
-    {% include "partials/instance_asset_cards.html" %}
+    {% with card_selectable = true %}{% include "partials/instance_asset_cards.html" %}{% endwith %}
     {% with pagination = asset_pagination %}{% include "partials/pagination.html" %}{% endwith %}
   </div>
 </div>
@@ -768,6 +795,7 @@
 </div>
 
 <script>const instanceId = {{ instance.id | tojson }};</script>
+<script src="/admin-assets/js/instance_asset_selection.js"></script>
 <script src="/admin-assets/js/instance_content.js"></script>
 
 <!-- Rename Asset Modal -->

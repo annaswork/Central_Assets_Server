@@ -254,10 +254,6 @@ function setGridColumns(cols) {
  * When user clicks down on a selection box and hovers across other cards,
  * they all get selected seamlessly.
  */
-let isSwipeSelecting = false;
-let swipeTargetState = true;
-let lastSwipeStart = 0;
-
 function applyCheckboxState(cb, state) {
   if (cb.checked === state) return;
   cb.checked = state;
@@ -269,20 +265,35 @@ function applyCheckboxState(cb, state) {
   }
 }
 
-function initSwipeSelection() {
-  const blockView = document.getElementById('assetBlockView');
-  if (!blockView) return;
+/**
+ * root: element holding the cards (listeners live on it, so its contents may be re-rendered).
+ * cbSelector: the card's select checkbox. onToggle(card, cb, state): applies the selection.
+ */
+function initSwipeSelection(
+  root = document.getElementById('assetBlockView'),
+  cbSelector = '.row-select-checkbox',
+  onToggle = (card, cb, state) => {
+    applyCheckboxState(cb, state);
+    card.classList.toggle('card-selected', state);
+    updateBulkActionsBar();
+  }
+) {
+  if (!root) return;
+  let isSwipeSelecting = false;
+  let swipeTargetState = true;
+  let lastSwipeStart = 0;
+  let grid = null;
 
   function handleSwipeStart(e) {
     if (e.button !== undefined && e.button !== 0) return;
 
-    const targetCheckbox = e.target.closest('.row-select-checkbox');
+    const targetCheckbox = e.target.closest(cbSelector);
     const targetTopbar = e.target.closest('.asset-card-topbar');
     const targetCard = e.target.closest('.asset-card');
 
     if (!targetCard || (!targetCheckbox && !targetTopbar)) return;
 
-    const cb = targetCard.querySelector('.row-select-checkbox');
+    const cb = targetCard.querySelector(cbSelector);
     if (!cb) return;
 
     const now = Date.now();
@@ -292,13 +303,11 @@ function initSwipeSelection() {
     e.preventDefault();
     isSwipeSelecting = true;
     swipeTargetState = !cb.checked;
+    onToggle(targetCard, cb, swipeTargetState);
 
-    applyCheckboxState(cb, swipeTargetState);
-    targetCard.classList.toggle('card-selected', swipeTargetState);
-    updateBulkActionsBar();
-
+    grid = targetCard.closest('.asset-grid');
     document.body.classList.add('is-swipe-selecting');
-    blockView.classList.add('is-swiping');
+    if (grid) grid.classList.add('is-swiping');
   }
 
   function handleSwipeMove(e) {
@@ -308,13 +317,9 @@ function initSwipeSelection() {
     if (!el) return;
 
     const card = el.closest('.asset-card');
-    if (card && blockView.contains(card)) {
-      const cb = card.querySelector('.row-select-checkbox');
-      if (cb && cb.checked !== swipeTargetState) {
-        applyCheckboxState(cb, swipeTargetState);
-        card.classList.toggle('card-selected', swipeTargetState);
-        updateBulkActionsBar();
-      }
+    if (card && root.contains(card)) {
+      const cb = card.querySelector(cbSelector);
+      if (cb && cb.checked !== swipeTargetState) onToggle(card, cb, swipeTargetState);
     }
   }
 
@@ -322,19 +327,23 @@ function initSwipeSelection() {
     if (isSwipeSelecting) {
       isSwipeSelecting = false;
       document.body.classList.remove('is-swipe-selecting');
-      blockView.classList.remove('is-swiping');
-      updateBulkActionsBar();
+      if (grid) grid.classList.remove('is-swiping');
     }
   }
 
+  // The pointerdown above already toggled the checkbox; stop the click from toggling it back.
+  root.addEventListener('click', e => {
+    if (e.target.matches(cbSelector)) e.preventDefault();
+  });
+
   // Pointer events for modern mouse, pen, and touch
-  blockView.addEventListener('pointerdown', handleSwipeStart);
+  root.addEventListener('pointerdown', handleSwipeStart);
   window.addEventListener('pointermove', handleSwipeMove);
   window.addEventListener('pointerup', handleSwipeEnd);
   window.addEventListener('pointercancel', handleSwipeEnd);
 
   // Mouse event fallbacks
-  blockView.addEventListener('mousedown', handleSwipeStart);
+  root.addEventListener('mousedown', handleSwipeStart);
   window.addEventListener('mousemove', handleSwipeMove);
   window.addEventListener('mouseup', handleSwipeEnd);
 }
