@@ -35,15 +35,17 @@
   {% if super_categories %}
   <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:0.75rem; margin-top:0.85rem;">
     {% for sc in super_categories %}
-    <div class="card" style="padding:0.75rem; background:var(--md-sys-color-surface-container-low); border:1px solid {{ 'var(--md-sys-color-primary)' if folder_super == sc.id else 'var(--md-sys-color-outline-variant)' }};">
+    {# Tertiary accent + tint so super categories read differently from the category blocks below #}
+    <div class="card" style="padding:0.85rem 0.85rem 0.85rem 1rem; background:linear-gradient(135deg, color-mix(in srgb, var(--md-sys-color-tertiary-container) 55%, transparent), var(--md-sys-color-surface-container-low) 70%); border:1px solid {{ 'var(--md-sys-color-tertiary)' if folder_super == sc.id else 'color-mix(in srgb, var(--md-sys-color-tertiary) 35%, transparent)' }}; border-left:4px solid var(--md-sys-color-tertiary);{% if folder_super == sc.id %} box-shadow:0 0 0 2px color-mix(in srgb, var(--md-sys-color-tertiary) 30%, transparent);{% endif %}">
+      <div style="font-size:0.65rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--md-sys-color-tertiary); margin-bottom:0.45rem;">⭐ Super Category</div>
       <a href="{{ content_url }}{% if folder_super != sc.id %}&folder_super={{ sc.id }}{% endif %}" title="{{ 'Click again to show all' if folder_super == sc.id else 'Show only this super category' }}" style="display:flex; align-items:center; gap:0.6rem; color:inherit; text-decoration:none;">
-        <div style="width:38px; height:38px; border-radius:var(--radius-sm); overflow:hidden; background:var(--md-sys-color-surface); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+        <div style="width:46px; height:46px; border-radius:50%; overflow:hidden; background:var(--md-sys-color-surface); border:2px solid var(--md-sys-color-tertiary); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
           {% if sc.thumbnail_url or sc.image_url %}
           <img src="{{ sc.thumbnail_url or sc.image_url }}" alt="{{ sc.name }}" style="width:100%; height:100%; object-fit:cover;">
           {% else %}<span style="font-size:1.1rem;">⭐</span>{% endif %}
         </div>
         <div style="min-width:0;">
-          <strong style="font-size:0.9rem;">{{ sc.name }}</strong>
+          <strong style="font-size:1rem;">{{ sc.name }}</strong>
           {% if sc.is_enabled == False %}<span class="badge badge-secondary" style="font-size:0.65rem;">Disabled</span>{% endif %}
           <span class="asset-card-premium-pill" data-premium-tag="{{ sc.id }}"{% if not sc.is_premium %} hidden{% endif %}>Premium</span>
           <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">📁 {{ sc.categories_count }} Categories</div>
