@@ -618,6 +618,7 @@ async def manager_instance_picker_assets(
     instance_id: str,
     categoryId: str | None = None,
     subCategoryId: str | None = None,
+    superCategoryId: str | None = None,
     q: str | None = None,
     target_category_id: str | None = None,
     target_sub_category_id: str | None = None,
@@ -630,7 +631,7 @@ async def manager_instance_picker_assets(
         return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
 
     await verify_manager_instance_access(db, session["user_id"], instance_id)
-    res = await picker_assets(db, instance_id, categoryId, subCategoryId, q, target_sub_category_id, page, page_size)
+    res = await picker_assets(db, instance_id, categoryId, subCategoryId, q, target_sub_category_id, page, page_size, superCategoryId)
     return JSONResponse(status_code=200, content={"success": True, **res})
 
 

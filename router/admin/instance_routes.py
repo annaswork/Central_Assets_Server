@@ -312,6 +312,7 @@ async def admin_instance_picker_assets(
     id: str,
     categoryId: str | None = None,
     subCategoryId: str | None = None,
+    superCategoryId: str | None = None,
     q: str | None = None,
     target_category_id: str | None = None,
     target_sub_category_id: str | None = None,
@@ -323,7 +324,7 @@ async def admin_instance_picker_assets(
     if not session:
         return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
 
-    res = await picker_assets(db, id, categoryId, subCategoryId, q, target_sub_category_id, page, page_size)
+    res = await picker_assets(db, id, categoryId, subCategoryId, q, target_sub_category_id, page, page_size, superCategoryId)
     return JSONResponse(status_code=200, content={"success": True, **res})
 
 

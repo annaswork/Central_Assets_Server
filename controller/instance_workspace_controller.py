@@ -428,6 +428,7 @@ async def picker_assets(
     target_sub_category_id: str | None = None,
     page: int = 1,
     page_size: int = 100,
+    super_category_id: str | None = None,
 ) -> dict[str, Any]:
     inst_oid = to_object_id(instance_id)
     active_ids = set(
@@ -443,6 +444,11 @@ async def picker_assets(
             )
         )
 
+    category_ids = None
+    if _clean(super_category_id) and not _clean(category_id):
+        cats = await list_categories(db, super_category_id=super_category_id, page=1, page_size=500)
+        category_ids = [c["id"] for c in cats.get("items", [])]
+
     result = await list_assets(
         db,
         category_id=_clean(category_id),
@@ -450,6 +456,7 @@ async def picker_assets(
         search=_clean(q),
         page=page,
         page_size=page_size,
+        category_ids=category_ids,
     )
     items = result.get("items", [])
     for a in items:

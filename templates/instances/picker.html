@@ -65,6 +65,12 @@
 <div id="tabContentCategories">
   <div class="card" style="padding:1rem; margin-bottom:1.25rem;">
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
+      <select class="select super-filter" style="max-width:220px;" onchange="onSuperFilterChange(this.value)">
+        <option value="">All Super Categories</option>
+        {% for sc in super_categories %}
+        <option value="{{ sc.id }}">{{ sc.name }}</option>
+        {% endfor %}
+      </select>
       <div style="position:relative; flex:1; max-width:320px;">
         <input type="text" id="catSearchInput" class="input" placeholder="Search categories..."
           oninput="filterCategoriesList(this.value)">
@@ -143,6 +149,12 @@
 <div id="tabContentSubcategories" style="display:none;">
   <div class="card" style="padding:1rem; margin-bottom:1.25rem;">
     <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+      <select class="select super-filter" style="max-width:220px;" onchange="onSuperFilterChange(this.value)">
+        <option value="">All Super Categories</option>
+        {% for sc in super_categories %}
+        <option value="{{ sc.id }}">{{ sc.name }}</option>
+        {% endfor %}
+      </select>
       <select id="subTabCatFilter" class="select" style="max-width:240px;" onchange="filterSubcategoriesList()">
         <option value="">All Parent Categories</option>
         {% for cat in categories %}
@@ -234,6 +246,12 @@
   <!-- Assets Filter Bar -->
   <div class="card" style="padding:1rem; margin-bottom:1.25rem;">
     <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+      <select class="select super-filter" style="max-width:220px;" onchange="onSuperFilterChange(this.value)">
+        <option value="">All Super Categories</option>
+        {% for sc in super_categories %}
+        <option value="{{ sc.id }}">{{ sc.name }}</option>
+        {% endfor %}
+      </select>
       <select id="pickerCategorySelect" class="select" style="max-width:220px;"
         onchange="onAssetCategoryChange(this.value)">
         <option value="">All Categories</option>
@@ -299,6 +317,25 @@
   let loadedAssets = {{ initial_assets | tojson | safe }};
   let searchDebounceTimer = null;
 
+  // Super category filter: narrows categories, subcategories (via parent category) and assets
+  const catSuperMap = { {% for c in categories %}"{{ c.id }}": "{{ c.super_category_id or '' }}", {% endfor %} };
+  function superOk(catId) {
+    const s = document.querySelector('.super-filter').value;
+    return !s || catSuperMap[catId] === s;
+  }
+  function onSuperFilterChange(value) {
+    document.querySelectorAll('.super-filter').forEach(sel => { sel.value = value; });
+    ['subTabCatFilter', 'pickerCategorySelect'].forEach(id => {
+      const sel = document.getElementById(id);
+      [...sel.options].forEach(o => { o.hidden = o.disabled = !!o.value && !superOk(o.value); });
+      if (sel.selectedOptions[0] && sel.selectedOptions[0].disabled) sel.value = '';
+    });
+    filterCategoriesList(document.getElementById('catSearchInput').value);
+    filterSubcategoriesList();
+    // A selected category already scopes the assets; otherwise reload with the super filter
+    if (!document.getElementById('pickerCategorySelect').value) onAssetCategoryChange('');
+  }
+
   function switchTab(tab) {
     currentTab = tab;
     document.getElementById('tabContentSuper').style.display = tab === 'supercategories' ? 'block' : 'none';
@@ -342,7 +379,7 @@
     const q = (query || '').toLowerCase().trim();
     document.querySelectorAll('.cat-card-item').forEach(card => {
       const name = card.dataset.catName || '';
-      card.style.display = (!q || name.includes(q)) ? 'flex' : 'none';
+      card.style.display = (!q || name.includes(q)) && superOk(card.dataset.catId) ? 'flex' : 'none';
     });
   }
 
@@ -373,7 +410,7 @@
     const q = (document.getElementById('subSearchInput').value || '').toLowerCase().trim();
 
     document.querySelectorAll('.sub-card-item').forEach(card => {
-      const matchCat = !catId || card.dataset.catId === catId;
+      const matchCat = (!catId || card.dataset.catId === catId) && superOk(card.dataset.catId);
       const matchName = !q || (card.dataset.subName || '').includes(q);
       card.style.display = (matchCat && matchName) ? 'flex' : 'none';
     });
@@ -439,6 +476,8 @@
       const params = new URLSearchParams();
       if (catId) params.set('categoryId', catId);
       if (subId) params.set('subCategoryId', subId);
+      const superId = document.querySelector('.super-filter').value;
+      if (superId) params.set('superCategoryId', superId);
       if (query) params.set('q', query);
       if (targetCategoryId) params.set('target_category_id', targetCategoryId);
       if (targetSubCategoryId) params.set('target_sub_category_id', targetSubCategoryId);
