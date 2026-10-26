@@ -191,54 +191,12 @@ async def get_resolved_subcategories(
                 ]
             }
         },
-        # Lookup parent category from INSTANCE_CATEGORIES to ensure assigned instance category ID is returned
-        {
-            "$lookup": {
-                "from": INSTANCE_CATEGORIES,
-                "let": {
-                    "sub_cat_id": "$category_id",
-                    "central_cat_id": "$central.category_id",
-                    "inst_id": "$app_instance_id",
-                },
-                "pipeline": [
-                    {
-                        "$match": {
-                            "$expr": {
-                                "$and": [
-                                    {"$eq": ["$app_instance_id", "$$inst_id"]},
-                                    {"$eq": ["$deleted_at", None]},
-                                    {
-                                        "$or": [
-                                            {"$eq": ["$_id", "$$sub_cat_id"]},
-                                            {"$eq": ["$source_id", "$$sub_cat_id"]},
-                                            {
-                                                "$and": [
-                                                    {"$ne": ["$$central_cat_id", None]},
-                                                    {"$eq": ["$source_id", "$$central_cat_id"]},
-                                                ]
-                                            },
-                                        ]
-                                    },
-                                ]
-                            }
-                        }
-                    },
-                    *_one_parent("sub_cat_id"),
-                ],
-                "as": "parent_inst_cat",
-            }
-        },
-        {"$unwind": {"path": "$parent_inst_cat", "preserveNullAndEmptyArrays": True}},
         {
             "$project": {
                 "id": {"$toString": "$_id"},
-                "categoryId": {
-                    "$cond": [
-                        {"$ifNull": ["$parent_inst_cat._id", False]},
-                        {"$toString": "$parent_inst_cat._id"},
-                        {"$toString": "$category_id"},
-                    ]
-                },
+                "categoryId": {"$toString": "$category_id"},
+                "_cat": "$category_id",
+                "_central_cat": "$central.category_id",
                 "is_enabled": "$is_enabled",
                 # Instance value once set, else the central folder's flag
                 "is_premium": {"$ifNull": ["$is_premium", {"$ifNull": ["$central.is_premium", False]}]},
@@ -261,6 +219,8 @@ async def get_resolved_subcategories(
                 "_id": 0,
                 "id": 1,
                 "categoryId": 1,
+                "_cat": 1,
+                "_central_cat": 1,
                 "is_enabled": 1,
                 "is_premium": 1,
                 "sequence": 1,
@@ -273,8 +233,16 @@ async def get_resolved_subcategories(
         {"$sort": {"sequence": 1, "name": 1}},
     ]
 
-    cursor = db[INSTANCE_SUBCATEGORIES].aggregate(pipeline)
-    return await cursor.to_list(length=None)
+    docs = await db[INSTANCE_SUBCATEGORIES].aggregate(pipeline).to_list(length=None)
+    # Parent instance category in Python: a per-row $lookup here was unindexable (folders x categories)
+    cats = _folder_index(
+        await db[INSTANCE_CATEGORIES].find({"app_instance_id": inst_oid, "deleted_at": None}, {"source_id": 1}).to_list(length=None)
+    )
+    for d in docs:
+        cat = _pick_parent(cats, d.pop("_cat", None), d.pop("_central_cat", None))
+        if cat:
+            d["categoryId"] = str(cat["_id"])
+    return docs
 
 
 def _pick_parent(
@@ -408,6 +376,19 @@ async def _asset_match_filter(
         else:
             match_filter["$or"] = tag_condition["$or"]
     return match_filter
+
+
+async def dead_asset_row_ids(db: AsyncIOMotorDatabase, inst_oid: Any) -> list[Any]:
+    """Live instance asset rows whose central asset is soft-deleted (unresolvable).
+
+    Looked up from the deleted side, so the cost follows deletions instead of the app's size.
+    """
+    dead = await db[ASSETS].distinct("_id", {"deleted_at": {"$ne": None}})
+    if not dead:
+        return []
+    return await db[INSTANCE_ASSETS].distinct(
+        "_id", {"app_instance_id": inst_oid, "deleted_at": None, "source_id": {"$in": dead}}
+    )
 
 
 async def get_resolved_assets(

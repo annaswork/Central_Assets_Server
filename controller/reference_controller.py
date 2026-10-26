@@ -10,6 +10,7 @@ from typing import Any
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo.errors import DuplicateKeyError
 
+from controller.catalog_controller import dead_asset_row_ids
 from database.collections import (
     ASSETS,
     CATEGORIES,
@@ -684,31 +685,13 @@ async def get_unresolved_references(
         .to_list(1000)
     )
 
-    # Assets: only inspect references with a central source_id
+    # Assets: rows whose central asset is soft-deleted. Hard deletes remove instance rows too
+    # (base_controller), so this skips the per-row $lookup that grew with the app's size.
     unresolved_assets = (
         await db[INSTANCE_ASSETS]
         .aggregate(
             [
-                {
-                    "$match": {
-                        "app_instance_id": inst_oid,
-                        "source_id": {"$ne": None},
-                        "deleted_at": None,
-                    }
-                },
-                {
-                    "$lookup": {
-                        "from": ASSETS,
-                        "localField": "source_id",
-                        "foreignField": "_id",
-                        "as": "central",
-                    }
-                },
-                {
-                    "$match": {
-                        "$or": [{"central": {"$size": 0}}, {"central.deleted_at": {"$ne": None}}]
-                    }
-                },
+                {"$match": {"_id": {"$in": await dead_asset_row_ids(db, inst_oid)}}},
                 {
                     "$project": {
                         "id": {"$toString": "$_id"},

@@ -254,6 +254,11 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
                 [("app_instance_id", ASCENDING), ("source_id", ASCENDING)],
                 name="idx_instance_asset_inst_source",
             ),
+            # Content page: live assets in display order, paged straight off the index
+            IndexModel(
+                [("app_instance_id", ASCENDING), ("deleted_at", ASCENDING), ("sequence", ASCENDING), ("_id", ASCENDING)],
+                name="idx_instance_asset_live_sequence",
+            ),
         ]
     )
 

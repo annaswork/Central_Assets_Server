@@ -9,9 +9,12 @@ from typing import Any
 
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.errors import OperationFailure
 
 from controller.asset_controller import asset_has_type, list_assets
 from controller.catalog_controller import (
+    _asset_match_filter,
+    dead_asset_row_ids,
     get_asset_index,
     get_resolved_assets,
     get_resolved_categories,
@@ -53,10 +56,15 @@ async def _group_counts(db: AsyncIOMotorDatabase, coll: str, match: dict[str, An
     return counts
 
 
+def _raw_count(raw: dict[str, int], fid: str, src: str) -> int:
+    """Stored count under either id form (instance _id or central source_id)."""
+    return raw.get(fid, 0) + (raw.get(src, 0) if src and src != fid else 0)
+
+
 def _live_count(counts: dict[str, int], raw: dict[str, int], fid: str, src: str) -> int:
     """Resolved count by id/sourceId, else the raw stored count under either id form."""
     n = counts.get(fid, 0) or (counts.get(src, 0) if src else 0)
-    return n or raw.get(fid, 0) + (raw.get(src, 0) if src and src != fid else 0)
+    return n or _raw_count(raw, fid, src)
 
 
 def _name_map(docs: list[dict[str, Any]]) -> dict[str, Any]:
@@ -96,26 +104,10 @@ async def build_instance_content(
 
     clean_type = (asset_type or "").strip().lower()
     # Type and text search read resolved fields (more_fields, names, tags), so those views resolve every asset.
-    # Otherwise a light pass (ids + resolved folders, display order) gives badge counts and the page slice,
-    # and only the page actually shown is fully resolved.
+    # Default view (sequence order) pages straight off an index; other sorts use a light pass over ids.
+    # Either way only the page actually shown is fully resolved.
     needs_payload = bool(clean_type or search_query)
-    list_assets_fn = get_resolved_assets if needs_payload else get_asset_index
-    all_index = await list_assets_fn(db, app_instance_id=instance_id, sort=s_order)
-    index = (
-        await list_assets_fn(
-            db, app_instance_id=instance_id, category_id=category_id, sub_category_id=sub_category_id, sort=s_order
-        )
-        if category_id or sub_category_id
-        else all_index
-    )
-
-    sub_asset_counts: dict[str, int] = defaultdict(int)
-    cat_asset_counts: dict[str, int] = defaultdict(int)
-    for a in all_index:
-        if a.get("subCategoryId"):
-            sub_asset_counts[str(a["subCategoryId"])] += 1
-        if a.get("categoryId"):
-            cat_asset_counts[str(a["categoryId"])] += 1
+    indexed_page = not needs_payload and s_order == "sequence"
 
     cat_sub_counts: dict[str, int] = defaultdict(int)
     for s in all_subcategories:
@@ -123,20 +115,29 @@ async def build_instance_content(
             cat_sub_counts[str(s["categoryId"])] += 1
 
     live = {"app_instance_id": inst_oid, "deleted_at": None}
+    # Asset badges are counted in MongoDB; rows store instance folder ids, so stored counts are the live ones.
+    # ponytail: still one $group pass over the app's assets; keep per-folder counters if apps reach millions.
+    dead_ids = await dead_asset_row_ids(db, inst_oid)
+    live_assets = {**live, "_id": {"$nin": dead_ids}} if dead_ids else live
     raw_cat_subs = await _group_counts(db, INSTANCE_SUBCATEGORIES, live, "category_id")
-    raw_cat_assets = await _group_counts(db, INSTANCE_ASSETS, live, "category_id")
-    raw_sub_assets = await _group_counts(db, INSTANCE_ASSETS, live, "sub_category_id")
+    raw_cat_assets: dict[str, int] = defaultdict(int)
+    raw_sub_assets: dict[str, int] = defaultdict(int)
+    group = {"$group": {"_id": {"c": "$category_id", "s": "$sub_category_id"}, "n": {"$sum": 1}}}
+    async for row in db[INSTANCE_ASSETS].aggregate([{"$match": live_assets}, group]):
+        for counts, key in ((raw_cat_assets, row["_id"].get("c")), (raw_sub_assets, row["_id"].get("s"))):
+            if key is not None:
+                counts[str(key)] += row["n"]
 
     for cat in categories:
         cid = str(cat.get("id") or "")
         c_src = str(cat.get("sourceId") or cat.get("source_id") or "")
         cat["subcategories_count"] = _live_count(cat_sub_counts, raw_cat_subs, cid, c_src)
-        cat["assets_count"] = _live_count(cat_asset_counts, raw_cat_assets, cid, c_src)
+        cat["assets_count"] = _raw_count(raw_cat_assets, cid, c_src)
 
     for sub in all_subcategories:
         sid = str(sub.get("id") or "")
         s_src = str(sub.get("sourceId") or sub.get("source_id") or "")
-        sub["assets_count"] = _live_count(sub_asset_counts, raw_sub_assets, sid, s_src)
+        sub["assets_count"] = _raw_count(raw_sub_assets, sid, s_src)
 
     # Category alias map: both cat["id"] and cat["sourceId"] resolve to cat["id"]
     cat_alias_map: dict[str, str] = {}
@@ -185,18 +186,48 @@ async def build_instance_content(
         if not selected_subcat_val:
             selected_subcat_val = str(sub_category_id)
 
-    assets = index
+    super_cat_ids = {
+        str(v) for c in categories if super_category_id and c.get("superCategoryId") == super_category_id
+        for v in (c.get("id"), c.get("sourceId")) if v
+    }
+    page_size = page_size if page_size in ASSET_PAGE_SIZES else ASSET_PAGE_SIZES[0]
+
+    if indexed_page:
+        match = await _asset_match_filter(db, inst_oid, category_id, sub_category_id)
+        if dead_ids:
+            match["_id"] = {"$nin": dead_ids}
+        if super_category_id:
+            # Folder ids may be stored as ObjectId or str
+            keys = [k for v in super_cat_ids for k in (v, to_object_id(v))]
+            match = {"$and": [match, {"category_id": {"$in": keys}}]}
+        total_assets = await db[INSTANCE_ASSETS].count_documents(match)
+        page = max(1, min(page, (total_assets + page_size - 1) // page_size or 1))
+        asset_offset = (page - 1) * page_size
+        def page_rows(hint: str | None = None) -> Any:
+            cursor = db[INSTANCE_ASSETS].find(match, {"_id": 1}).sort([("sequence", 1), ("_id", 1)])
+            return (cursor.hint(hint) if hint else cursor).skip(asset_offset).limit(page_size).to_list(length=None)
+
+        if category_id or sub_category_id or super_category_id:
+            rows = await page_rows()
+        else:
+            try:
+                # The planner otherwise often picks an in-memory sort here (10x slower on deep pages)
+                rows = await page_rows("idx_instance_asset_live_sequence")
+            except OperationFailure:  # index missing (create_indexes failed at startup): slower, still right
+                rows = await page_rows()
+        assets = [{"id": str(r["_id"])} for r in rows]
+    else:
+        list_assets_fn = get_resolved_assets if needs_payload else get_asset_index
+        assets = await list_assets_fn(
+            db, app_instance_id=instance_id, category_id=category_id, sub_category_id=sub_category_id, sort=s_order
+        )
     if clean_type:
         assets = [
             a for a in assets
             if asset_has_type(a.get("more_fields") or a.get("moreFields"), clean_type, a.get("thumbnail_url"))
         ]
 
-    if super_category_id:
-        super_cat_ids = {
-            str(v) for c in categories if c.get("superCategoryId") == super_category_id
-            for v in (c.get("id"), c.get("sourceId")) if v
-        }
+    if super_category_id and not indexed_page:
         assets = [a for a in assets if str(a.get("categoryId") or "") in super_cat_ids]
 
     # In-memory name fallback for instant display
@@ -225,11 +256,11 @@ async def build_instance_content(
             or any(sq in str(t).lower() for t in a.get("tags", []))
         ]
 
-    page_size = page_size if page_size in ASSET_PAGE_SIZES else ASSET_PAGE_SIZES[0]
-    total_assets = len(assets)
-    page = max(1, min(page, (total_assets + page_size - 1) // page_size or 1))
-    asset_offset = (page - 1) * page_size
-    assets = assets[asset_offset : asset_offset + page_size]
+    if not indexed_page:
+        total_assets = len(assets)
+        page = max(1, min(page, (total_assets + page_size - 1) // page_size or 1))
+        asset_offset = (page - 1) * page_size
+        assets = assets[asset_offset : asset_offset + page_size]
     if not needs_payload:
         page_ids = [a["id"] for a in assets]
         by_id = {

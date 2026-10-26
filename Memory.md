@@ -3,7 +3,7 @@
 > **Single Source of Truth** for the Creative Asset Library & App Instance Management Platform.  
 > **Purpose:** This document provides an exhaustive, authoritative reference for the architecture, data models, business logic, endpoints, asset processing pipelines, and chronological changelog of the entire codebase. Future modifications should reference this file directly without needing to re-analyze the entire codebase.
 >
-> **Last Updated:** October 19, 2026 (Instance content page: speed, layout, super-category blocks)
+> **Last Updated:** October 26, 2026 (Instance content page scales with large instances)
 
 ---
 
@@ -658,6 +658,14 @@ Requires `manager_session` cookie.
   - The template opens and closes the block using `loop.previtem` / `loop.nextitem`.
   - Drag-reorder is unchanged: it saves the DOM order of all category cards. Dragging a card out of its block does not change its super category; use the ⭐ selector for that.
 - **Client API:** no endpoint changes. The docs now explain grouping by `superCategoryId` / `categoryIds`.
+
+### Update 22: App Instance Content Page — Scales With Large Instances (Admin & Manager)
+- **Default view** (sequence order, no search/type filter): `build_instance_content` no longer loads every asset row into Python. It gets the total with `count_documents` and the page with `skip/limit` on the new `idx_instance_asset_live_sequence` index (`app_instance_id, deleted_at, sequence, _id`). The unfiltered query hints that index, because the planner otherwise picks an in-memory sort. If the index is missing, it falls back to the unhinted query.
+- **Folder badge counts:** one `$group` over (`category_id`, `sub_category_id`) in MongoDB. Asset rows store instance folder ids, so these stored counts are the live ones.
+- **Unresolved assets:** `dead_asset_row_ids` (catalog_controller) starts from soft-deleted central assets instead of running a `$lookup` per instance row. It is used for the content page exclusions and by `get_unresolved_references`. Rows pointing at hard-deleted central assets are not reported, since hard deletes already remove instance rows (`base_controller`).
+- **`get_resolved_subcategories`:** the parent category is resolved in Python (`_folder_index` / `_pick_parent`) instead of an unindexable `$expr` `$lookup` per subcategory. Output is unchanged.
+- **Measured (50k assets in one instance):** default page 2.2s → 0.17s, unresolved count 1.3s → 0.02s.
+- **Still scanning every asset:** text search, type filter, and the name/newest/oldest/views/downloads sorts (~2–6s at 50k).
 
 ---
 
