@@ -322,6 +322,19 @@
     border-bottom: none;
   }
 
+  .string-list-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(142, 68, 173, 0.25);
+    border-top-color: var(--md-sys-color-primary);
+    border-radius: 50%;
+    animation: stringListSpin 0.8s linear infinite;
+  }
+
+  @keyframes stringListSpin {
+    to { transform: rotate(360deg); }
+  }
+
   /* Inline JSON Editor Modal Styles (Aligned with color_palette.md tokens) */
   .json-modal-overlay {
     position: fixed;
@@ -2335,12 +2348,19 @@
 
     // Split by commas or newlines if any
     const parts = rawText.split(/[,\n\r]+/).map(s => s.trim()).filter(Boolean);
-    for (const part of parts) {
-      if (part) {
-        block.items.push(part);
-      }
+    if (!parts.length) return;
+
+    // Show a spinner and let it paint before the (synchronous) re-render of a large list blocks the UI.
+    const safeId = 'blk_' + Math.abs(hashCode(key));
+    const box = document.getElementById(`bubblesBox_${safeId}`);
+    if (box) {
+      box.insertAdjacentHTML('afterbegin',
+        `<div class="morefields-uploading-bar" style="width:100%; margin-top:0;"><span class="string-list-spinner"></span><span>Adding ${parts.length} item(s)...</span></div>`);
     }
-    renderPayloadBlocks();
+    requestAnimationFrame(() => setTimeout(() => {
+      for (const part of parts) block.items.push(part);
+      renderPayloadBlocks();
+    }, 0));
   }
 
   function removeStringListItem(key, idx) {
@@ -2921,7 +2941,27 @@
     const namesList = document.getElementById('namesList');
     if (namesList && namesList.value.trim()) {
       isSubmitting = true;
-      form.submit();
+      const count = namesList.value.split('\n').filter(s => s.trim()).length;
+      const submitBtn = document.getElementById('saveAssetSubmitBtn');
+      const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<span class="string-list-spinner" style="display:inline-block; vertical-align:middle; margin-right:0.4rem; border-top-color:currentColor;"></span>Creating ${count} asset(s)...`;
+      }
+      // Paint the spinner first, then POST in the background so the page stays live while the server works
+      await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+      try {
+        const res = await fetch(form.action, { method: 'POST', body: new FormData(form) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        window.location.href = res.url; // final URL after the server's redirect
+      } catch (err) {
+        alert('Failed to create text assets: ' + err.message);
+        isSubmitting = false;
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalBtnHtml;
+        }
+      }
       return;
     }
 
