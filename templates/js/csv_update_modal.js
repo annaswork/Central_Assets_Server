@@ -189,6 +189,9 @@ async function submitCsvUpdate() {
       }
 
       let detailsHtml = '';
+      if (data.truncated) {
+        detailsHtml += `<div style="margin-bottom:6px; color:var(--md-sys-color-on-surface-variant, #94a3b8);">Showing the first ${data.updated.length} updated and ${data.skipped.length} skipped rows.</div>`;
+      }
       if (data.updated && data.updated.length > 0) {
         detailsHtml += `<div style="color:var(--app-success, #4ade80); font-weight:600; margin-bottom:4px;">Updated:</div>`;
         data.updated.forEach(u => {

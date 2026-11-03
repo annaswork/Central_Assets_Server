@@ -1,15 +1,23 @@
 """Controller for updating database records from CSV data scoped to active filters."""
 
 from collections import defaultdict
+import csv
 from datetime import datetime, timezone
+import itertools
 import json
 import re
-from typing import Any
+from typing import Any, BinaryIO
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo import UpdateOne
 
 from database.collections import ASSETS, CATEGORIES, SUBCATEGORIES
-from utils.csv_utils import parse_csv_rows
+from utils.csv_utils import iter_csv_rows
+
+# Writes per bulk_write round-trip.
+BULK_BATCH_SIZE = 1000
+# Detail rows returned to the UI; counts always cover the whole file.
+MAX_REPORTED_ROWS = 500
 
 
 def _convert_value(col: str, val: str) -> Any:
@@ -97,7 +105,7 @@ def _convert_value(col: str, val: str) -> Any:
 async def apply_csv_column_updates(
     db: AsyncIOMotorDatabase,
     collection_name: str,
-    content: str | bytes,
+    content: str | bytes | BinaryIO,
     filter_query: dict[str, Any] | None = None,
     is_asset: bool = False,
 ) -> dict[str, Any]:
@@ -106,48 +114,41 @@ async def apply_csv_column_updates(
     Args:
         db: AsyncIOMotorDatabase instance
         collection_name: Name of target collection (categories, subcategories, assets)
-        content: Raw CSV string or bytes
+        content: Raw CSV string/bytes, or a binary file object (streamed)
         filter_query: Filter dictionary to constrain candidate records (active UI filter)
         is_asset: True if updating the assets collection (handles more_fields)
 
     Returns:
         Summary dict containing success flag, updated count, skipped count, and details.
     """
-    rows, errors = parse_csv_rows(content)
-    if errors:
+    def _fail(message: str, skipped: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         return {
             "success": False,
             "total_rows": 0,
             "updated_count": 0,
-            "skipped_count": len(errors),
+            "skipped_count": len(skipped or []),
             "updated": [],
-            "skipped": errors,
-            "message": f"CSV parse error: {errors[0].get('error', 'Invalid CSV format')}",
+            "skipped": skipped or [],
+            "message": message,
         }
 
-    if not rows:
-        return {
-            "success": False,
-            "total_rows": 0,
-            "updated_count": 0,
-            "skipped_count": 0,
-            "updated": [],
-            "skipped": [],
-            "message": "CSV file contains no data rows.",
-        }
+    rows = iter_csv_rows(content)
+    try:
+        first = next(rows, None)
+    except ValueError as e:
+        return _fail(f"CSV parse error: {e}", [{"line": 1, "error": str(e)}])
+    except csv.Error as e:
+        return _fail(f"CSV parse error: {e}", [{"line": 2, "error": str(e)}])
+
+    if first is None:
+        return _fail("CSV file contains no data rows.")
 
     # Verify 'name' column exists
-    first_row = rows[0]
-    if "name" not in first_row:
-        return {
-            "success": False,
-            "total_rows": len(rows),
-            "updated_count": 0,
-            "skipped_count": len(rows),
-            "updated": [],
-            "skipped": [{"reason": "Missing 'name' column"}],
-            "message": "CSV must include a 'name' column to match records.",
-        }
+    if "name" not in first[1]:
+        return _fail(
+            "CSV must include a 'name' column to match records.",
+            [{"reason": "Missing 'name' column"}],
+        )
 
     # Query only records in the active filtered dataset
     base_query: dict[str, Any] = {"deleted_at": None}
@@ -201,69 +202,100 @@ async def apply_csv_column_updates(
 
     now = datetime.now(timezone.utc)
 
-    for idx, row in enumerate(rows, start=1):
-        name_val = row.get("name", "").strip()
-        if not name_val:
-            skipped.append({
-                "line": idx + 1,
-                "name": "",
-                "reason": "Missing name value in row",
-            })
-            continue
+    updated_count = 0
+    skipped_count = 0
+    total_rows = 0
+    ops: list[UpdateOne] = []
+    collection = db[collection_name]
 
-        name_key = name_val.lower()
-        matching_docs = candidates_by_name.get(name_key)
-        if not matching_docs:
-            skipped.append({
-                "line": idx + 1,
-                "name": name_val,
-                "reason": "No match found in currently filtered data",
-            })
-            continue
+    def _skip(entry: dict[str, Any]) -> None:
+        nonlocal skipped_count
+        skipped_count += 1
+        if len(skipped) < MAX_REPORTED_ROWS:
+            skipped.append(entry)
 
-        # Prepare update dict
-        update_doc: dict[str, Any] = {}
-        for col_name, raw_val in row.items():
-            if col_name in ("name", "id", "_id"):
-                continue  # 'name' was used for matching; do not overwrite unless explicit
+    async def _flush() -> None:
+        if ops:
+            await collection.bulk_write(ops, ordered=False)
+            ops.clear()
 
-            canon_name = alias_map.get(col_name, col_name)
-            typed_val = _convert_value(canon_name, raw_val)
+    try:
+        for line, row in itertools.chain([first], rows):
+            total_rows += 1
+            name_val = row.get("name", "").strip()
+            if not name_val:
+                _skip({"line": line, "name": "", "reason": "Missing name value in row"})
+                continue
 
-            if is_asset and canon_name not in root_fields:
-                # Custom attribute -> place under more_fields.<column>
-                update_doc[f"more_fields.{canon_name}"] = typed_val
-            else:
-                update_doc[canon_name] = typed_val
+            matching_docs = candidates_by_name.get(name_val.lower())
+            if not matching_docs:
+                _skip({
+                    "line": line,
+                    "name": name_val,
+                    "reason": "No match found in currently filtered data",
+                })
+                continue
 
-        if not update_doc:
-            skipped.append({
-                "line": idx + 1,
-                "name": name_val,
-                "reason": "No valid updatable columns provided in row",
-            })
-            continue
+            # Prepare update dict
+            update_doc: dict[str, Any] = {}
+            for col_name, raw_val in row.items():
+                if col_name in ("name", "id", "_id"):
+                    continue  # 'name' was used for matching; do not overwrite unless explicit
 
-        update_doc["updated_at"] = now
+                canon_name = alias_map.get(col_name, col_name)
+                typed_val = _convert_value(canon_name, raw_val)
 
-        for target_doc in matching_docs:
-            await db[collection_name].update_one(
-                {"_id": target_doc["_id"]},
-                {"$set": update_doc},
-            )
-            updated.append({
-                "line": idx + 1,
-                "id": str(target_doc["_id"]),
-                "name": target_doc.get("name", name_val),
-                "fields": [k for k in update_doc.keys() if k != "updated_at"],
-            })
+                if is_asset and canon_name not in root_fields:
+                    # Custom attribute -> place under more_fields.<column>
+                    update_doc[f"more_fields.{canon_name}"] = typed_val
+                else:
+                    update_doc[canon_name] = typed_val
+
+            if not update_doc:
+                _skip({
+                    "line": line,
+                    "name": name_val,
+                    "reason": "No valid updatable columns provided in row",
+                })
+                continue
+
+            update_doc["updated_at"] = now
+
+            for target_doc in matching_docs:
+                ops.append(UpdateOne({"_id": target_doc["_id"]}, {"$set": update_doc}))
+                updated_count += 1
+                if len(updated) < MAX_REPORTED_ROWS:
+                    updated.append({
+                        "line": line,
+                        "id": str(target_doc["_id"]),
+                        "name": target_doc.get("name", name_val),
+                        "fields": [k for k in update_doc.keys() if k != "updated_at"],
+                    })
+            if len(ops) >= BULK_BATCH_SIZE:
+                await _flush()
+    except csv.Error as e:
+        await _flush()  # keep rows already processed; report where parsing stopped
+        return {
+            "success": False,
+            "total_rows": total_rows,
+            "updated_count": updated_count,
+            "skipped_count": skipped_count,
+            "updated": updated,
+            "skipped": skipped,
+            "message": (
+                f"CSV parse error after row {total_rows}: {e}. "
+                f"{updated_count} item(s) before that point were updated."
+            ),
+        }
+    await _flush()
 
     return {
         "success": True,
-        "total_rows": len(rows),
-        "updated_count": len(updated),
-        "skipped_count": len(skipped),
+        "total_rows": total_rows,
+        "updated_count": updated_count,
+        "skipped_count": skipped_count,
         "updated": updated,
         "skipped": skipped,
-        "message": f"Successfully updated {len(updated)} item(s). {len(skipped)} item(s) skipped.",
+        "truncated": updated_count > len(updated) or skipped_count > len(skipped),
+        "message": f"Successfully updated {updated_count} item(s). {skipped_count} item(s) skipped.",
     }

@@ -333,11 +333,10 @@ async def admin_upload_csv_subcategories(
     if search_term and search_term.strip():
         filter_query["name"] = {"$regex": search_term.strip(), "$options": "i"}
 
-    content = await csv_file.read()
     result = await apply_csv_column_updates(
         db=db,
         collection_name=SUBCATEGORIES,
-        content=content,
+        content=csv_file.file,  # streamed, not read into memory
         filter_query=filter_query,
         is_asset=False,
     )

@@ -257,11 +257,10 @@ async def admin_upload_csv_assets(
     if q_search and q_search.strip():
         filter_query["name"] = {"$regex": q_search.strip(), "$options": "i"}
 
-    content = await csv_file.read()
     result = await apply_csv_column_updates(
         db=db,
         collection_name=ASSETS,
-        content=content,
+        content=csv_file.file,  # streamed, not read into memory
         filter_query=filter_query,
         is_asset=True,
     )
