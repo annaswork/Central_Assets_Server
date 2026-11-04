@@ -9,7 +9,7 @@ from typing import Any
 
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from pymongo.errors import OperationFailure
+from pymongo.errors import DuplicateKeyError, OperationFailure
 
 from controller.asset_controller import asset_has_type, list_assets
 from controller.catalog_controller import (
@@ -728,10 +728,13 @@ async def set_category_super_category(
     except ValueError as err:
         raise ValidationError("Invalid category id") from err
     sup_id = await _instance_super_id(db, inst_oid, super_category_id) if super_category_id else None
-    res = await instance_collection(db, INSTANCE_CATEGORIES).update_one(
-        {"app_instance_id": inst_oid, "$or": [{"_id": c_oid}, {"source_id": c_oid}], "deleted_at": None},
-        {"$set": {"super_category_id": sup_id, "updated_at": utc_now()}},
-    )
+    try:
+        res = await instance_collection(db, INSTANCE_CATEGORIES).update_one(
+            {"app_instance_id": inst_oid, "$or": [{"_id": c_oid}, {"source_id": c_oid}], "deleted_at": None},
+            {"$set": {"super_category_id": sup_id, "updated_at": utc_now()}},
+        )
+    except DuplicateKeyError as err:
+        raise ValidationError("This category is already in that super category") from err
     if not res.matched_count:
         raise ValidationError("Category not found in this app instance")
     return {"success": True, "category_id": category_id, "super_category_id": str(sup_id) if sup_id else None}

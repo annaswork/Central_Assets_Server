@@ -136,21 +136,26 @@ async def _ensure_category(
     super_link: Any = None,
     count_present: bool = True,
 ) -> Any:
-    """Find-or-create the instance category for a central category (one per instance).
+    """Find-or-create the instance category for a central category.
 
-    A newly inserted category joins its central super category (auto-added); `super_link`
-    (an instance super category _id) explicitly places it there instead, moving it if needed.
+    A newly inserted category joins its central super category (auto-added). `super_link`
+    (an instance super category _id) explicitly places it there: an ungrouped copy moves in,
+    otherwise a separate copy is made, so the category can sit in several super categories.
     """
-    cat_id, status = await _ensure_link(
-        db, INSTANCE_CATEGORIES, {"app_instance_id": inst_oid, "source_id": c_oid}, now
-    )
+    key = {"app_instance_id": inst_oid, "source_id": c_oid}
+    if super_link:
+        coll = instance_collection(db, INSTANCE_CATEGORIES)
+        if not await coll.find_one({**key, "super_category_id": super_link}, {"_id": 1}):
+            await coll.update_one({**key, "super_category_id": None}, {"$set": {"super_category_id": super_link}})
+        key["super_category_id"] = super_link
+    cat_id, status = await _ensure_link(db, INSTANCE_CATEGORIES, key, now)
     _tally(counts, "added_categories", status, count_present)
     if not super_link and status == "inserted":
         super_link = await _auto_super_category(db, inst_oid, c_oid, counts, now)
-    if super_link:
-        await instance_collection(db, INSTANCE_CATEGORIES).update_one(
-            {"_id": cat_id}, {"$set": {"super_category_id": super_link}}
-        )
+        if super_link:
+            await instance_collection(db, INSTANCE_CATEGORIES).update_one(
+                {"_id": cat_id}, {"$set": {"super_category_id": super_link}}
+            )
     return cat_id
 
 
@@ -577,11 +582,14 @@ async def remove_reference(
 
         source_cat_oid = cat_ref.get("source_id")
         cat_ids = [cat_ref["_id"]]
-        if source_cat_oid:
+        # Rows keyed by the central id are shared by every copy of this category: keep them while another copy remains
+        await db[INSTANCE_CATEGORIES].delete_one({"_id": cat_ref["_id"]})
+        if source_cat_oid and not await db[INSTANCE_CATEGORIES].find_one(
+            {"app_instance_id": inst_oid, "source_id": source_cat_oid}, {"_id": 1}
+        ):
             cat_ids.append(source_cat_oid)
 
-        # Remove category, child subcategories, and child assets in this app permanently
-        await db[INSTANCE_CATEGORIES].delete_one({"_id": cat_ref["_id"]})
+        # Remove child subcategories and child assets in this app permanently
         sub_res = await db[INSTANCE_SUBCATEGORIES].delete_many(
             {"app_instance_id": inst_oid, "category_id": {"$in": cat_ids}}
         )

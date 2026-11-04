@@ -144,7 +144,8 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
     await db[INSTANCE_CATEGORIES].create_indexes(
         [
             IndexModel(
-                [("app_instance_id", ASCENDING), ("source_id", ASCENDING)],
+                # One copy per super category: the same central category may sit in several
+                [("app_instance_id", ASCENDING), ("source_id", ASCENDING), ("super_category_id", ASCENDING)],
                 unique=True,
                 partialFilterExpression={"source_id": {"$type": "objectId"}},
                 name="uniq_instance_category_source",
