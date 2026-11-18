@@ -189,6 +189,11 @@
     <div id="matchedThumbStatus" style="margin-top:0.4rem; font-size:0.82rem; color:var(--app-success); font-weight:500;"></div>
   </div>
 
+  <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.75rem; font-size:0.88rem; cursor:pointer;" title="Files that share the same name (e.g. cat.webp, cat.json, cat.mp3) are added to one asset">
+    <input type="checkbox" id="bulkGroupSameName" checked onchange="renderStaged()" style="accent-color:var(--md-sys-color-primary);">
+    🔗 Group files with the same name into one asset <span style="color:var(--md-sys-color-on-surface-variant); font-size:0.78rem;">(e.g. cat.webp + cat.json + cat.mp3)</span>
+  </label>
+
   <div class="dropzone" id="bulkDropzone" onclick="onBulkDropzoneClick(event)">
     <div style="font-size:3rem; margin-bottom:0.75rem;">📁</div>
     <div style="font-size:1.1rem; font-weight:600; margin-bottom:0.25rem;">Drag & drop creative files here</div>
@@ -529,6 +534,16 @@ function getNextCandidateName(filename, takenSet) {
   }
 }
 
+const rawStem = n => n.replace(/\.[^/.]+$/, '');
+const stemOf = n => n.replace(/\.[^/.]+$/, '').toLowerCase();
+const isGroupingOn = () => document.getElementById('bulkGroupSameName')?.checked !== false;
+// With grouping on, same-name files are meant to share one asset: only one filename per stem is conflict-checked
+function uniqueStemNames(names, skipStems = new Set()) {
+  const seen = new Set(skipStems), out = [];
+  for (const n of names) { const st = stemOf(n); if (!seen.has(st)) { seen.add(st); out.push(n); } }
+  return out;
+}
+
 async function handleFileSelect(files, forceCrop = false) {
   if (!files || files.length === 0) return;
   const activeTypes = getSelectedDataTypes();
@@ -567,6 +582,8 @@ async function handleFileSelect(files, forceCrop = false) {
   const subId = document.getElementById('bulkSubcategory').value;
 
   // Pre-check filenames with server if category & subcategory are selected
+  const groupOn = isGroupingOn();
+  const stemRename = new Map(); // old stem -> new stem, so one rename covers the whole same-name group
   let matchMap = {};
   if (catId && subId) {
     try {
@@ -574,10 +591,10 @@ async function handleFileSelect(files, forceCrop = false) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          filenames: fileArray.map(item => item.file.name),
+          filenames: groupOn ? uniqueStemNames(fileArray.map(item => item.file.name), new Set(stagedFiles.map(it => stemOf(it.file.name)))) : fileArray.map(item => item.file.name),
           categoryId: catId,
           subCategoryId: subId,
-          existingStaged: stagedFiles.map(it => it.file.name)
+          existingStaged: groupOn ? [] : stagedFiles.map(it => it.file.name)
         })
       });
       if (res.ok) {
@@ -620,6 +637,11 @@ async function handleFileSelect(files, forceCrop = false) {
       }
     }
 
+    const oldStem = stemOf(file.name);
+    if (groupOn && stemRename.has(oldStem)) {
+      const dot = file.name.lastIndexOf('.');
+      file = new File([file], stemRename.get(oldStem) + (dot !== -1 ? file.name.slice(dot) : ''), { type: file.type, lastModified: file.lastModified || Date.now() });
+    }
     const match = matchMap[file.name];
     let isClash = match && match.has_conflict;
     let conflictType = match ? match.conflict_type : null;
@@ -641,6 +663,7 @@ async function handleFileSelect(files, forceCrop = false) {
       });
       if (renamed && renamed !== file.name) {
         file = new File([file], renamed, { type: file.type, lastModified: file.lastModified || Date.now() });
+        if (groupOn) stemRename.set(oldStem, rawStem(renamed));
         isClash = false;
       }
     }
@@ -683,7 +706,7 @@ async function checkStagedConflicts() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        filenames: stagedFiles.map(it => it.file.name),
+        filenames: isGroupingOn() ? uniqueStemNames(stagedFiles.map(it => it.file.name)) : stagedFiles.map(it => it.file.name),
         categoryId: catId,
         subCategoryId: subId
       })
@@ -714,7 +737,15 @@ async function checkStagedConflicts() {
             title: 'Rename File — Filename Conflict Detected'
           });
           if (renamed && renamed !== stagedFiles[i].file.name) {
+            const oldStem = stemOf(stagedFiles[i].file.name);
             applyRenameToStaged(i, renamed);
+            if (isGroupingOn()) {
+              stagedFiles.forEach((it, k) => {
+                if (k === i || stemOf(it.file.name) !== oldStem) return;
+                const dot = it.file.name.lastIndexOf('.');
+                applyRenameToStaged(k, rawStem(renamed) + (dot !== -1 ? it.file.name.slice(dot) : ''));
+              });
+            }
           }
         }
       }
@@ -813,7 +844,12 @@ function renderStaged() {
   const activeTypes = getSelectedDataTypes();
   const fragment = document.createDocumentFragment();
   
+  const groupOn = document.getElementById('bulkGroupSameName')?.checked !== false;
+  const stemCount = {};
+  stagedFiles.forEach(it => { const s = it.file.name.replace(/\.[^/.]+$/, '').toLowerCase(); stemCount[s] = (stemCount[s] || 0) + 1; });
+
   stagedFiles.forEach((item, idx) => {
+    const grouped = groupOn && stemCount[item.file.name.replace(/\.[^/.]+$/, '').toLowerCase()] > 1;
     const tr = document.createElement('tr');
     tr.id = `stagedRow_${idx}`;
     const isVisual = item.detectedType === 'image' || item.detectedType === 'frames';
@@ -824,6 +860,7 @@ function renderStaged() {
       </td>
       <td class="staged-filename-cell" style="color:var(--md-sys-color-on-surface-variant); font-size:0.85rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
         <span style="font-family:monospace; font-weight:500;" title="${escapeHtml(item.file.name)}">${escapeHtml(item.file.name)}</span>
+        ${grouped ? '<span class="badge badge-primary" style="margin-left:0.5rem; font-size:0.7rem;" title="Merged into one asset with same-name files">🔗 grouped</span>' : ''}
         ${item.hasConflict ? `<span class="badge ${item.conflictType === 'exact' ? 'badge-error' : 'badge-warning'}" style="margin-left:0.5rem; font-size:0.7rem;">${item.conflictType === 'exact' ? 'Collision' : 'Similar Name'}</span>` : ''}
         ${item.customThumbFile ? `<span class="badge badge-success" style="margin-left:0.5rem; font-size:0.7rem;" title="Custom thumbnail matched by filename stem">📸 ${escapeHtml(item.customThumbFile.name)}</span>` : ''}
       </td>
@@ -920,93 +957,17 @@ dropzone.addEventListener('drop', (e) => {
   }
 });
 
-async function startBulkUpload() {
-  const catId = document.getElementById('bulkCategory').value;
-  const subId = document.getElementById('bulkSubcategory').value;
-  const btn = document.getElementById('startUploadBtn');
-  
-  if (!catId || !subId) {
-    alert('Please select both a target category and subcategory.');
-    return;
+function mergeBlocks(target, part) {
+  for (const [key, val] of Object.entries(part)) {
+    if (Array.isArray(val)) { target[key] = (target[key] || []).concat(val); continue; }
+    let k = key, n = 2;
+    while (k in target) k = `${key}_${n++}`;
+    target[k] = val;
   }
-  if (stagedFiles.length === 0) {
-    alert('Please select at least one file to ingest.');
-    return;
-  }
-  
-  btn.disabled = true;
-  btn.textContent = 'Ingesting assets...';
-  
-  for (let i = 0; i < stagedFiles.length; i++) {
-    const item = stagedFiles[i];
-    updateStagedRowStatus(i, 'Uploading...');
-    
-    try {
-      // Step 1: Upload media file to hierarchical storage
-      let uploadData = null;
-      if (window.BackgroundUploader) {
-        try {
-          uploadData = await window.BackgroundUploader.upload(item.file, {
-            folder: 'assets',
-            categoryId: catId,
-            subCategoryId: subId,
-            assetName: item.name,
-            onProgress: (p) => {
-              updateStagedRowStatus(i, `Uploading (${p.percent}%)...`);
-            }
-          });
-        } catch (upErr) {
-          const upErrMsg = upErr.message || 'Upload failed';
-          if ((upErrMsg.includes('clash') || upErrMsg.includes('already exists') || upErrMsg.includes('rename') || upErrMsg.includes('409')) && typeof showRenameModal === 'function') {
-            const renamed = await showRenameModal({
-              filename: item.file.name,
-              existingMatch: item.file.name,
-              conflictType: 'exact',
-              title: 'Filename Collision — Rename File'
-            });
-            if (renamed && renamed !== item.file.name) {
-              applyRenameToStaged(i, renamed);
-              i--; // Retry this item with the renamed file
-              continue;
-            }
-          }
-          throw upErr;
-        }
-      } else {
-        const formData = new FormData();
-        formData.append('file', item.file);
-        formData.append('folder', 'assets');
-        formData.append('categoryId', catId);
-        formData.append('subCategoryId', subId);
-        if (item.name) {
-          formData.append('assetName', item.name);
-        }
-        
-        const upRes = await fetch('/api/v1/media/upload', {
-          method: 'POST',
-          body: formData
-        });
-        const upJson = await upRes.json().catch(() => ({}));
-        
-        if (!upRes.ok) {
-          const upErrMsg = upJson.error?.message || upJson.message || 'Upload failed';
-          if ((upRes.status === 409 || upErrMsg.includes('clash') || upErrMsg.includes('already exists') || upErrMsg.includes('rename')) && typeof showRenameModal === 'function') {
-            const renamed = await showRenameModal({
-              filename: item.file.name,
-              existingMatch: item.file.name,
-              conflictType: 'exact',
-              title: 'Filename Collision — Rename File'
-            });
-            if (renamed && renamed !== item.file.name) {
-              applyRenameToStaged(i, renamed);
-              i--; // Retry this item with the renamed file
-              continue;
-            }
-          }
-          throw new Error(upErrMsg);
-        }
-        uploadData = upJson.data || upJson || {};
-      }
+}
+
+// Builds the typed more_fields block(s) for one uploaded file
+async function buildBlocks(item, uploadData) {
       const mediaUrl = uploadData.url || '';
       
       // Step 2: Create Central Asset with valid typed block based on detectedType
@@ -1126,15 +1087,133 @@ async function startBulkUpload() {
           [detectedType]: [blockMeta]
         };
       }
-      
+  return moreFieldsPayload;
+}
+
+
+async function startBulkUpload() {
+  const catId = document.getElementById('bulkCategory').value;
+  const subId = document.getElementById('bulkSubcategory').value;
+  const btn = document.getElementById('startUploadBtn');
+  
+  if (!catId || !subId) {
+    alert('Please select both a target category and subcategory.');
+    return;
+  }
+  if (stagedFiles.length === 0) {
+    alert('Please select at least one file to ingest.');
+    return;
+  }
+  
+  btn.disabled = true;
+  btn.textContent = 'Ingesting assets...';
+  
+  const groupOn = document.getElementById('bulkGroupSameName')?.checked !== false;
+  const groups = [];
+  const byStem = new Map();
+  stagedFiles.forEach((it, idx) => {
+    if (it.status === 'Uploaded') return;
+    const stem = it.file.name.replace(/\.[^/.]+$/, '').toLowerCase();
+    if (groupOn && byStem.has(stem)) byStem.get(stem).push(idx);
+    else { const grp = [idx]; groups.push(grp); if (groupOn) byStem.set(stem, grp); }
+  });
+
+  groupLoop:
+  for (let g = 0; g < groups.length; g++) {
+    const idxs = groups[g];
+    try {
+      for (const i of idxs) {
+      const item = stagedFiles[i];
+      if (item.uploadData) continue;
+      updateStagedRowStatus(i, 'Uploading...');
+      // Step 1: Upload media file to hierarchical storage
+      let uploadData = null;
+      if (window.BackgroundUploader) {
+        try {
+          uploadData = await window.BackgroundUploader.upload(item.file, {
+            folder: 'assets',
+            categoryId: catId,
+            subCategoryId: subId,
+            assetName: item.name,
+            onProgress: (p) => {
+              updateStagedRowStatus(i, `Uploading (${p.percent}%)...`);
+            }
+          });
+        } catch (upErr) {
+          const upErrMsg = upErr.message || 'Upload failed';
+          if ((upErrMsg.includes('clash') || upErrMsg.includes('already exists') || upErrMsg.includes('rename') || upErrMsg.includes('409')) && typeof showRenameModal === 'function') {
+            const renamed = await showRenameModal({
+              filename: item.file.name,
+              existingMatch: item.file.name,
+              conflictType: 'exact',
+              title: 'Filename Collision — Rename File'
+            });
+            if (renamed && renamed !== item.file.name) {
+              applyRenameToStaged(i, renamed);
+              g--;
+              continue groupLoop;
+            }
+          }
+          throw upErr;
+        }
+      } else {
+        const formData = new FormData();
+        formData.append('file', item.file);
+        formData.append('folder', 'assets');
+        formData.append('categoryId', catId);
+        formData.append('subCategoryId', subId);
+        if (item.name) {
+          formData.append('assetName', item.name);
+        }
+        
+        const upRes = await fetch('/api/v1/media/upload', {
+          method: 'POST',
+          body: formData
+        });
+        const upJson = await upRes.json().catch(() => ({}));
+        
+        if (!upRes.ok) {
+          const upErrMsg = upJson.error?.message || upJson.message || 'Upload failed';
+          if ((upRes.status === 409 || upErrMsg.includes('clash') || upErrMsg.includes('already exists') || upErrMsg.includes('rename')) && typeof showRenameModal === 'function') {
+            const renamed = await showRenameModal({
+              filename: item.file.name,
+              existingMatch: item.file.name,
+              conflictType: 'exact',
+              title: 'Filename Collision — Rename File'
+            });
+            if (renamed && renamed !== item.file.name) {
+              applyRenameToStaged(i, renamed);
+              g--;
+              continue groupLoop;
+            }
+          }
+          throw new Error(upErrMsg);
+        }
+        uploadData = upJson.data || upJson || {};
+      }
+      item.uploadData = uploadData;
+      }
+
+      // Step 2: one asset per group; every member file becomes a block
+      const rank = { image: 0, video: 1, videos: 1, frames: 2, audio: 3 };
+      const members = idxs.map(k => stagedFiles[k]);
+      const item = members.slice().sort((a, b) => (rank[a.detectedType] ?? 9) - (rank[b.detectedType] ?? 9))[0];
+      const i = stagedFiles.indexOf(item);
+      const uploadData = item.uploadData;
+      const mediaUrl = uploadData.url || '';
+      const rawType = item.detectedType || 'image';
+      const detectedType = (rawType === 'videos') ? 'video' : rawType;
+      const moreFieldsPayload = {};
+      for (const m of members) mergeBlocks(moreFieldsPayload, await buildBlocks(m, m.uploadData));
+      const customThumb = (members.find(m => m.customThumbFile) || {}).customThumbFile || null;
       // Step 3: Determine Thumbnail based on chosen thumbnail mode
       const thumbModeRadio = document.querySelector('input[name="asset_thumb_mode"]:checked');
       const thumbMode = thumbModeRadio ? thumbModeRadio.value : 'auto_create';
 
       let finalThumbUrl = null;
-      if (thumbMode === 'custom' && item.customThumbFile) {
+      if (thumbMode === 'custom' && customThumb) {
         try {
-          let cFile = item.customThumbFile;
+          let cFile = customThumb;
           if (!cFile.name.startsWith('thumb_')) {
             cFile = new File([cFile], 'thumb_' + cFile.name, { type: cFile.type, lastModified: cFile.lastModified || Date.now() });
           }
@@ -1199,19 +1278,19 @@ async function startBulkUpload() {
           });
           if (renamed && renamed !== item.file.name) {
             applyRenameToStaged(i, renamed);
-            i--; // Retry this item with the renamed file
-            continue;
+            g--;
+            continue groupLoop;
           }
         }
         throw new Error(msg);
       }
-      updateStagedRowStatus(i, 'Uploaded');
+      idxs.forEach(k => updateStagedRowStatus(k, 'Uploaded'));
     } catch (err) {
       console.error(err);
       const errStatus = (err.message && (err.message.includes('clash') || err.message.includes('already exists') || err.message.includes('rename') || err.message.includes('Rename')))
         ? 'Clash! Please Rename'
         : 'Error';
-      updateStagedRowStatus(i, errStatus);
+      idxs.forEach(k => updateStagedRowStatus(k, errStatus));
     }
   }
   

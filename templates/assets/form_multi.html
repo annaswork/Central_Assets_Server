@@ -1603,6 +1603,10 @@
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
             <label class="label" style="font-size:0.8rem; margin-bottom:0;">JSON Configuration</label>
             <div style="display:flex; gap:0.4rem; align-items:center;">
+              <button type="button" class="btn btn-outlined" style="min-height:24px; padding:0.1rem 0.5rem; font-size:0.75rem;" onclick="document.getElementById('jsonFile_${safeId}').click()" title="Load a .json file into this block">
+                ⬆ Upload .json
+              </button>
+              <input type="file" id="jsonFile_${safeId}" accept=".json,application/json" style="display:none;" onchange="loadJsonFileIntoBlock(this.files[0], '${safeKey}', '${safeId}'); this.value='';">
               <button type="button" class="btn btn-outlined" style="min-height:24px; padding:0.1rem 0.5rem; font-size:0.75rem;" onclick="formatBlockJson('${safeKey}', '${safeId}')">
                 Prettify JSON
               </button>
@@ -1612,7 +1616,7 @@
             </div>
           </div>
           <div style="position:relative;">
-            <textarea id="jsonArea_${safeId}" class="textarea" rows="5" style="font-family:monospace; font-size:0.85rem; padding-right:75px;" oninput="updateBlockJson('${safeKey}', this.value, '${safeId}')" ondblclick="openJsonEditorModal('${safeKey}', '${safeId}')" title="Double-click to expand in popup">${escapeHtml(jsonStr)}</textarea>
+            <textarea id="jsonArea_${safeId}" class="textarea" rows="5" style="font-family:monospace; font-size:0.85rem; padding-right:75px;" oninput="updateBlockJson('${safeKey}', this.value, '${safeId}')" ondblclick="openJsonEditorModal('${safeKey}', '${safeId}')" ondragover="event.preventDefault()" ondrop="event.preventDefault(); loadJsonFileIntoBlock(event.dataTransfer.files[0], '${safeKey}', '${safeId}')" title="Double-click to expand, or drop a .json file here">${escapeHtml(jsonStr)}</textarea>
             <button type="button" onclick="openJsonEditorModal('${safeKey}', '${safeId}')" title="Expand in popup screen" style="position:absolute; right:8px; bottom:12px; background:rgba(30,30,30,0.75); color:#fff; border:1px solid rgba(255,255,255,0.25); border-radius:4px; padding:2px 7px; font-size:0.72rem; cursor:pointer; display:flex; align-items:center; gap:3px;">
               ⛶ Expand
             </button>
@@ -2638,6 +2642,25 @@
         status.textContent = '✕ Invalid JSON: ' + err.message;
         status.style.color = 'var(--md-sys-color-error)';
       }
+    }
+  }
+
+  async function loadJsonFileIntoBlock(file, key, safeId) {
+    if (!file) return;
+    const area = document.getElementById(`jsonArea_${safeId}`);
+    const status = document.getElementById(`jsonStatus_${safeId}`);
+    try {
+      const parsed = JSON.parse(await file.text());
+      area.value = JSON.stringify(parsed, null, 2);
+      updateBlockJson(key, area.value, safeId);
+      const nameInput = document.getElementById('assetName');
+      if (nameInput && !nameInput.value.trim()) {
+        const raw = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ").trim();
+        nameInput.value = raw.charAt(0).toUpperCase() + raw.slice(1);
+        checkAssetNameAvailability();
+      }
+    } catch (err) {
+      if (status) { status.textContent = '✕ Could not load ' + file.name + ': ' + err.message; status.style.color = 'var(--md-sys-color-error)'; }
     }
   }
 
