@@ -552,10 +552,13 @@
           <span style="font-size:0.85rem; font-weight:600; color:var(--md-sys-color-primary, #4338ca);">
             <span id="selectedAssetCount">0</span> selected
           </span>
+          <button type="button" class="btn btn-outlined btn-sm" onclick="toggleSelectAllAssets(true)" style="font-size:0.8rem; padding:0.25rem 0.55rem;">Select All</button>
           <button type="button" class="btn btn-outlined btn-sm" onclick="bulkSetAssetOverride('is_enabled', true)" style="font-size:0.8rem; padding:0.25rem 0.55rem;">Enable</button>
           <button type="button" class="btn btn-outlined btn-sm" onclick="bulkSetAssetOverride('is_enabled', false)" style="font-size:0.8rem; padding:0.25rem 0.55rem;">Disable</button>
           <button type="button" class="btn btn-outlined btn-sm" onclick="bulkSetAssetOverride('is_premium', true)" style="font-size:0.8rem; padding:0.25rem 0.55rem;">Premium</button>
           <button type="button" class="btn btn-outlined btn-sm" onclick="bulkSetAssetOverride('is_premium', false)" style="font-size:0.8rem; padding:0.25rem 0.55rem;">Normal</button>
+          <button type="button" class="btn btn-outlined btn-sm" onclick="bulkSetAssetOverride('is_rewarded', true)" style="font-size:0.8rem; padding:0.25rem 0.55rem;">Set Rewarded</button>
+          <button type="button" class="btn btn-outlined btn-sm" onclick="bulkSetAssetOverride('is_rewarded', false)" style="font-size:0.8rem; padding:0.25rem 0.55rem;">Remove Rewarded</button>
           <button type="button" class="btn btn-outlined btn-sm" onclick="clearSelectedAssets()" style="font-size:0.8rem; padding:0.25rem 0.55rem;">Deselect</button>
         </div>
       </div>

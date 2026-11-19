@@ -21,7 +21,7 @@ from utils.errors import NotFoundError, ValidationError
 from utils.ids import to_object_id
 from utils.sequencing import generate_sequence_reordering
 
-ALLOWED_FOLDER_OVERRIDES = {"name", "thumbnail_url", "image_url"}
+ALLOWED_FOLDER_OVERRIDES = {"name", "thumbnail_url", "image_url", "tags"}
 ALLOWED_ASSET_OVERRIDES = {"name", "description", "thumbnail_url", "more_fields", "tags"}
 BLOCKED_OVERRIDE_KEYS = {
     "super_category_id",

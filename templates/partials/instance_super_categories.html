@@ -102,6 +102,27 @@
     }
   }
 
+  // Replaces the folder's tags with the comma-separated list typed in (empty clears them).
+  async function editInstanceFolderTags(type, id, btn) {
+    const raw = prompt('Tags for this folder (comma-separated):', btn.dataset.tags);
+    if (raw === null) return;
+    try {
+      const res = await fetch(`{{ portal_base }}/instances/{{ instance.id }}/folders/${type}/${id}/override`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: raw })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+      const tags = (data.data && data.data.overrides && data.data.overrides.tags) || [];
+      btn.dataset.tags = tags.join(', ');
+      btn.title = tags.join(', ') || 'No tags';
+      btn.textContent = `🏷️ Tags (${tags.length})`;
+    } catch (err) {
+      alert('Error updating tags: ' + err.message);
+    }
+  }
+
   async function detachSuperCategory(superId, name, categoryCount) {
     if (!confirm(`Detach super category "${name}" from this app instance?\n\nIts ${categoryCount} categor${categoryCount === 1 ? 'y' : 'ies'} and all their sub-folders and assets are detached too. Central data remains untouched.`)) {
       return;

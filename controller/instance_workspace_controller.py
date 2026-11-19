@@ -532,6 +532,15 @@ def parse_reference_payload(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _parse_tags(raw_tags: Any) -> list[str]:
+    """Tags from a comma-separated string or a list; anything else clears them."""
+    if isinstance(raw_tags, str):
+        raw_tags = raw_tags.split(",")
+    if not isinstance(raw_tags, list):
+        return []
+    return list(dict.fromkeys(str(t).strip() for t in raw_tags if str(t).strip()))
+
+
 def parse_asset_override_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Normalize an asset override body (snake/camel aliases) into update_item_settings_and_overrides kwargs."""
     is_rewarded = payload.get("is_rewarded")
@@ -551,13 +560,7 @@ def parse_asset_override_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if payload.get("name") is not None:
         overrides["name"] = str(payload["name"]).strip()
     if "tags" in payload:
-        raw_tags = payload.get("tags")
-        if isinstance(raw_tags, str):
-            overrides["tags"] = [t.strip() for t in raw_tags.split(",") if t.strip()]
-        elif isinstance(raw_tags, list):
-            overrides["tags"] = [str(t).strip() for t in raw_tags if str(t).strip()]
-        else:
-            overrides["tags"] = []
+        overrides["tags"] = _parse_tags(payload.get("tags"))
 
     return {
         "is_enabled": payload.get("is_enabled"),
@@ -586,8 +589,13 @@ def parse_folder_override_payload(folder_type: str, payload: dict[str, Any]) -> 
         "sequence": payload.get("sequence"),
         "is_premium": payload.get("is_premium"),
     }
+    overrides: dict[str, Any] = {}
     if "name" in payload:
-        kwargs["overrides"] = {"name": str(payload["name"] or "").strip() or None}
+        overrides["name"] = str(payload["name"] or "").strip() or None
+    if "tags" in payload:
+        overrides["tags"] = _parse_tags(payload["tags"])
+    if overrides:
+        kwargs["overrides"] = overrides
     return kwargs
 
 

@@ -96,6 +96,7 @@ def _top_folder_pipeline(match_filter: dict[str, Any], central_coll: str, extra:
                 "name": "$merged.name",
                 "thumbnail_url": "$merged.thumbnail_url",
                 "image_url": "$merged.image_url",
+                "tags": {"$ifNull": ["$merged.tags", []]},
             }
         },
         {"$sort": {"sequence": 1, "name": 1}},
@@ -228,6 +229,7 @@ async def get_resolved_subcategories(
                 "name": "$merged.name",
                 "thumbnail_url": "$merged.thumbnail_url",
                 "image_url": "$merged.image_url",
+                "tags": {"$ifNull": ["$merged.tags", []]},
             }
         },
         {"$sort": {"sequence": 1, "name": 1}},
