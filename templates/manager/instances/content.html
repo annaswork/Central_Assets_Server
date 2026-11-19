@@ -139,6 +139,11 @@
           <div
             style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; padding-bottom:0.75rem; border-bottom:1px solid var(--md-sys-color-outline-variant);">
             <div style="display:flex; align-items:center; gap:0.75rem;">
+              <input type="checkbox" class="folder-select-checkbox category-select-checkbox"
+                data-folder-type="category" data-folder-id="{{ cat.id }}" data-folder-name="{{ cat.name|escape }}"
+                onchange="onFolderCheckboxChange(this)" onclick="event.stopPropagation()"
+                title="Select category {{ cat.name }}"
+                style="cursor:pointer; width:17px; height:17px; accent-color:var(--md-sys-color-primary, #6366f1); flex-shrink:0;">
               <span class="cat-drag-handle"
                 style="cursor:grab; font-size:1.25rem; color:var(--md-sys-color-on-surface-variant); padding:2px; user-select:none;"
                 title="Drag to reorder folder">⠿</span>
@@ -194,9 +199,17 @@
           <!-- Nested Sub-folders in this Category -->
           <div
             style="margin-top:0.85rem; padding-left:1.5rem; border-left:2px solid var(--md-sys-color-surface-container-high);">
-            <div
-              style="font-size:0.8rem; font-weight:600; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.6rem; text-transform:uppercase; letter-spacing:0.5px;">
-              Sub-folders in {{ cat.name }}
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.6rem; flex-wrap:wrap; gap:0.4rem;">
+              <div
+                style="font-size:0.8rem; font-weight:600; color:var(--md-sys-color-on-surface-variant); text-transform:uppercase; letter-spacing:0.5px;">
+                Sub-folders in {{ cat.name }}
+              </div>
+              <button type="button" class="btn btn-outlined btn-sm"
+                onclick="event.stopPropagation(); toggleCategorySubfoldersSelection('{{ cat.id }}')"
+                style="font-size:0.72rem; padding:0.15rem 0.5rem; min-height:24px;"
+                title="Select all sub-folders in this category">
+                Select Sub-folders
+              </button>
             </div>
             {% set cat_source_id = cat.sourceId or cat.id %}
             {% set matching_subs = [] %}
@@ -215,6 +228,12 @@
                 onclick="if (!event.target.closest('a, button, input, .sub-drag-handle')) window.location.href = '/manager/instances/{{ instance.id }}/content?tab=assets&categoryId={{ cat.id }}&subCategoryId={{ sub.id }}';"
                 style="padding:0.75rem 1rem; background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant); display:flex; flex-direction:row; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:0.5rem; cursor:grab;">
                 <div style="display:flex; align-items:center; gap:0.65rem; flex:1 1 auto; min-width:0;">
+                  <input type="checkbox" class="folder-select-checkbox subcategory-select-checkbox"
+                    data-folder-type="subcategory" data-folder-id="{{ sub.id }}" data-folder-name="{{ sub.name|escape }}"
+                    data-parent-category-id="{{ cat.id }}"
+                    onchange="onFolderCheckboxChange(this)" onclick="event.stopPropagation()"
+                    title="Select subcategory {{ sub.name }}"
+                    style="cursor:pointer; width:15px; height:15px; accent-color:var(--md-sys-color-primary, #6366f1); flex-shrink:0;">
                   <span class="sub-drag-handle"
                     style="cursor:grab; font-size:1.15rem; color:var(--md-sys-color-on-surface-variant); padding:0 2px; user-select:none;"
                     title="Drag to reorder sub-folder">⠿</span>

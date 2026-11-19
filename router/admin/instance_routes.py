@@ -18,6 +18,7 @@ from controller.instance_workspace_controller import (
     build_picker_page,
     create_instance_folder,
     parse_asset_override_payload,
+    parse_bulk_folder_tags_payload,
     parse_folder_override_payload,
     parse_reference_payload,
     picker_assets,
@@ -25,7 +26,11 @@ from controller.instance_workspace_controller import (
     picker_subcategories,
     set_category_super_category,
 )
-from controller.override_controller import reorder_items, update_item_settings_and_overrides
+from controller.override_controller import (
+    bulk_update_folder_tags,
+    reorder_items,
+    update_item_settings_and_overrides,
+)
 from controller.reference_controller import (
     add_references,
     get_unresolved_references,
@@ -479,6 +484,46 @@ async def admin_instance_folder_override(
         db, app_instance_id=id, item_id=folder_id, **parse_folder_override_payload(folder_type, payload)
     )
     return JSONResponse(status_code=200, content={"success": True, "data": serialize_mongo_doc(res)})
+
+
+@router.post("/{id}/folders/bulk-tags")
+async def admin_instance_folders_bulk_tags(
+    request: Request,
+    id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Add, replace, or remove tags on multiple selected categories and subcategories together."""
+    session = get_current_admin_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    parsed = parse_bulk_folder_tags_payload(payload)
+    if not parsed["category_ids"] and not parsed["sub_category_ids"]:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "message": "Please select at least one category or subcategory"},
+        )
+
+    if parsed["mode"] == "add" and not parsed["tags"]:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "message": "Please enter at least one tag"},
+        )
+
+    res = await bulk_update_folder_tags(
+        db,
+        app_instance_id=id,
+        categories=parsed["category_ids"],
+        subcategories=parsed["sub_category_ids"],
+        tags=parsed["tags"],
+        mode=parsed["mode"],
+    )
+    return JSONResponse(status_code=200, content=res)
 
 
 @router.delete("/{id}/assets/{assetId}")

@@ -254,3 +254,171 @@ async def set_asset_override(
         is_premium=is_premium,
         overrides=overrides or None,
     )
+
+
+async def bulk_update_folder_tags(
+    db: AsyncIOMotorDatabase,
+    app_instance_id: str,
+    categories: list[str],
+    subcategories: list[str],
+    tags: list[str] | str,
+    mode: str = "add",
+) -> dict[str, Any]:
+    """Bulk update tags across categories and subcategories in an app instance.
+
+    Supported modes:
+    - 'add': appends tags without duplicates
+    - 'replace': overwrites tags with the provided tags (empty clears tags)
+    - 'remove': pulls matching tags
+    """
+    inst_oid = to_object_id(app_instance_id)
+
+    # Clean tags
+    if isinstance(tags, str):
+        clean_tags = [t.strip() for t in tags.split(",") if t.strip()]
+    elif isinstance(tags, list):
+        clean_tags = []
+        for item in tags:
+            if isinstance(item, str):
+                for part in item.split(","):
+                    p = part.strip()
+                    if p and p not in clean_tags:
+                        clean_tags.append(p)
+    else:
+        clean_tags = []
+
+    clean_tags = list(dict.fromkeys(clean_tags))
+
+    if mode not in ("add", "replace", "remove"):
+        mode = "add"
+
+    cat_oids: list[Any] = []
+    for c in categories:
+        try:
+            cat_oids.append(to_object_id(c))
+        except Exception:
+            pass
+
+    sub_oids: list[Any] = []
+    for s in subcategories:
+        try:
+            sub_oids.append(to_object_id(s))
+        except Exception:
+            pass
+
+    if not cat_oids and not sub_oids:
+        raise ValidationError("No valid category or subcategory IDs provided")
+
+    now = utc_now()
+    if mode == "replace":
+        update_op = {
+            "$set": {
+                "tags": clean_tags,
+                "overrides.tags": clean_tags,
+                "updated_at": now,
+            }
+        }
+    elif mode == "remove":
+        update_op = {
+            "$pull": {
+                "tags": {"$in": clean_tags},
+                "overrides.tags": {"$in": clean_tags},
+            },
+            "$set": {"updated_at": now},
+        }
+    else:  # "add"
+        update_op = {
+            "$addToSet": {
+                "tags": {"$each": clean_tags},
+                "overrides.tags": {"$each": clean_tags},
+            },
+            "$set": {"updated_at": now},
+        }
+
+    cats_modified = 0
+    subs_modified = 0
+    tags_by_id: dict[str, list[str]] = {}
+
+    if cat_oids:
+        cat_query = {
+            "app_instance_id": inst_oid,
+            "$or": [{"_id": {"$in": cat_oids}}, {"source_id": {"$in": cat_oids}}],
+            "deleted_at": None,
+        }
+        await instance_collection(db, INSTANCE_CATEGORIES).update_many(
+            {**cat_query, "overrides": None},
+            {"$set": {"overrides": {}}},
+        )
+        await instance_collection(db, INSTANCE_CATEGORIES).update_many(
+            {**cat_query, "tags": None},
+            {"$set": {"tags": []}},
+        )
+        await instance_collection(db, INSTANCE_CATEGORIES).update_many(
+            {**cat_query, "overrides.tags": None},
+            {"$set": {"overrides.tags": []}},
+        )
+
+        cat_res = await instance_collection(db, INSTANCE_CATEGORIES).update_many(cat_query, update_op)
+        cats_modified = cat_res.modified_count
+
+        updated_cats = await instance_collection(db, INSTANCE_CATEGORIES).find(
+            cat_query,
+            {"_id": 1, "source_id": 1, "tags": 1, "overrides": 1},
+        ).to_list(length=None)
+
+        for doc in updated_cats:
+            doc_id = str(doc["_id"])
+            t_list = doc.get("tags") or doc.get("overrides", {}).get("tags") or []
+            tags_by_id[f"category_{doc_id}"] = t_list
+            tags_by_id[doc_id] = t_list
+            if doc.get("source_id"):
+                src_id = str(doc["source_id"])
+                tags_by_id[f"category_{src_id}"] = t_list
+                tags_by_id[src_id] = t_list
+
+    if sub_oids:
+        sub_query = {
+            "app_instance_id": inst_oid,
+            "$or": [{"_id": {"$in": sub_oids}}, {"source_id": {"$in": sub_oids}}],
+            "deleted_at": None,
+        }
+        await instance_collection(db, INSTANCE_SUBCATEGORIES).update_many(
+            {**sub_query, "overrides": None},
+            {"$set": {"overrides": {}}},
+        )
+        await instance_collection(db, INSTANCE_SUBCATEGORIES).update_many(
+            {**sub_query, "tags": None},
+            {"$set": {"tags": []}},
+        )
+        await instance_collection(db, INSTANCE_SUBCATEGORIES).update_many(
+            {**sub_query, "overrides.tags": None},
+            {"$set": {"overrides.tags": []}},
+        )
+
+        sub_res = await instance_collection(db, INSTANCE_SUBCATEGORIES).update_many(sub_query, update_op)
+        subs_modified = sub_res.modified_count
+
+        updated_subs = await instance_collection(db, INSTANCE_SUBCATEGORIES).find(
+            sub_query,
+            {"_id": 1, "source_id": 1, "tags": 1, "overrides": 1},
+        ).to_list(length=None)
+
+        for doc in updated_subs:
+            doc_id = str(doc["_id"])
+            t_list = doc.get("tags") or doc.get("overrides", {}).get("tags") or []
+            tags_by_id[f"subcategory_{doc_id}"] = t_list
+            tags_by_id[doc_id] = t_list
+            if doc.get("source_id"):
+                src_id = str(doc["source_id"])
+                tags_by_id[f"subcategory_{src_id}"] = t_list
+                tags_by_id[src_id] = t_list
+
+    total_modified = cats_modified + subs_modified
+    return {
+        "success": True,
+        "categories_modified": cats_modified,
+        "subcategories_modified": subs_modified,
+        "total_modified": total_modified,
+        "tags_by_id": tags_by_id,
+        "message": f"Successfully updated tags for {total_modified} folder(s)",
+    }

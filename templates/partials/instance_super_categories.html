@@ -66,7 +66,320 @@
   {% endif %}
 </div>
 
+<!-- Folder Bulk Actions Bar (Sticky toolbar when categories/subcategories are selected) -->
+<div id="folderBulkActionsBar"
+  style="display:none; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; background:var(--md-sys-color-surface-container-high, #e2e8f0); padding:0.55rem 0.95rem; border-radius:10px; border:1px solid var(--md-sys-color-primary, #6366f1); margin-top:1rem; margin-bottom:1.25rem; position:sticky; top:0.75rem; z-index:35; box-shadow:0 4px 14px rgba(0,0,0,0.18);">
+  <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+    <span style="font-size:0.86rem; font-weight:600; color:var(--md-sys-color-primary, #4338ca);">
+      <span id="selectedFoldersCount">0</span> selected (<span id="selectedFoldersBreakdown">0 categories, 0 subcategories</span>)
+    </span>
+    <button type="button" class="btn btn-outlined btn-sm" onclick="toggleSelectAllFolders(true)" style="font-size:0.78rem; padding:0.2rem 0.55rem; min-height:28px;">Select All</button>
+    <button type="button" class="btn btn-outlined btn-sm" onclick="clearSelectedFolders()" style="font-size:0.78rem; padding:0.2rem 0.55rem; min-height:28px;">Deselect All</button>
+  </div>
+  <div style="display:flex; align-items:center; gap:0.5rem;">
+    <button type="button" class="btn btn-primary btn-sm" onclick="openBulkFolderTagsModal()"
+      style="font-size:0.82rem; padding:0.35rem 0.85rem; min-height:32px; display:inline-flex; align-items:center; gap:0.35rem; font-weight:600;">
+      🏷️ Add Tags to Selected
+    </button>
+  </div>
+</div>
+
+<!-- Bulk Folder Tags Modal -->
+<div id="bulkFolderTagsModal" class="modal-backdrop"
+  style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1100; align-items:center; justify-content:center; padding:1.5rem;"
+  onclick="if(event.target === this) closeBulkFolderTagsModal();">
+  <div class="card"
+    style="max-width:540px; width:100%; border-radius:12px; box-shadow:var(--md-sys-elevation-4); overflow:hidden; padding:0; background:var(--md-sys-color-surface);">
+    <div
+      style="padding:1.25rem 1.5rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center; background:var(--md-sys-color-surface-container-low);">
+      <div>
+        <h3 style="margin:0; font-size:1.15rem; display:flex; align-items:center; gap:0.5rem;">
+          <span>🏷️</span>
+          <span id="folderTagModalTitle">Add Tags to Selected Categories & Subcategories</span>
+        </h3>
+        <p style="margin:0.25rem 0 0 0; font-size:0.82rem; color:var(--md-sys-color-on-surface-variant);"
+          id="folderTagModalSubtitle">
+          Applying tags to <strong id="folderTagModalCount">0</strong> selected folder(s).
+        </p>
+      </div>
+      <button type="button" onclick="closeBulkFolderTagsModal()"
+        style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:var(--md-sys-color-on-surface);">✕</button>
+    </div>
+
+    <div style="padding:1.5rem;">
+      <div class="form-group" style="margin-bottom:1.25rem;">
+        <label class="form-label" style="font-weight:600; font-size:0.88rem; margin-bottom:0.35rem; display:block;">
+          Tags *
+        </label>
+        <input type="text" id="folderTagModalInput" class="input" placeholder="e.g. summer, neon, party, 3d, featured"
+          style="width:100%;" onkeydown="if(event.key==='Enter'){event.preventDefault();submitBulkFolderTagsModal();}">
+        <span
+          style="font-size:0.76rem; color:var(--md-sys-color-on-surface-variant); display:block; margin-top:0.35rem;">
+          Separate multiple tags with commas (e.g. <code>summer, neon, trending</code>).
+        </span>
+      </div>
+
+      <div class="form-group" style="margin-bottom:1.5rem;">
+        <label class="form-label" style="font-weight:600; font-size:0.88rem; margin-bottom:0.45rem; display:block;">
+          Tagging Mode
+        </label>
+        <div style="display:flex; flex-direction:column; gap:0.5rem;">
+          <label style="display:flex; align-items:flex-start; gap:0.5rem; font-size:0.88rem; cursor:pointer;">
+            <input type="radio" name="folderTagApplyMode" value="add" checked style="margin-top:0.15rem;">
+            <div>
+              <strong>Append tags</strong>
+              <div style="font-size:0.78rem; color:var(--md-sys-color-on-surface-variant);">Keeps existing tags on each selected item and appends new ones (prevents duplicates)</div>
+            </div>
+          </label>
+          <label style="display:flex; align-items:flex-start; gap:0.5rem; font-size:0.88rem; cursor:pointer;">
+            <input type="radio" name="folderTagApplyMode" value="replace" style="margin-top:0.15rem;">
+            <div>
+              <strong>Replace all tags</strong>
+              <div style="font-size:0.78rem; color:var(--md-sys-color-on-surface-variant);">Overwrites all tags on the selected categories and subcategories with the tags entered above (leave empty to clear tags)</div>
+            </div>
+          </label>
+          <label style="display:flex; align-items:flex-start; gap:0.5rem; font-size:0.88rem; cursor:pointer;">
+            <input type="radio" name="folderTagApplyMode" value="remove" style="margin-top:0.15rem;">
+            <div>
+              <strong>Remove tags</strong>
+              <div style="font-size:0.78rem; color:var(--md-sys-color-on-surface-variant);">Removes the tags entered above from the selected categories and subcategories</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+        <button type="button" class="btn btn-outlined" onclick="closeBulkFolderTagsModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnApplyFolderTags" onclick="submitBulkFolderTagsModal()"
+          style="display:inline-flex; align-items:center; gap:0.4rem;">
+          <span>Apply Tags</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
+  const selectedFolderItems = new Map(); // key: "type:id", value: { type, id, name }
+
+  function onFolderCheckboxChange(checkbox) {
+    if (checkbox) {
+      const type = checkbox.dataset.folderType;
+      const id = checkbox.dataset.folderId;
+      const name = checkbox.dataset.folderName;
+      const key = `${type}:${id}`;
+      if (checkbox.checked) {
+        selectedFolderItems.set(key, { type, id, name });
+      } else {
+        selectedFolderItems.delete(key);
+      }
+    } else {
+      selectedFolderItems.clear();
+      document.querySelectorAll('.folder-select-checkbox:checked').forEach(cb => {
+        const type = cb.dataset.folderType;
+        const id = cb.dataset.folderId;
+        const name = cb.dataset.folderName;
+        selectedFolderItems.set(`${type}:${id}`, { type, id, name });
+      });
+    }
+    updateFolderBulkActionsBar();
+  }
+
+  function updateFolderBulkActionsBar() {
+    const bar = document.getElementById('folderBulkActionsBar');
+    if (!bar) return;
+    const total = selectedFolderItems.size;
+    if (total === 0) {
+      bar.style.display = 'none';
+      return;
+    }
+    bar.style.display = 'flex';
+    let catCount = 0;
+    let subCount = 0;
+    selectedFolderItems.forEach(item => {
+      if (item.type === 'category') catCount++;
+      else if (item.type === 'subcategory') subCount++;
+    });
+    const countEl = document.getElementById('selectedFoldersCount');
+    if (countEl) countEl.textContent = total;
+    const breakdownEl = document.getElementById('selectedFoldersBreakdown');
+    if (breakdownEl) {
+      const parts = [];
+      if (catCount > 0) parts.push(`${catCount} categor${catCount === 1 ? 'y' : 'ies'}`);
+      if (subCount > 0) parts.push(`${subCount} subcategor${subCount === 1 ? 'y' : 'ies'}`);
+      breakdownEl.textContent = parts.join(', ') || `${total} items`;
+    }
+  }
+
+  function toggleSelectAllFolders(forceChecked) {
+    const checkboxes = document.querySelectorAll('.folder-select-checkbox');
+    checkboxes.forEach(cb => {
+      cb.checked = !!forceChecked;
+      const type = cb.dataset.folderType;
+      const id = cb.dataset.folderId;
+      const name = cb.dataset.folderName;
+      const key = `${type}:${id}`;
+      if (forceChecked) {
+        selectedFolderItems.set(key, { type, id, name });
+      } else {
+        selectedFolderItems.delete(key);
+      }
+    });
+    updateFolderBulkActionsBar();
+  }
+
+  function clearSelectedFolders() {
+    toggleSelectAllFolders(false);
+  }
+
+  function toggleCategorySubfoldersSelection(catId) {
+    const subCbs = document.querySelectorAll(`.folder-select-checkbox[data-folder-type="subcategory"][data-parent-category-id="${catId}"]`);
+    if (!subCbs.length) return;
+    const allChecked = Array.from(subCbs).every(cb => cb.checked);
+    const newChecked = !allChecked;
+    subCbs.forEach(cb => {
+      cb.checked = newChecked;
+      const type = cb.dataset.folderType;
+      const id = cb.dataset.folderId;
+      const name = cb.dataset.folderName;
+      const key = `${type}:${id}`;
+      if (newChecked) {
+        selectedFolderItems.set(key, { type, id, name });
+      } else {
+        selectedFolderItems.delete(key);
+      }
+    });
+    updateFolderBulkActionsBar();
+  }
+
+  function openBulkFolderTagsModal() {
+    if (selectedFolderItems.size === 0) {
+      const msg = 'Please select at least one category or subcategory first';
+      if (typeof showToast === 'function') showToast(msg, 'error');
+      else alert(msg);
+      return;
+    }
+    let catCount = 0;
+    let subCount = 0;
+    selectedFolderItems.forEach(item => {
+      if (item.type === 'category') catCount++;
+      else if (item.type === 'subcategory') subCount++;
+    });
+    const total = selectedFolderItems.size;
+    const countEl = document.getElementById('folderTagModalCount');
+    if (countEl) countEl.textContent = total;
+    const parts = [];
+    if (catCount > 0) parts.push(`${catCount} categor${catCount === 1 ? 'y' : 'ies'}`);
+    if (subCount > 0) parts.push(`${subCount} subcategor${subCount === 1 ? 'y' : 'ies'}`);
+    const subEl = document.getElementById('folderTagModalSubtitle');
+    if (subEl) {
+      subEl.innerHTML = `Applying tags to <strong>${total}</strong> selected folder(s) (${parts.join(', ')}).`;
+    }
+
+    const inp = document.getElementById('folderTagModalInput');
+    if (inp) inp.value = '';
+    const addRadio = document.querySelector('input[name="folderTagApplyMode"][value="add"]');
+    if (addRadio) addRadio.checked = true;
+
+    const modal = document.getElementById('bulkFolderTagsModal');
+    if (modal) {
+      modal.style.display = 'flex';
+      setTimeout(() => {
+        if (inp) inp.focus();
+      }, 50);
+    }
+  }
+
+  function closeBulkFolderTagsModal() {
+    const modal = document.getElementById('bulkFolderTagsModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  async function submitBulkFolderTagsModal() {
+    const rawInput = (document.getElementById('folderTagModalInput')?.value || '').trim();
+    const modeEl = document.querySelector('input[name="folderTagApplyMode"]:checked');
+    const mode = modeEl ? modeEl.value : 'add';
+
+    const tags = rawInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
+    if (tags.length === 0 && mode === 'add') {
+      const msg = 'Please enter at least one tag to add';
+      if (typeof showToast === 'function') showToast(msg, 'error');
+      else alert(msg);
+      return;
+    }
+
+    const categoryIds = [];
+    const subcategoryIds = [];
+    selectedFolderItems.forEach(item => {
+      if (item.type === 'category') categoryIds.push(item.id);
+      else if (item.type === 'subcategory') subcategoryIds.push(item.id);
+    });
+
+    if (categoryIds.length === 0 && subcategoryIds.length === 0) {
+      const msg = 'No categories or subcategories selected';
+      if (typeof showToast === 'function') showToast(msg, 'error');
+      else alert(msg);
+      return;
+    }
+
+    const btn = document.getElementById('btnApplyFolderTags');
+    const origHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span>Saving...</span>';
+    }
+
+    try {
+      const res = await fetch(`{{ portal_base }}/instances/{{ instance.id }}/folders/bulk-tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category_ids: categoryIds,
+          subcategory_ids: subcategoryIds,
+          tags: tags,
+          mode: mode
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+
+      const msg = data.message || `Tags updated successfully on ${selectedFolderItems.size} folder(s)`;
+      if (typeof showToast === 'function') showToast('✓ ' + msg, 'success');
+      else alert(msg);
+
+      closeBulkFolderTagsModal();
+
+      // Dynamically update DOM tag buttons
+      if (data.tags_by_id) {
+        for (const [key, tList] of Object.entries(data.tags_by_id)) {
+          const btns = document.querySelectorAll(`[id="folderTagBtn_${key}"], [data-folder-tag-btn="${key}"]`);
+          btns.forEach(tagBtn => {
+            const tagArray = tList || [];
+            tagBtn.dataset.tags = tagArray.join(', ');
+            tagBtn.title = tagArray.join(', ') || 'No tags';
+            tagBtn.textContent = `🏷️ Tags (${tagArray.length})`;
+          });
+        }
+      }
+
+      clearSelectedFolders();
+    } catch (err) {
+      const msg = 'Error updating tags: ' + err.message;
+      if (typeof showToast === 'function') showToast(msg, 'error');
+      else alert(msg);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+      }
+    }
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      closeBulkFolderTagsModal();
+    }
+  });
   function setCardDraggable(el, on) {
     const card = el.closest('.folder-card, .manager-cat-card');
     if (card) card.setAttribute('draggable', on ? 'true' : 'false');

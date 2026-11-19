@@ -8,7 +8,10 @@
 <button type="button" class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;"
   data-name="{{ folder.name }}" onclick="event.stopPropagation(); promptCustomName('{{ folder.id }}', this.dataset.name, '{{ folder_type }}')">Rename</button>
 {% if folder_type != "super_category" %}
-<button type="button" class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;"
+<button type="button" class="btn btn-outlined folder-tag-btn" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;"
+  id="folderTagBtn_{{ folder_type }}_{{ folder.id }}"
+  data-folder-tag-btn="{{ folder_type }}_{{ folder.id }}"
+  data-folder-type="{{ folder_type }}" data-folder-id="{{ folder.id }}"
   data-tags="{{ (folder.tags or []) | join(', ') }}" title="{{ (folder.tags or []) | join(', ') or 'No tags' }}"
   onclick="event.stopPropagation(); editInstanceFolderTags('{{ folder_type }}', '{{ folder.id }}', this)">🏷️ Tags ({{ (folder.tags or []) | length }})</button>
 {% endif %}

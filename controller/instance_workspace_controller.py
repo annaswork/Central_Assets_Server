@@ -599,6 +599,52 @@ def parse_folder_override_payload(folder_type: str, payload: dict[str, Any]) -> 
     return kwargs
 
 
+def parse_bulk_folder_tags_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Parse and normalize payload for bulk category and subcategory tagging.
+
+    Supports category_ids, subcategory_ids (or sub_category_ids), and a unified items list:
+    [{"type": "category"|"subcategory", "id": "..."}].
+    """
+    category_ids: list[str] = []
+    sub_category_ids: list[str] = []
+
+    for cid in payload.get("category_ids") or []:
+        s = str(cid).strip()
+        if s and s not in category_ids:
+            category_ids.append(s)
+
+    for sid in payload.get("subcategory_ids") or payload.get("sub_category_ids") or []:
+        s = str(sid).strip()
+        if s and s not in sub_category_ids:
+            sub_category_ids.append(s)
+
+    for item in payload.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        itype = str(item.get("type") or item.get("folder_type") or "").lower().strip()
+        iid = str(item.get("id") or item.get("folder_id") or "").strip()
+        if not iid:
+            continue
+        if itype in ("category", "categories"):
+            if iid not in category_ids:
+                category_ids.append(iid)
+        elif itype in ("subcategory", "subcategories", "sub_category"):
+            if iid not in sub_category_ids:
+                sub_category_ids.append(iid)
+
+    raw_tags = payload.get("tags")
+    mode = str(payload.get("mode") or "add").lower().strip()
+    if mode not in ("add", "replace", "remove"):
+        mode = "add"
+
+    return {
+        "category_ids": category_ids,
+        "sub_category_ids": sub_category_ids,
+        "tags": _parse_tags(raw_tags),
+        "mode": mode,
+    }
+
+
 async def _create_or_restore_folder(
     db: AsyncIOMotorDatabase,
     coll: str,
