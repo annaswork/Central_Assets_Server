@@ -66,6 +66,20 @@
   {% endif %}
 </div>
 
+<!-- App Tags: the only tags offered (as bubbles) when tagging categories/subcategories -->
+<div class="card" style="padding:1rem 1.25rem; margin-bottom:1.5rem; border:1px solid var(--md-sys-color-outline-variant);">
+  <h3 style="margin:0; font-size:1.05rem;">🏷️ App Tags</h3>
+  <p style="margin:0.15rem 0 0.75rem 0; font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
+    Create this app's tags once, then click them as bubbles when tagging categories and subcategories.
+  </p>
+  <div id="appTagBubbles" style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.75rem;"></div>
+  <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+    <input type="text" id="appTagInput" class="input" placeholder="New tag(s), comma-separated" style="flex:1 1 220px;"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();addAppTags();}">
+    <button type="button" class="btn btn-outlined" style="min-height:34px; padding:0.25rem 0.75rem; font-size:0.82rem;" onclick="addAppTags()">+ Add Tag</button>
+  </div>
+</div>
+
 <!-- Folder Bulk Actions Bar (Sticky toolbar when categories/subcategories are selected) -->
 <div id="folderBulkActionsBar"
   style="display:none; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; background:var(--md-sys-color-surface-container-high, #e2e8f0); padding:0.55rem 0.95rem; border-radius:10px; border:1px solid var(--md-sys-color-primary, #6366f1); margin-top:1rem; margin-bottom:1.25rem; position:sticky; top:0.75rem; z-index:35; box-shadow:0 4px 14px rgba(0,0,0,0.18);">
@@ -109,17 +123,14 @@
     <div style="padding:1.5rem;">
       <div class="form-group" style="margin-bottom:1.25rem;">
         <label class="form-label" style="font-weight:600; font-size:0.88rem; margin-bottom:0.35rem; display:block;">
-          Tags *
+          Tags
         </label>
-        <input type="text" id="folderTagModalInput" class="input" placeholder="e.g. summer, neon, party, 3d, featured"
-          style="width:100%;" onkeydown="if(event.key==='Enter'){event.preventDefault();submitBulkFolderTagsModal();}">
-        <span
-          style="font-size:0.76rem; color:var(--md-sys-color-on-surface-variant); display:block; margin-top:0.35rem;">
-          Separate multiple tags with commas (e.g. <code>summer, neon, trending</code>).
-        </span>
+        <div id="folderTagModalBubbles" style="display:flex; flex-wrap:wrap; gap:0.4rem;"></div>
+        <span id="folderTagModalHint"
+          style="font-size:0.76rem; color:var(--md-sys-color-on-surface-variant); display:block; margin-top:0.5rem;"></span>
       </div>
 
-      <div class="form-group" style="margin-bottom:1.5rem;">
+      <div class="form-group bulk-tag-only" style="margin-bottom:1.5rem;">
         <label class="form-label" style="font-weight:600; font-size:0.88rem; margin-bottom:0.45rem; display:block;">
           Tagging Mode
         </label>
@@ -135,22 +146,22 @@
             <input type="radio" name="folderTagApplyMode" value="replace" style="margin-top:0.15rem;">
             <div>
               <strong>Replace all tags</strong>
-              <div style="font-size:0.78rem; color:var(--md-sys-color-on-surface-variant);">Overwrites all tags on the selected categories and subcategories with the tags entered above (leave empty to clear tags)</div>
+              <div style="font-size:0.78rem; color:var(--md-sys-color-on-surface-variant);">Overwrites all tags on the selected categories and subcategories with the clicked tags (none clicked clears tags)</div>
             </div>
           </label>
           <label style="display:flex; align-items:flex-start; gap:0.5rem; font-size:0.88rem; cursor:pointer;">
             <input type="radio" name="folderTagApplyMode" value="remove" style="margin-top:0.15rem;">
             <div>
               <strong>Remove tags</strong>
-              <div style="font-size:0.78rem; color:var(--md-sys-color-on-surface-variant);">Removes the tags entered above from the selected categories and subcategories</div>
+              <div style="font-size:0.78rem; color:var(--md-sys-color-on-surface-variant);">Removes the clicked tags from the selected categories and subcategories</div>
             </div>
           </label>
         </div>
       </div>
 
       <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
-        <button type="button" class="btn btn-outlined" onclick="closeBulkFolderTagsModal()">Cancel</button>
-        <button type="button" class="btn btn-primary" id="btnApplyFolderTags" onclick="submitBulkFolderTagsModal()"
+        <button type="button" class="btn btn-outlined" onclick="closeBulkFolderTagsModal()">Close</button>
+        <button type="button" class="btn btn-primary bulk-tag-only" id="btnApplyFolderTags" onclick="submitBulkFolderTagsModal()"
           style="display:inline-flex; align-items:center; gap:0.4rem;">
           <span>Apply Tags</span>
         </button>
@@ -276,18 +287,15 @@
       subEl.innerHTML = `Applying tags to <strong>${total}</strong> selected folder(s) (${parts.join(', ')}).`;
     }
 
-    const inp = document.getElementById('folderTagModalInput');
-    if (inp) inp.value = '';
+    tagModalTarget = null;
+    tagModalSelected = new Set();
+    document.getElementById('folderTagModalTitle').textContent = 'Add Tags to Selected Categories & Subcategories';
+    renderTagModal();
     const addRadio = document.querySelector('input[name="folderTagApplyMode"][value="add"]');
     if (addRadio) addRadio.checked = true;
 
     const modal = document.getElementById('bulkFolderTagsModal');
-    if (modal) {
-      modal.style.display = 'flex';
-      setTimeout(() => {
-        if (inp) inp.focus();
-      }, 50);
-    }
+    if (modal) modal.style.display = 'flex';
   }
 
   function closeBulkFolderTagsModal() {
@@ -296,13 +304,12 @@
   }
 
   async function submitBulkFolderTagsModal() {
-    const rawInput = (document.getElementById('folderTagModalInput')?.value || '').trim();
     const modeEl = document.querySelector('input[name="folderTagApplyMode"]:checked');
     const mode = modeEl ? modeEl.value : 'add';
 
-    const tags = rawInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
-    if (tags.length === 0 && mode === 'add') {
-      const msg = 'Please enter at least one tag to add';
+    const tags = [...tagModalSelected];
+    if (tags.length === 0 && mode !== 'replace') {
+      const msg = 'Please click at least one tag';
       if (typeof showToast === 'function') showToast(msg, 'error');
       else alert(msg);
       return;
@@ -415,15 +422,83 @@
     }
   }
 
-  // Replaces the folder's tags with the comma-separated list typed in (empty clears them).
-  async function editInstanceFolderTags(type, id, btn) {
-    const raw = prompt('Tags for this folder (comma-separated):', btn.dataset.tags);
-    if (raw === null) return;
+  // ---- App tags: the predefined list offered as bubbles ----
+  let appTagList = {{ (instance.tag_list or []) | tojson }};
+  let tagModalTarget = null;        // null = bulk selection, else { type, id, btn } for one folder
+  let tagModalSelected = new Set();
+
+  function tagBubble(tag, selected, onclick, extra = '') {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'badge ' + (selected ? 'badge-primary' : 'badge-secondary');
+    b.style.cssText = 'border:none; cursor:pointer; padding:0.35rem 0.7rem; font-size:0.8rem;';
+    b.textContent = (selected ? '✓ ' : '') + tag + extra;
+    b.onclick = onclick;
+    return b;
+  }
+
+  function renderAppTags() {
+    const box = document.getElementById('appTagBubbles');
+    box.replaceChildren(...appTagList.map(t => tagBubble(t, false, () => removeAppTag(t), '  ✕')));
+    if (!appTagList.length) box.textContent = 'No app tags yet.';
+  }
+
+  async function saveAppTags(tags) {
+    const res = await fetch(`{{ portal_base }}/instances/{{ instance.id }}/tags`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+    appTagList = data.tags;
+    renderAppTags();
+  }
+
+  async function addAppTags() {
+    const inp = document.getElementById('appTagInput');
+    const fresh = inp.value.split(',').map(t => t.trim()).filter(Boolean);
+    if (!fresh.length) return;
+    try {
+      await saveAppTags([...appTagList, ...fresh]);
+      inp.value = '';
+    } catch (err) {
+      alert('Error saving app tags: ' + err.message);
+    }
+  }
+
+  async function removeAppTag(tag) {
+    if (!confirm(`Remove "${tag}" from this app's tag list?\n\nCategories/subcategories already tagged keep it until you untag them.`)) return;
+    try {
+      await saveAppTags(appTagList.filter(t => t !== tag));
+    } catch (err) {
+      alert('Error saving app tags: ' + err.message);
+    }
+  }
+
+  // Bubbles = app tags plus any tag the folder already has (so legacy/typo tags can be clicked off).
+  function renderTagModal() {
+    const single = !!tagModalTarget;
+    document.querySelectorAll('#bulkFolderTagsModal .bulk-tag-only').forEach(el => { el.style.display = single ? 'none' : ''; });
+    const pool = [...new Set([...appTagList, ...tagModalSelected])];
+    const box = document.getElementById('folderTagModalBubbles');
+    box.replaceChildren(...pool.map(t => tagBubble(t, tagModalSelected.has(t), () => toggleModalTag(t))));
+    document.getElementById('folderTagModalHint').textContent = !pool.length
+      ? 'No app tags yet. Add some in the 🏷️ App Tags card first.'
+      : single ? 'Click a tag to apply it to this folder; click again to remove it. Saved instantly.'
+               : 'Click tags to select them, choose a mode, then Apply.';
+  }
+
+  async function toggleModalTag(tag) {
+    tagModalSelected.has(tag) ? tagModalSelected.delete(tag) : tagModalSelected.add(tag);
+    renderTagModal();
+    if (!tagModalTarget) return;
+    const { type, id, btn } = tagModalTarget;
     try {
       const res = await fetch(`{{ portal_base }}/instances/{{ instance.id }}/folders/${type}/${id}/override`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tags: raw })
+        body: JSON.stringify({ tags: [...tagModalSelected] })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
@@ -432,9 +507,22 @@
       btn.title = tags.join(', ') || 'No tags';
       btn.textContent = `🏷️ Tags (${tags.length})`;
     } catch (err) {
+      tagModalSelected.has(tag) ? tagModalSelected.delete(tag) : tagModalSelected.add(tag);
+      renderTagModal();
       alert('Error updating tags: ' + err.message);
     }
   }
+
+  function editInstanceFolderTags(type, id, btn) {
+    tagModalTarget = { type, id, btn };
+    tagModalSelected = new Set(btn.dataset.tags.split(',').map(t => t.trim()).filter(Boolean));
+    document.getElementById('folderTagModalTitle').textContent = 'Tags for this folder';
+    document.getElementById('folderTagModalSubtitle').textContent = '';
+    renderTagModal();
+    document.getElementById('bulkFolderTagsModal').style.display = 'flex';
+  }
+
+  renderAppTags();
 
   async function detachSuperCategory(superId, name, categoryCount) {
     if (!confirm(`Detach super category "${name}" from this app instance?\n\nIts ${categoryCount} categor${categoryCount === 1 ? 'y' : 'ies'} and all their sub-folders and assets are detached too. Central data remains untouched.`)) {

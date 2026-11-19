@@ -26,6 +26,7 @@ from controller.reference_controller import link_super_category
 from controller.subcategory_controller import list_subcategories
 from controller.super_category_controller import list_super_categories
 from database.collections import (
+    APP_INSTANCES,
     ASSETS,
     INSTANCE_ASSETS,
     INSTANCE_CATEGORIES,
@@ -597,6 +598,15 @@ def parse_folder_override_payload(folder_type: str, payload: dict[str, Any]) -> 
     if overrides:
         kwargs["overrides"] = overrides
     return kwargs
+
+
+async def set_instance_tag_list(db: AsyncIOMotorDatabase, app_instance_id: str, raw_tags: Any) -> list[str]:
+    """Replace the app's predefined tag list (the bubbles offered when tagging categories/subcategories)."""
+    tags = _parse_tags(raw_tags)
+    await db[APP_INSTANCES].update_one(
+        {"_id": to_object_id(app_instance_id)}, {"$set": {"tag_list": tags, "updated_at": utc_now()}}
+    )
+    return tags
 
 
 def parse_bulk_folder_tags_payload(payload: dict[str, Any]) -> dict[str, Any]:

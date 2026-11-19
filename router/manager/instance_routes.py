@@ -20,6 +20,7 @@ from controller.instance_workspace_controller import (
     parse_bulk_folder_tags_payload,
     parse_folder_override_payload,
     parse_reference_payload,
+    set_instance_tag_list,
     picker_assets,
     picker_categories,
     picker_subcategories,
@@ -522,6 +523,25 @@ async def manager_instance_folder_override(
         db, app_instance_id=instance_id, item_id=folder_id, **parse_folder_override_payload(folder_type, payload)
     )
     return JSONResponse(status_code=200, content={"success": True, "data": serialize_mongo_doc(res)})
+
+
+@router.put("/{instance_id}/tags")
+async def manager_instance_tag_list(
+    request: Request,
+    instance_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Replace the app's tag list offered as bubbles when tagging categories/subcategories."""
+    session = get_current_manager_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+    await verify_manager_instance_access(db, session["user_id"], instance_id)
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    tags = await set_instance_tag_list(db, instance_id, payload.get("tags"))
+    return JSONResponse(status_code=200, content={"success": True, "tags": tags})
 
 
 @router.post("/{instance_id}/folders/bulk-tags")
