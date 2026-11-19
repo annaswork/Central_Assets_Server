@@ -156,6 +156,7 @@ async function bulkSetAssetOverride(field, value) {
   ));
   const failed = results.filter(r => r.status === 'rejected').length;
   showToast(failed ? `Updated ${ids.length - failed} asset(s), ${failed} failed` : `Updated ${ids.length} asset(s)`, failed ? 'error' : 'success');
+  clearSelectedAssets();
   await applyAssetFilters();
 }
 

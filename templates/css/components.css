@@ -1966,6 +1966,12 @@ body.is-swipe-selecting {
   flex-shrink: 0;
 }
 
+/* Rewarded: teal app accent; text uses surface so it stays readable in light and dark themes. */
+.asset-card-rewarded-pill {
+  background-color: var(--app-accent, #0d9488);
+  color: var(--md-sys-color-surface, #ffffff);
+}
+
 .asset-card-disabled-pill {
   background-color: var(--md-sys-color-outline);
   color: #ffffff;

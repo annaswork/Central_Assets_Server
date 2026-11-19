@@ -29,6 +29,7 @@
       <div class="asset-card-meta">
         <span class="asset-card-category">{{ (asset.category_name or '—') | upper }}</span>
         {% if asset.is_premium %}<span class="asset-card-premium-pill">PREMIUM</span>{% endif %}
+        {% if inst_flags.is_rewarded %}<span class="asset-card-premium-pill asset-card-rewarded-pill">REWARDED</span>{% endif %}
         {% if asset.is_enabled == False %}<span class="asset-card-disabled-pill">DISABLED</span>{% endif %}
         <span class="asset-card-sub">· {{ asset.subcategory_name or '—' }}</span>
       </div>
