@@ -475,17 +475,20 @@ async function updateAssetOverride(assetId, field, value) {
 async function bulkSetAssetOverride(field, value) {
   const ids = [...selectedAssetIds];
   if (!ids.length) return;
-  const results = await Promise.allSettled(ids.map(id =>
-    fetch(`/manager/instances/${instanceId}/assets/${id}/override`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ [field]: value })
-    }).then(res => { if (!res.ok) throw new Error(res.status); })
-  ));
+  const results = await withLoading(`Updating ${ids.length} asset(s)…`, async () => {
+    const r = await Promise.allSettled(ids.map(id =>
+      fetch(`/manager/instances/${instanceId}/assets/${id}/override`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value })
+      }).then(res => { if (!res.ok) throw new Error(res.status); })
+    ));
+    clearSelectedAssets();
+    await applyManagerAssetFilters();
+    return r;
+  });
   const failed = results.filter(r => r.status === 'rejected').length;
   showToast(failed ? `Updated ${ids.length - failed} asset(s), ${failed} failed` : `Updated ${ids.length} asset(s)`, failed ? 'error' : 'success');
-  clearSelectedAssets();
-  await applyManagerAssetFilters();
 }
 
 async function handlePricedToggle(assetId, isChecked) {
@@ -680,7 +683,7 @@ async function submitTagsModal() {
   btn.innerHTML = '<span>Saving...</span>';
 
   try {
-    const res = await fetch(`/manager/instances/${instanceId}/assets/bulk-tags`, {
+    const res = await withLoading(`Applying tags to ${assetIds.length} asset(s)…`, () => fetch(`/manager/instances/${instanceId}/assets/bulk-tags`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -688,7 +691,7 @@ async function submitTagsModal() {
         tags: tags,
         mode: mode
       })
-    });
+    }));
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Failed to update tags');
 
@@ -764,7 +767,7 @@ async function saveAssetOrder(orderedIds) {
   if (!orderedIds || orderedIds.length === 0) return;
   showToast('Saving asset sequence order...', 'info');
   try {
-    const res = await fetch(`/manager/instances/${instanceId}/reorder`, {
+    const res = await withLoading('Saving asset order…', () => fetch(`/manager/instances/${instanceId}/reorder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -772,7 +775,7 @@ async function saveAssetOrder(orderedIds) {
         start: assetOffset(),
         ordered_ids: orderedIds
       })
-    });
+    }));
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Failed to save asset order');
     showToast('✓ Asset sequence updated', 'success');

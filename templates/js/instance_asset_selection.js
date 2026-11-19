@@ -46,3 +46,24 @@ function updateAssetSelectionUI() {
     selectAll.indeterminate = (count > 0 && count < allCbs.length);
   }
 }
+
+// Blocking "working…" popup shown while an asset action runs. Native <dialog>.showModal() supplies the
+// backdrop and blocks clicks; Esc is ignored so it can't be dismissed mid-request.
+async function withLoading(message, fn) {
+  let dlg = document.getElementById('assetLoadingDialog');
+  if (!dlg) {
+    dlg = document.createElement('dialog');
+    dlg.id = 'assetLoadingDialog';
+    dlg.className = 'asset-loading-dialog';
+    dlg.innerHTML = '<div class="asset-loading-spinner" aria-hidden="true"></div><p role="status"></p>';
+    dlg.addEventListener('cancel', e => e.preventDefault());
+    document.body.append(dlg);
+  }
+  dlg.querySelector('p').textContent = message;
+  if (!dlg.open) dlg.showModal();
+  try {
+    return await fn();
+  } finally {
+    dlg.close();
+  }
+}

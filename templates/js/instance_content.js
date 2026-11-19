@@ -147,17 +147,20 @@ async function updateAssetOverride(assetId, field, value) {
 async function bulkSetAssetOverride(field, value) {
   const ids = [...selectedAssetIds];
   if (!ids.length) return;
-  const results = await Promise.allSettled(ids.map(id =>
-    fetch(`/admin/instances/${instanceId}/assets/${id}/override`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ [field]: value })
-    }).then(res => { if (!res.ok) throw new Error(res.status); })
-  ));
+  const results = await withLoading(`Updating ${ids.length} asset(s)…`, async () => {
+    const r = await Promise.allSettled(ids.map(id =>
+      fetch(`/admin/instances/${instanceId}/assets/${id}/override`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value })
+      }).then(res => { if (!res.ok) throw new Error(res.status); })
+    ));
+    clearSelectedAssets();
+    await applyAssetFilters();
+    return r;
+  });
   const failed = results.filter(r => r.status === 'rejected').length;
   showToast(failed ? `Updated ${ids.length - failed} asset(s), ${failed} failed` : `Updated ${ids.length} asset(s)`, failed ? 'error' : 'success');
-  clearSelectedAssets();
-  await applyAssetFilters();
 }
 
 async function handlePricedToggle(assetId, isChecked) {
@@ -281,9 +284,9 @@ async function removeReference(assetId) {
   }
 
   try {
-    const res = await fetch(`/admin/instances/${instanceId}/assets/${assetId}`, {
+    const res = await withLoading('Removing asset…', () => fetch(`/admin/instances/${instanceId}/assets/${assetId}`, {
       method: 'DELETE'
-    });
+    }));
     if (!res.ok) throw new Error('Failed to remove asset reference');
     window.location.reload();
   } catch (err) {
@@ -604,7 +607,7 @@ async function saveAssetOrder(orderedIds) {
   if (!orderedIds || orderedIds.length === 0) return;
   showToast('Saving sequence order...', 'info');
   try {
-    const res = await fetch(`/admin/instances/${instanceId}/reorder`, {
+    const res = await withLoading('Saving asset order…', () => fetch(`/admin/instances/${instanceId}/reorder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -612,7 +615,7 @@ async function saveAssetOrder(orderedIds) {
         start: assetOffset(),
         ordered_ids: orderedIds
       })
-    });
+    }));
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Failed to save reorder');
     showToast('✓ Sequence order updated (1, 2, 3...)', 'success');

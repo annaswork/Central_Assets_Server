@@ -4714,3 +4714,26 @@ body.is-swipe-selecting {
 .presence.is-online::before { background: var(--app-success); }
 .presence-label::after { content: "Offline"; }
 .presence-label.is-online::after { content: "Online"; }
+
+/* Loading popup for app-instance asset actions (withLoading in instance_asset_selection.js) */
+.asset-loading-dialog {
+  border: none;
+  border-radius: 14px;
+  padding: 1.5rem 2rem;
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  min-width: 220px;
+}
+.asset-loading-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+.asset-loading-dialog p { margin: 0.85rem 0 0; font-weight: 600; font-size: 0.92rem; }
+.asset-loading-spinner {
+  width: 38px;
+  height: 38px;
+  margin: 0 auto;
+  border: 4px solid var(--md-sys-color-outline-variant);
+  border-top-color: var(--md-sys-color-primary);
+  border-radius: 50%;
+  animation: spinRefresh 0.8s linear infinite;
+}
