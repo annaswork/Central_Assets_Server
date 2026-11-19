@@ -4717,6 +4717,10 @@ body.is-swipe-selecting {
 
 /* Loading popup for app-instance asset actions (withLoading in instance_asset_selection.js) */
 .asset-loading-dialog {
+  /* base.css resets every margin to 0, which kills the browser's built-in dialog centering */
+  position: fixed;
+  inset: 0;
+  margin: auto;
   border: none;
   border-radius: 14px;
   padding: 1.5rem 2rem;
