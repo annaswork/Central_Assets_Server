@@ -1,6 +1,6 @@
 """Schemas for per-instance reference rows, overrides, and catalog resolution."""
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -60,6 +60,28 @@ class DistributeTiersPayload(BaseModel):
     normal_frequency: int = Field(default=1, ge=1, description="Consecutive normal items per cycle")
     premium_frequency: int = Field(default=1, ge=1, description="Consecutive premium items per cycle")
     rewarded_frequency: int = Field(default=1, ge=1, description="Consecutive rewarded items per cycle")
+    alternate_paid: bool = Field(
+        default=False,
+        description="Alternate premium and rewarded paid batches across separate free batches",
+    )
+
+
+class BulkDistributeSubcategoryAssetsPayload(BaseModel):
+    subcategory_ids: list[str] = Field(default_factory=list, description="Explicit instance subcategory IDs to target")
+    parent_category_id: str | None = Field(default=None, description="Target all subcategories inside this category")
+    apply_to_all: bool = Field(default=False, description="If true, target all non-deleted subcategories in the instance")
+    count_mode: Literal["fixed", "percentage"] = Field(default="fixed", description="'fixed' counts or 'percentage' per subcategory")
+    premium_count: int = Field(default=0, ge=0, description="Target premium items per subcategory (fixed mode)")
+    rewarded_count: int = Field(default=0, ge=0, description="Target rewarded items per subcategory (fixed mode)")
+    premium_percent: float = Field(default=0, ge=0, le=99, description="Target premium % per subcategory (percentage mode)")
+    rewarded_percent: float = Field(default=0, ge=0, le=99, description="Target rewarded % per subcategory (percentage mode)")
+    normal_frequency: int = Field(default=1, ge=1, description="Consecutive normal items per cycle")
+    premium_frequency: int = Field(default=1, ge=1, description="Consecutive premium items per cycle")
+    rewarded_frequency: int = Field(default=1, ge=1, description="Consecutive rewarded items per cycle")
+    alternate_paid: bool = Field(
+        default=False,
+        description="Alternate premium and rewarded paid batches across separate free batches",
+    )
 
 
 # MongoDB InDB representations for reference rows
@@ -72,6 +94,7 @@ class InstanceCategoryInDB(MongoInDBModel, TimestampMixin, SoftDeleteMixin):
     is_premium: bool = False
     sequence: int = 1
     tier_distribution_settings: dict[str, Any] | None = None
+    bulk_asset_tier_distribution_settings: dict[str, Any] | None = None
     overrides: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -116,6 +139,7 @@ class ResolvedCategoryOut(MongoModel):
     is_rewarded: bool = False
     sequence: int
     tier_distribution_settings: dict[str, Any] | None = None
+    bulk_asset_tier_distribution_settings: dict[str, Any] | None = None
     overrides: dict[str, Any] = Field(default_factory=dict)
 
 

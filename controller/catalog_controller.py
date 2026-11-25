@@ -72,6 +72,7 @@ def _top_folder_pipeline(match_filter: dict[str, Any], central_coll: str, extra:
                 "is_premium": {"$ifNull": ["$is_premium", {"$ifNull": ["$central.is_premium", False]}]},
                 "is_rewarded": {"$ifNull": ["$is_rewarded", {"$ifNull": ["$central.is_rewarded", False]}]},
                 "tier_distribution_settings": {"$ifNull": ["$tier_distribution_settings", None]},
+                "bulk_asset_tier_distribution_settings": {"$ifNull": ["$bulk_asset_tier_distribution_settings", None]},
                 "sequence": "$sequence",
                 "overrides": {"$ifNull": ["$overrides", {}]},
                 "merged": {
@@ -97,6 +98,8 @@ def _top_folder_pipeline(match_filter: dict[str, Any], central_coll: str, extra:
                 "isRewarded": "$is_rewarded",
                 "tier_distribution_settings": 1,
                 "tierDistributionSettings": "$tier_distribution_settings",
+                "bulk_asset_tier_distribution_settings": 1,
+                "bulkAssetTierDistributionSettings": "$bulk_asset_tier_distribution_settings",
                 "sequence": 1,
                 "overrides": 1,
                 "name": "$merged.name",
@@ -209,6 +212,7 @@ async def get_resolved_subcategories(
                 "is_premium": {"$ifNull": ["$is_premium", {"$ifNull": ["$central.is_premium", False]}]},
                 "is_rewarded": {"$ifNull": ["$is_rewarded", {"$ifNull": ["$central.is_rewarded", False]}]},
                 "tier_distribution_settings": {"$ifNull": ["$tier_distribution_settings", None]},
+                "bulk_asset_tier_distribution_settings": {"$ifNull": ["$bulk_asset_tier_distribution_settings", None]},
                 "sequence": "$sequence",
                 "overrides": {"$ifNull": ["$overrides", {}]},
                 "merged": {
@@ -236,6 +240,8 @@ async def get_resolved_subcategories(
                 "isRewarded": "$is_rewarded",
                 "tier_distribution_settings": 1,
                 "tierDistributionSettings": "$tier_distribution_settings",
+                "bulk_asset_tier_distribution_settings": 1,
+                "bulkAssetTierDistributionSettings": "$bulk_asset_tier_distribution_settings",
                 "sequence": 1,
                 "overrides": 1,
                 "name": "$merged.name",

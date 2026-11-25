@@ -62,9 +62,17 @@
         Manage folder structure, categories, and subcategories for this app instance
       </p>
     </div>
-    <button type="button" class="btn btn-outlined" style="font-size:0.85rem;" onclick="openCreateFolderModal()">
-      + New Folder / Sub-folder
-    </button>
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+      <button type="button" class="btn btn-outlined btn-bulk-all-sub-assets" style="font-size:0.85rem;"
+        data-bulk-asset-settings='{{ (instance.bulk_asset_tier_distribution_settings or {}) | tojson }}'
+        onclick="openBulkAllSubcategoriesTierModal(this)"
+        title="Apply the same asset tier distribution rule across all sub-folders together">
+        ⚡ Distribute All Sub-folders' Assets
+      </button>
+      <button type="button" class="btn btn-outlined" style="font-size:0.85rem;" onclick="openCreateFolderModal()">
+        + New Folder / Sub-folder
+      </button>
+    </div>
   </div>
   <!-- Filters & Search (Categories & Subcategories) -->
   <div class="card search-filter-card" style="padding:0.85rem 1rem; margin-bottom:1.5rem; overflow-x:auto;">
@@ -217,12 +225,24 @@
                 style="font-size:0.8rem; font-weight:600; color:var(--md-sys-color-on-surface-variant); text-transform:uppercase; letter-spacing:0.5px;">
                 Sub-folders in {{ cat.name }}
               </div>
-              <button type="button" class="btn btn-outlined btn-sm"
-                onclick="event.stopPropagation(); toggleCategorySubfoldersSelection('{{ cat.id }}')"
-                style="font-size:0.72rem; padding:0.15rem 0.5rem; min-height:24px;"
-                title="Select all sub-folders in this category">
-                Select Sub-folders
-              </button>
+              <div style="display:flex; gap:0.35rem; align-items:center; flex-wrap:wrap;">
+                <button type="button" class="btn btn-outlined btn-sm btn-bulk-cat-sub-assets"
+                  data-cat-id="{{ cat.id }}"
+                  data-cat-source-id="{{ cat.sourceId or '' }}"
+                  data-cat-name="{{ cat.name|escape }}"
+                  data-bulk-asset-settings='{{ (cat.bulk_asset_tier_distribution_settings or cat.bulkAssetTierDistributionSettings or {}) | tojson }}'
+                  onclick="event.stopPropagation(); openBulkCategorySubcategoriesTierModal(this)"
+                  style="font-size:0.72rem; padding:0.15rem 0.5rem; min-height:24px;"
+                  title="Distribute asset tiers across all sub-folders in {{ cat.name }} together">
+                  ⚡ Bulk Distribute Assets
+                </button>
+                <button type="button" class="btn btn-outlined btn-sm"
+                  onclick="event.stopPropagation(); toggleCategorySubfoldersSelection('{{ cat.id }}')"
+                  style="font-size:0.72rem; padding:0.15rem 0.5rem; min-height:24px;"
+                  title="Select all sub-folders in this category">
+                  Select Sub-folders
+                </button>
+              </div>
             </div>
             {% set cat_source_id = cat.sourceId or cat.id %}
             {% set matching_subs = [] %}

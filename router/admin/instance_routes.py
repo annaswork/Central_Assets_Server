@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Form, Query, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pydantic import ValidationError as PydanticValidationError
 
 from authorization.admin_session import get_current_admin_session
 from config.paths import TEMPLATES_DIR
@@ -28,6 +29,7 @@ from controller.instance_workspace_controller import (
     set_category_super_category,
 )
 from controller.override_controller import (
+    bulk_distribute_subcategory_assets,
     bulk_update_folder_tags,
     distribute_item_tiers,
     reorder_items,
@@ -44,7 +46,10 @@ from database.collections import (
     INSTANCE_SUBCATEGORIES,
 )
 from database.models.app_instance import AppInstanceCreate, AppInstanceUpdate
-from database.models.instance_content import DistributeTiersPayload
+from database.models.instance_content import (
+    BulkDistributeSubcategoryAssetsPayload,
+    DistributeTiersPayload,
+)
 from router.deps import get_db
 from utils.errors import ValidationError
 from utils.ids import to_object_id
@@ -577,7 +582,11 @@ async def admin_instance_distribute_tiers(
     except Exception:
         body = {}
 
-    payload = DistributeTiersPayload(**body)
+    try:
+        payload = DistributeTiersPayload(**body)
+    except PydanticValidationError as exc:
+        raise ValidationError(str(exc))
+
     res = await distribute_item_tiers(
         db,
         app_instance_id=id,
@@ -589,6 +598,46 @@ async def admin_instance_distribute_tiers(
         normal_frequency=payload.normal_frequency,
         premium_frequency=payload.premium_frequency,
         rewarded_frequency=payload.rewarded_frequency,
+        alternate_paid=payload.alternate_paid,
+    )
+    return JSONResponse(status_code=200, content={"success": True, "data": res})
+
+
+@router.post("/{id}/bulk-distribute-assets")
+async def admin_instance_bulk_distribute_assets(
+    request: Request,
+    id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    session = get_current_admin_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    try:
+        payload = BulkDistributeSubcategoryAssetsPayload(**body)
+    except PydanticValidationError as exc:
+        raise ValidationError(str(exc))
+
+    res = await bulk_distribute_subcategory_assets(
+        db,
+        app_instance_id=id,
+        subcategory_ids=payload.subcategory_ids,
+        parent_category_id=payload.parent_category_id,
+        apply_to_all=payload.apply_to_all,
+        count_mode=payload.count_mode,
+        premium_count=payload.premium_count,
+        rewarded_count=payload.rewarded_count,
+        premium_percent=payload.premium_percent,
+        rewarded_percent=payload.rewarded_percent,
+        normal_frequency=payload.normal_frequency,
+        premium_frequency=payload.premium_frequency,
+        rewarded_frequency=payload.rewarded_frequency,
+        alternate_paid=payload.alternate_paid,
     )
     return JSONResponse(status_code=200, content={"success": True, "data": res})
 

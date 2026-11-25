@@ -21,7 +21,7 @@
     </div>
 
     <!-- Rule / Constraint Callout Banner -->
-    <div style="background:var(--md-sys-color-surface-container-high, rgba(99,102,241,0.08)); border-left:3px solid var(--md-sys-color-primary, #6366f1); border-radius:6px; padding:0.6rem 0.85rem; margin-bottom:1.2rem; font-size:0.84rem; line-height:1.45;">
+    <div id="tierDistRuleBanner" style="background:var(--md-sys-color-surface-container-high, rgba(99,102,241,0.08)); border-left:3px solid var(--md-sys-color-primary, #6366f1); border-radius:6px; padding:0.6rem 0.85rem; margin-bottom:1.2rem; font-size:0.84rem; line-height:1.45;">
       <span>ℹ️ <strong>Rule:</strong> Out of <strong id="tierDistTotalNotice">0</strong> items, at most <strong id="tierDistMaxNotice" style="color:var(--md-sys-color-primary, #6366f1);">0</strong> can be set to Premium / Rewarded combined. At least <strong>1 item</strong> must remain Free/Normal.</span>
     </div>
 
@@ -32,6 +32,23 @@
       <input type="hidden" id="tierDistTargetType" value="subcategory">
       <input type="hidden" id="tierDistTotalCount" value="0">
 
+      <!-- Bulk Multi-Subcategory Allocation Mode (Shown only in bulk mode) -->
+      <div id="tierDistBulkModeRow" style="display:none; margin-bottom:1.15rem; padding:0.7rem 0.85rem; background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant); border-radius:8px;">
+        <div style="font-size:0.78rem; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.45rem;">
+          Allocation Basis Across Sub-folders
+        </div>
+        <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:center;">
+          <label style="display:inline-flex; align-items:center; gap:0.4rem; cursor:pointer; font-size:0.84rem; font-weight:500;">
+            <input type="radio" name="tierDistCountMode" value="fixed" checked onchange="onTierDistCountModeChange()">
+            <span>Fixed Count per Sub-folder</span>
+          </label>
+          <label style="display:inline-flex; align-items:center; gap:0.4rem; cursor:pointer; font-size:0.84rem; font-weight:500;">
+            <input type="radio" name="tierDistCountMode" value="percentage" onchange="onTierDistCountModeChange()">
+            <span>Percentage (%) per Sub-folder</span>
+          </label>
+        </div>
+      </div>
+
       <!-- Step 1: Quantities / Counts -->
       <div style="margin-bottom:1.25rem;">
         <label style="display:block; font-size:0.82rem; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.6rem;">
@@ -39,7 +56,7 @@
         </label>
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:0.85rem; align-items:end;">
           <div>
-            <label for="tierDistPremiumCount" style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.3rem;">
+            <label for="tierDistPremiumCount" id="tierDistPremLabel" style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.3rem;">
               ⭐ Premium Count
             </label>
             <input type="number" id="tierDistPremiumCount" class="input" style="width:100%; font-weight:600;" min="0" value="0"
@@ -50,7 +67,7 @@
           </div>
 
           <div>
-            <label for="tierDistRewardedCount" style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.3rem;">
+            <label for="tierDistRewardedCount" id="tierDistRewLabel" style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.3rem;">
               🎁 Rewarded Count
             </label>
             <input type="number" id="tierDistRewardedCount" class="input" style="width:100%; font-weight:600;" min="0" value="0"
@@ -61,7 +78,7 @@
           </div>
 
           <div style="background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant); border-radius:8px; padding:0.6rem 0.8rem; text-align:center;">
-            <span style="font-size:0.74rem; text-transform:uppercase; color:var(--md-sys-color-on-surface-variant); font-weight:600; display:block;">
+            <span id="tierDistNormalCardLabel" style="font-size:0.74rem; text-transform:uppercase; color:var(--md-sys-color-on-surface-variant); font-weight:600; display:block;">
               Free / Normal Items
             </span>
             <strong id="tierDistNormalCount" style="font-size:1.2rem; color:var(--md-sys-color-primary, #6366f1); display:block; margin-top:0.15rem;">
@@ -113,6 +130,16 @@
             </span>
           </div>
         </div>
+
+        <label style="display:flex; align-items:flex-start; gap:0.5rem; margin-top:0.85rem; padding:0.6rem 0.75rem; background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant); border-radius:8px; cursor:pointer;">
+          <input type="checkbox" id="tierDistAlternatePaid" onchange="onTierDistFreqChange()" style="margin-top:0.2rem; width:16px; height:16px; accent-color:var(--md-sys-color-primary, #6366f1); flex-shrink:0;">
+          <div>
+            <div style="font-size:0.84rem; font-weight:600;">🔁 Alternate Premium &amp; Rewarded across Free batches</div>
+            <div id="tierDistAltHint" style="font-size:0.74rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.12rem;">
+              Combined order: Free → Premium → Rewarded
+            </div>
+          </div>
+        </label>
       </div>
 
       <!-- Step 3: Interactive Live Preview Ribbon (WYSIWYG) -->
@@ -144,3 +171,18 @@
     </form>
   </div>
 </div>
+<script>
+window.TIER_PORTAL_BASE = {{ (portal_base | default('/admin')) | tojson }};
+window.INSTANCE_BULK_SUB_META = [
+  {% for s in all_subcategories | default([]) %}
+  {
+    id: {{ s.id | tojson }},
+    categoryId: {{ (s.canonicalCategoryId or s.categoryId or '') | tojson }},
+    name: {{ (s.name or '') | tojson }},
+    assetsCount: {{ s.assets_count | default(0) | tojson }},
+    tierSettings: {{ (s.tier_distribution_settings or s.tierDistributionSettings or {}) | tojson }}
+  }{% if not loop.last %},{% endif %}
+  {% endfor %}
+];
+</script>
+<script src="/admin-assets/js/tier_distribution.js"></script>

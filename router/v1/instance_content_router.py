@@ -15,6 +15,7 @@ from controller.catalog_controller import (
     get_resolved_super_categories,
 )
 from controller.override_controller import (
+    bulk_distribute_subcategory_assets,
     bulk_update_flags,
     distribute_item_tiers,
     reorder_items,
@@ -23,6 +24,7 @@ from controller.override_controller import (
 )
 from controller.reference_controller import get_unresolved_references, remove_reference
 from database.models.instance_content import (
+    BulkDistributeSubcategoryAssetsPayload,
     BulkFlagsPayload,
     DistributeTiersPayload,
     InstanceContentUpdate,
@@ -219,6 +221,31 @@ async def distribute_instance_tiers_endpoint(
         normal_frequency=payload.normal_frequency,
         premium_frequency=payload.premium_frequency,
         rewarded_frequency=payload.rewarded_frequency,
+        alternate_paid=payload.alternate_paid,
+    )
+
+
+@router.post("/bulk-distribute-assets", dependencies=[Depends(require_scope("assets:write"))])
+async def bulk_distribute_instance_assets_endpoint(
+    id: str,
+    payload: BulkDistributeSubcategoryAssetsPayload,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> dict[str, Any]:
+    return await bulk_distribute_subcategory_assets(
+        db,
+        app_instance_id=id,
+        subcategory_ids=payload.subcategory_ids,
+        parent_category_id=payload.parent_category_id,
+        apply_to_all=payload.apply_to_all,
+        count_mode=payload.count_mode,
+        premium_count=payload.premium_count,
+        rewarded_count=payload.rewarded_count,
+        premium_percent=payload.premium_percent,
+        rewarded_percent=payload.rewarded_percent,
+        normal_frequency=payload.normal_frequency,
+        premium_frequency=payload.premium_frequency,
+        rewarded_frequency=payload.rewarded_frequency,
+        alternate_paid=payload.alternate_paid,
     )
 
 
