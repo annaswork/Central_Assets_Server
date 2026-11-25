@@ -415,10 +415,31 @@
         body: JSON.stringify({ is_premium: checkbox.checked })
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
-      document.querySelectorAll(`[data-premium-tag="${id}"]`).forEach(t => { t.hidden = !checkbox.checked; });
+      document.querySelectorAll(`[data-premium-tag="${id}"]`).forEach(t => {
+        t.hidden = !checkbox.checked;
+        t.style.display = checkbox.checked ? 'inline-block' : 'none';
+      });
     } catch (err) {
       checkbox.checked = !checkbox.checked;
       alert('Error updating premium: ' + err.message);
+    }
+  }
+
+  async function setInstanceFolderRewarded(type, id, checkbox) {
+    try {
+      const res = await fetch(`{{ portal_base }}/instances/{{ instance.id }}/folders/${type}/${id}/override`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_rewarded: checkbox.checked })
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+      document.querySelectorAll(`[data-rewarded-tag="${id}"]`).forEach(t => {
+        t.hidden = !checkbox.checked;
+        t.style.display = checkbox.checked ? 'inline-block' : 'none';
+      });
+    } catch (err) {
+      checkbox.checked = !checkbox.checked;
+      alert('Error updating rewarded: ' + err.message);
     }
   }
 

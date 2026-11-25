@@ -3,8 +3,17 @@
 <label class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem; gap:0.3rem; cursor:pointer;"
   title="Premium in this app" onclick="event.stopPropagation()">
   <input type="checkbox" {% if folder.is_premium %}checked{% endif %}
+    data-folder-premium-cb="{{ folder.id }}"
     onchange="setInstanceFolderPremium('{{ folder_type }}', '{{ folder.id }}', this)"> Premium
 </label>
+{% if folder_type != "super_category" %}
+<label class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem; gap:0.3rem; cursor:pointer;"
+  title="Rewarded in this app" onclick="event.stopPropagation()">
+  <input type="checkbox" {% if folder.is_rewarded or folder.isRewarded %}checked{% endif %}
+    data-folder-rewarded-cb="{{ folder.id }}"
+    onchange="setInstanceFolderRewarded('{{ folder_type }}', '{{ folder.id }}', this)"> Rewarded
+</label>
+{% endif %}
 <button type="button" class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;"
   data-name="{{ folder.name }}" onclick="event.stopPropagation(); promptCustomName('{{ folder.id }}', this.dataset.name, '{{ folder_type }}')">Rename</button>
 {% if folder_type != "super_category" %}

@@ -584,11 +584,15 @@ def parse_folder_override_payload(folder_type: str, payload: dict[str, Any]) -> 
     """
     if folder_type not in FOLDER_TYPES:
         raise ValidationError(f"Unknown folder type: {folder_type}")
+    is_rewarded = payload.get("is_rewarded")
+    if is_rewarded is None:
+        is_rewarded = payload.get("isRewarded")
     kwargs: dict[str, Any] = {
         "item_type": folder_type,
         "is_enabled": payload.get("is_enabled"),
         "sequence": payload.get("sequence"),
         "is_premium": payload.get("is_premium"),
+        "is_rewarded": is_rewarded,
     }
     overrides: dict[str, Any] = {}
     if "name" in payload:

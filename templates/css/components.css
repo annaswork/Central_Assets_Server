@@ -1,5 +1,9 @@
 /* Components CSS: Buttons, Cards, Badges, Tables, Forms, and Modals */
 
+[hidden] {
+  display: none !important;
+}
+
 /* Buttons */
 .btn,
 a.btn,

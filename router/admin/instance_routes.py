@@ -29,6 +29,7 @@ from controller.instance_workspace_controller import (
 )
 from controller.override_controller import (
     bulk_update_folder_tags,
+    distribute_item_tiers,
     reorder_items,
     update_item_settings_and_overrides,
 )
@@ -43,6 +44,7 @@ from database.collections import (
     INSTANCE_SUBCATEGORIES,
 )
 from database.models.app_instance import AppInstanceCreate, AppInstanceUpdate
+from database.models.instance_content import DistributeTiersPayload
 from router.deps import get_db
 from utils.errors import ValidationError
 from utils.ids import to_object_id
@@ -557,6 +559,37 @@ async def admin_instance_delete_asset_reference(
         return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
 
     res = await remove_reference(db, app_instance_id=id, item_type="asset", item_id=assetId)
+    return JSONResponse(status_code=200, content={"success": True, "data": res})
+
+
+@router.post("/{id}/distribute-tiers")
+async def admin_instance_distribute_tiers(
+    request: Request,
+    id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    session = get_current_admin_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    payload = DistributeTiersPayload(**body)
+    res = await distribute_item_tiers(
+        db,
+        app_instance_id=id,
+        scope_type=payload.scope_type,
+        scope_id=payload.scope_id,
+        target_type=payload.target_type,
+        premium_count=payload.premium_count,
+        rewarded_count=payload.rewarded_count,
+        normal_frequency=payload.normal_frequency,
+        premium_frequency=payload.premium_frequency,
+        rewarded_frequency=payload.rewarded_frequency,
+    )
     return JSONResponse(status_code=200, content={"success": True, "data": res})
 
 

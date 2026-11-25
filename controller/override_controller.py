@@ -8,6 +8,7 @@ It NEVER imports central controllers or CentralRepository.
 from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo import UpdateOne
 
 from database.collections import (
     INSTANCE_ASSETS,
@@ -86,7 +87,7 @@ async def update_item_settings_and_overrides(
         set_fields["sequence"] = sequence
     if is_premium is not None:
         set_fields["is_premium"] = bool(is_premium)
-    if is_rewarded is not None and item_type == "asset":
+    if is_rewarded is not None and item_type in ("asset", "subcategory"):
         set_fields["is_rewarded"] = bool(is_rewarded)
     if is_priced is not None and item_type == "asset":
         set_fields["is_priced"] = bool(is_priced)
@@ -421,4 +422,200 @@ async def bulk_update_folder_tags(
         "total_modified": total_modified,
         "tags_by_id": tags_by_id,
         "message": f"Successfully updated tags for {total_modified} folder(s)",
+    }
+
+
+def compute_tier_distribution(
+    total_count: int,
+    premium_count: int,
+    rewarded_count: int = 0,
+    normal_frequency: int = 1,
+    premium_frequency: int = 1,
+    rewarded_frequency: int = 1,
+) -> list[str]:
+    """Calculate the sequence of tiers ('normal', 'premium', 'rewarded') for total_count items.
+
+    Enforces that combined premium + rewarded cannot exceed total_count - 1 (when total_count > 0),
+    ensuring at least 1 item remains normal/free.
+    Cycles through normal_frequency normal items, premium_frequency premium items, and
+    rewarded_frequency rewarded items until all items are assigned, capping at the specified counts.
+    """
+    if total_count <= 0:
+        return []
+
+    max_allowed = max(0, total_count - 1)
+    if premium_count + rewarded_count > max_allowed:
+        raise ValidationError(
+            f"Combined premium ({premium_count}) and rewarded ({rewarded_count}) count "
+            f"cannot exceed {max_allowed} (out of {total_count} items). At least 1 item must remain normal/free."
+        )
+
+    rem_normal = total_count - premium_count - rewarded_count
+    rem_premium = premium_count
+    rem_rewarded = rewarded_count
+
+    n_freq = max(1, normal_frequency)
+    p_freq = max(1, premium_frequency)
+    r_freq = max(1, rewarded_frequency)
+
+    result: list[str] = []
+
+    while len(result) < total_count:
+        # Step 1: Normal batch
+        normal_batch = min(n_freq, rem_normal, total_count - len(result))
+        for _ in range(normal_batch):
+            result.append("normal")
+            rem_normal -= 1
+
+        # Step 2: Premium batch (if budget remains)
+        if rem_premium > 0 and len(result) < total_count:
+            prem_batch = min(p_freq, rem_premium, total_count - len(result))
+            for _ in range(prem_batch):
+                result.append("premium")
+                rem_premium -= 1
+
+        # Step 3: Rewarded batch (if budget remains)
+        if rem_rewarded > 0 and len(result) < total_count:
+            rew_batch = min(r_freq, rem_rewarded, total_count - len(result))
+            for _ in range(rew_batch):
+                result.append("rewarded")
+                rem_rewarded -= 1
+
+        # Fallback: if premium & rewarded budgets exhausted, remaining slots become normal
+        if rem_premium == 0 and rem_rewarded == 0:
+            while len(result) < total_count:
+                result.append("normal")
+                rem_normal -= 1
+
+    return result
+
+
+async def distribute_item_tiers(
+    db: AsyncIOMotorDatabase,
+    app_instance_id: str,
+    scope_type: str,
+    scope_id: str,
+    target_type: str,
+    premium_count: int = 0,
+    rewarded_count: int = 0,
+    normal_frequency: int = 1,
+    premium_frequency: int = 1,
+    rewarded_frequency: int = 1,
+) -> dict[str, Any]:
+    """Assign premium and rewarded tiers across child items (subcategories in category, or assets in subcategory/category)."""
+    inst_oid = to_object_id(app_instance_id)
+    scope_oid = to_object_id(scope_id)
+
+    scope_type_clean = scope_type.strip().lower()
+    target_type_clean = target_type.strip().lower()
+
+    if scope_type_clean not in ("category", "subcategory"):
+        raise ValidationError(f"Invalid scope_type '{scope_type}'. Must be 'category' or 'subcategory'.")
+    if target_type_clean not in ("subcategory", "asset"):
+        raise ValidationError(f"Invalid target_type '{target_type}'. Must be 'subcategory' or 'asset'.")
+
+    # Resolve parent scope keys (_id and source_id, ObjectId and str)
+    scope_coll = INSTANCE_CATEGORIES if scope_type_clean == "category" else INSTANCE_SUBCATEGORIES
+    scope_doc = await instance_collection(db, scope_coll).find_one(
+        {"app_instance_id": inst_oid, "$or": [{"_id": scope_oid}, {"source_id": scope_oid}], "deleted_at": None}
+    )
+    if not scope_doc:
+        raise NotFoundError(f"Parent {scope_type_clean} not found in this app instance")
+
+    scope_keys: set[Any] = {scope_doc["_id"], str(scope_doc["_id"])}
+    if scope_doc.get("source_id"):
+        scope_keys.add(scope_doc["source_id"])
+        scope_keys.add(str(scope_doc["source_id"]))
+
+    # Query matching items in sequence order
+    if target_type_clean == "subcategory":
+        coll_name = INSTANCE_SUBCATEGORIES
+        item_query = {
+            "app_instance_id": inst_oid,
+            "category_id": {"$in": list(scope_keys)},
+            "deleted_at": None,
+        }
+    else:  # asset
+        coll_name = INSTANCE_ASSETS
+        field_name = "sub_category_id" if scope_type_clean == "subcategory" else "category_id"
+        item_query = {
+            "app_instance_id": inst_oid,
+            field_name: {"$in": list(scope_keys)},
+            "deleted_at": None,
+        }
+
+    items = await instance_collection(db, coll_name).find(
+        item_query,
+        {"_id": 1, "sequence": 1, "name": 1, "is_premium": 1, "is_rewarded": 1, "rewarded_credits": 1}
+    ).sort([("sequence", 1), ("_id", 1)]).to_list(length=None)
+
+    total_count = len(items)
+    if total_count == 0:
+        raise ValidationError(f"No {target_type_clean}s found in the specified {scope_type_clean}")
+
+    pattern = compute_tier_distribution(
+        total_count=total_count,
+        premium_count=premium_count,
+        rewarded_count=rewarded_count,
+        normal_frequency=normal_frequency,
+        premium_frequency=premium_frequency,
+        rewarded_frequency=rewarded_frequency,
+    )
+
+    operations = []
+    assignments = []
+    now = utc_now()
+
+    for item, tier in zip(items, pattern):
+        is_prem = (tier == "premium")
+        is_rew = (tier == "rewarded")
+        item_id_str = str(item["_id"])
+
+        set_fields: dict[str, Any] = {
+            "is_premium": is_prem,
+            "is_rewarded": is_rew,
+            "updated_at": now,
+        }
+        if target_type_clean == "asset" and is_rew and not item.get("rewarded_credits"):
+            set_fields["rewarded_credits"] = 5
+
+        operations.append(UpdateOne({"_id": item["_id"]}, {"$set": set_fields}))
+        assignments.append({
+            "id": item_id_str,
+            "name": item.get("name") or "",
+            "sequence": item.get("sequence", 1),
+            "tier": tier,
+            "is_premium": is_prem,
+            "is_rewarded": is_rew,
+        })
+
+    if operations:
+        await instance_collection(db, coll_name).bulk_write(operations, ordered=False)
+
+    # Persist the configuration on the parent scope document
+    settings_doc = {
+        "target_type": target_type_clean,
+        "premium_count": premium_count,
+        "rewarded_count": rewarded_count,
+        "normal_frequency": normal_frequency,
+        "premium_frequency": premium_frequency,
+        "rewarded_frequency": rewarded_frequency,
+        "updated_at": now.isoformat(),
+    }
+    await instance_collection(db, scope_coll).update_one(
+        {"_id": scope_doc["_id"]},
+        {"$set": {"tier_distribution_settings": settings_doc, "updated_at": now}}
+    )
+
+    return {
+        "success": True,
+        "total_items": total_count,
+        "premium_count": premium_count,
+        "rewarded_count": rewarded_count,
+        "normal_count": total_count - premium_count - rewarded_count,
+        "target_type": target_type_clean,
+        "scope_type": scope_type_clean,
+        "scope_id": str(scope_doc["_id"]),
+        "settings": settings_doc,
+        "assignments": assignments,
     }

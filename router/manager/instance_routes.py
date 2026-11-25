@@ -36,11 +36,13 @@ from controller.manager_controller import (
 )
 from controller.override_controller import (
     bulk_update_folder_tags,
+    distribute_item_tiers,
     reorder_items,
     update_item_settings_and_overrides,
 )
 from controller.reference_controller import add_references, remove_reference
 from database.collections import APP_INSTANCES, INSTANCE_ASSETS
+from database.models.instance_content import DistributeTiersPayload
 from router.deps import get_db
 from utils.datetimes import format_datetime_display, utc_now
 from utils.errors import ForbiddenError, NotFoundError, ValidationError
@@ -585,6 +587,40 @@ async def manager_instance_folders_bulk_tags(
         mode=parsed["mode"],
     )
     return JSONResponse(status_code=200, content=res)
+
+
+@router.post("/{instance_id}/distribute-tiers")
+async def manager_instance_distribute_tiers(
+    request: Request,
+    instance_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    session = get_current_manager_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    user_id = session["user_id"]
+    await verify_manager_instance_access(db, user_id, instance_id)
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    payload = DistributeTiersPayload(**body)
+    res = await distribute_item_tiers(
+        db,
+        app_instance_id=instance_id,
+        scope_type=payload.scope_type,
+        scope_id=payload.scope_id,
+        target_type=payload.target_type,
+        premium_count=payload.premium_count,
+        rewarded_count=payload.rewarded_count,
+        normal_frequency=payload.normal_frequency,
+        premium_frequency=payload.premium_frequency,
+        rewarded_frequency=payload.rewarded_frequency,
+    )
+    return JSONResponse(status_code=200, content={"success": True, "data": res})
 
 
 @router.post("/{instance_id}/reorder")

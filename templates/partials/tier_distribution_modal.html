@@ -1,0 +1,146 @@
+<!-- Tier Distribution Modal (Category / Subcategory / Asset) -->
+<div id="tierDistributionModal" class="asset-preview-modal-backdrop" style="display:none;"
+  onclick="handleTierDistBackdropClick(event)">
+  <div class="card" role="dialog" aria-modal="true"
+    style="width:100%; max-width:640px; max-height:90vh; overflow-y:auto; margin:auto; padding:1.5rem; border-radius:14px; background:var(--md-sys-color-surface, #1e1e2e); border:1px solid var(--md-sys-color-outline-variant, #313244); box-shadow:0 12px 36px rgba(0,0,0,0.5);"
+    onclick="event.stopPropagation()">
+    
+    <!-- Modal Header -->
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1rem; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:0.75rem;">
+      <div>
+        <h3 id="tierDistModalTitle" style="margin:0; font-size:1.15rem; font-weight:600; display:flex; align-items:center; gap:0.4rem;">
+          ⚡ Distribute Tiers
+        </h3>
+        <p id="tierDistModalSubtitle" style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); margin:0.25rem 0 0 0;">
+          Assign Premium and Rewarded tiers in cyclical sequence.
+        </p>
+      </div>
+      <button type="button" class="btn-icon" onclick="closeTierDistributionModal()"
+        style="background:none; border:none; cursor:pointer; font-size:1.4rem; line-height:1; color:var(--md-sys-color-on-surface-variant); padding:0.2rem 0.4rem;"
+        aria-label="Close modal">&times;</button>
+    </div>
+
+    <!-- Rule / Constraint Callout Banner -->
+    <div style="background:var(--md-sys-color-surface-container-high, rgba(99,102,241,0.08)); border-left:3px solid var(--md-sys-color-primary, #6366f1); border-radius:6px; padding:0.6rem 0.85rem; margin-bottom:1.2rem; font-size:0.84rem; line-height:1.45;">
+      <span>ℹ️ <strong>Rule:</strong> Out of <strong id="tierDistTotalNotice">0</strong> items, at most <strong id="tierDistMaxNotice" style="color:var(--md-sys-color-primary, #6366f1);">0</strong> can be set to Premium / Rewarded combined. At least <strong>1 item</strong> must remain Free/Normal.</span>
+    </div>
+
+    <!-- Form Container -->
+    <form id="tierDistributionForm" onsubmit="event.preventDefault(); applyTierDistribution();">
+      <input type="hidden" id="tierDistScopeType" value="category">
+      <input type="hidden" id="tierDistScopeId" value="">
+      <input type="hidden" id="tierDistTargetType" value="subcategory">
+      <input type="hidden" id="tierDistTotalCount" value="0">
+
+      <!-- Step 1: Quantities / Counts -->
+      <div style="margin-bottom:1.25rem;">
+        <label style="display:block; font-size:0.82rem; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.6rem;">
+          1. Set Item Counts
+        </label>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:0.85rem; align-items:end;">
+          <div>
+            <label for="tierDistPremiumCount" style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.3rem;">
+              ⭐ Premium Count
+            </label>
+            <input type="number" id="tierDistPremiumCount" class="input" style="width:100%; font-weight:600;" min="0" value="0"
+              oninput="onTierDistCountChange(this)" onblur="if(this.value===''){this.value=0;onTierDistCountChange();}">
+            <span style="font-size:0.74rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.2rem; display:block;">
+              Max: <strong id="tierDistPremMaxHint">0</strong>
+            </span>
+          </div>
+
+          <div>
+            <label for="tierDistRewardedCount" style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.3rem;">
+              🎁 Rewarded Count
+            </label>
+            <input type="number" id="tierDistRewardedCount" class="input" style="width:100%; font-weight:600;" min="0" value="0"
+              oninput="onTierDistCountChange(this)" onblur="if(this.value===''){this.value=0;onTierDistCountChange();}">
+            <span style="font-size:0.74rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.2rem; display:block;">
+              Max: <strong id="tierDistRewMaxHint">0</strong>
+            </span>
+          </div>
+
+          <div style="background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant); border-radius:8px; padding:0.6rem 0.8rem; text-align:center;">
+            <span style="font-size:0.74rem; text-transform:uppercase; color:var(--md-sys-color-on-surface-variant); font-weight:600; display:block;">
+              Free / Normal Items
+            </span>
+            <strong id="tierDistNormalCount" style="font-size:1.2rem; color:var(--md-sys-color-primary, #6366f1); display:block; margin-top:0.15rem;">
+              0
+            </strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Frequency Distribution Pattern -->
+      <div id="tierDistFreqSection" style="margin-bottom:1.25rem;">
+        <label style="display:block; font-size:0.82rem; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.6rem;">
+          2. Sequential Frequency Pattern (Cycle)
+        </label>
+        <p style="font-size:0.78rem; color:var(--md-sys-color-on-surface-variant); margin:0 0 0.6rem 0;">
+          Defines the sequence repeat order (e.g. 3 Normal → 2 Premium → 1 Rewarded, then repeats).
+        </p>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:0.85rem;">
+          <div>
+            <label for="tierDistNormalFreq" style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.3rem;">
+              Free/Normal Batch
+            </label>
+            <input type="number" id="tierDistNormalFreq" class="input" style="width:100%;" min="1" value="3"
+              oninput="onTierDistFreqChange()" onblur="if(this.value===''||parseInt(this.value)<1){this.value=1;onTierDistFreqChange();}">
+            <span style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.15rem; display:block;">
+              Consecutive free items
+            </span>
+          </div>
+
+          <div>
+            <label for="tierDistPremiumFreq" style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.3rem;">
+              Premium Batch
+            </label>
+            <input type="number" id="tierDistPremiumFreq" class="input" style="width:100%;" min="1" value="2"
+              oninput="onTierDistFreqChange()" onblur="if(this.value===''||parseInt(this.value)<1){this.value=1;onTierDistFreqChange();}">
+            <span style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.15rem; display:block;">
+              Consecutive premium items
+            </span>
+          </div>
+
+          <div id="tierDistRewFreqBox">
+            <label for="tierDistRewardedFreq" style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.3rem;">
+              Rewarded Batch
+            </label>
+            <input type="number" id="tierDistRewardedFreq" class="input" style="width:100%;" min="1" value="1"
+              oninput="onTierDistFreqChange()" onblur="if(this.value===''||parseInt(this.value)<1){this.value=1;onTierDistFreqChange();}">
+            <span style="font-size:0.72rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.15rem; display:block;">
+              Consecutive rewarded items
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Interactive Live Preview Ribbon (WYSIWYG) -->
+      <div style="margin-bottom:1.5rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+          <label style="font-size:0.82rem; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--md-sys-color-on-surface-variant);">
+            3. Live Sequence Preview
+          </label>
+          <span id="tierDistSummaryBadge" style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);"></span>
+        </div>
+        
+        <div id="tierDistPreviewRibbon"
+          style="display:flex; gap:0.4rem; overflow-x:auto; padding:0.75rem; background:var(--md-sys-color-surface-container-low, #181825); border:1px solid var(--md-sys-color-outline-variant, #313244); border-radius:8px; min-height:48px; align-items:center;">
+          <!-- Dynamically populated by JS -->
+        </div>
+        <p id="tierDistSummaryText" style="font-size:0.78rem; color:var(--md-sys-color-on-surface-variant); margin:0.4rem 0 0 0;"></p>
+      </div>
+
+      <!-- Footer Actions -->
+      <div style="display:flex; justify-content:flex-end; gap:0.6rem; border-top:1px solid var(--md-sys-color-outline-variant); padding-top:1rem;">
+        <button type="button" class="btn btn-outlined" onclick="closeTierDistributionModal()">
+          Cancel
+        </button>
+        <button type="button" id="tierDistApplyBtn" class="btn btn-primary" onclick="applyTierDistribution()"
+          style="min-width:140px;">
+          ⚡ Apply Distribution
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

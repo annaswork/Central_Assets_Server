@@ -51,6 +51,17 @@ class ResetOverridesPayload(BaseModel):
     fields: list[str] | None = None  # None or empty means reset all
 
 
+class DistributeTiersPayload(BaseModel):
+    scope_type: str = Field(..., description="'category' or 'subcategory'")
+    scope_id: str = Field(..., description="ID of the parent category or subcategory")
+    target_type: str = Field(..., description="'subcategory' or 'asset'")
+    premium_count: int = Field(default=0, ge=0, description="Total items to mark premium")
+    rewarded_count: int = Field(default=0, ge=0, description="Total items to mark rewarded")
+    normal_frequency: int = Field(default=1, ge=1, description="Consecutive normal items per cycle")
+    premium_frequency: int = Field(default=1, ge=1, description="Consecutive premium items per cycle")
+    rewarded_frequency: int = Field(default=1, ge=1, description="Consecutive rewarded items per cycle")
+
+
 # MongoDB InDB representations for reference rows
 class InstanceCategoryInDB(MongoInDBModel, TimestampMixin, SoftDeleteMixin):
     app_instance_id: PyObjectId
@@ -58,7 +69,9 @@ class InstanceCategoryInDB(MongoInDBModel, TimestampMixin, SoftDeleteMixin):
     name: str | None = None
     thumbnail_url: str | None = None
     is_enabled: bool = True
+    is_premium: bool = False
     sequence: int = 1
+    tier_distribution_settings: dict[str, Any] | None = None
     overrides: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -69,7 +82,10 @@ class InstanceSubcategoryInDB(MongoInDBModel, TimestampMixin, SoftDeleteMixin):
     name: str | None = None
     thumbnail_url: str | None = None
     is_enabled: bool = True
+    is_premium: bool = False
+    is_rewarded: bool = False
     sequence: int = 1
+    tier_distribution_settings: dict[str, Any] | None = None
     overrides: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -97,7 +113,9 @@ class ResolvedCategoryOut(MongoModel):
     image_url: str | None = None
     is_enabled: bool = True
     is_premium: bool = False
+    is_rewarded: bool = False
     sequence: int
+    tier_distribution_settings: dict[str, Any] | None = None
     overrides: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -109,7 +127,9 @@ class ResolvedSubcategoryOut(MongoModel):
     image_url: str | None = None
     is_enabled: bool = True
     is_premium: bool = False
+    is_rewarded: bool = Field(default=False, serialization_alias="isRewarded")
     sequence: int
+    tier_distribution_settings: dict[str, Any] | None = None
     overrides: dict[str, Any] = Field(default_factory=dict)
 
 

@@ -70,6 +70,8 @@ def _top_folder_pipeline(match_filter: dict[str, Any], central_coll: str, extra:
                 "is_enabled": "$is_enabled",
                 # Instance value once set, else the central folder's flag
                 "is_premium": {"$ifNull": ["$is_premium", {"$ifNull": ["$central.is_premium", False]}]},
+                "is_rewarded": {"$ifNull": ["$is_rewarded", {"$ifNull": ["$central.is_rewarded", False]}]},
+                "tier_distribution_settings": {"$ifNull": ["$tier_distribution_settings", None]},
                 "sequence": "$sequence",
                 "overrides": {"$ifNull": ["$overrides", {}]},
                 "merged": {
@@ -91,6 +93,10 @@ def _top_folder_pipeline(match_filter: dict[str, Any], central_coll: str, extra:
                 **{k: 1 for k in extra},
                 "is_enabled": 1,
                 "is_premium": 1,
+                "is_rewarded": 1,
+                "isRewarded": "$is_rewarded",
+                "tier_distribution_settings": 1,
+                "tierDistributionSettings": "$tier_distribution_settings",
                 "sequence": 1,
                 "overrides": 1,
                 "name": "$merged.name",
@@ -201,6 +207,8 @@ async def get_resolved_subcategories(
                 "is_enabled": "$is_enabled",
                 # Instance value once set, else the central folder's flag
                 "is_premium": {"$ifNull": ["$is_premium", {"$ifNull": ["$central.is_premium", False]}]},
+                "is_rewarded": {"$ifNull": ["$is_rewarded", {"$ifNull": ["$central.is_rewarded", False]}]},
+                "tier_distribution_settings": {"$ifNull": ["$tier_distribution_settings", None]},
                 "sequence": "$sequence",
                 "overrides": {"$ifNull": ["$overrides", {}]},
                 "merged": {
@@ -224,6 +232,10 @@ async def get_resolved_subcategories(
                 "_central_cat": 1,
                 "is_enabled": 1,
                 "is_premium": 1,
+                "is_rewarded": 1,
+                "isRewarded": "$is_rewarded",
+                "tier_distribution_settings": 1,
+                "tierDistributionSettings": "$tier_distribution_settings",
                 "sequence": 1,
                 "overrides": 1,
                 "name": "$merged.name",

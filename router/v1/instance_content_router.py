@@ -16,6 +16,7 @@ from controller.catalog_controller import (
 )
 from controller.override_controller import (
     bulk_update_flags,
+    distribute_item_tiers,
     reorder_items,
     reset_overrides,
     update_item_settings_and_overrides,
@@ -23,6 +24,7 @@ from controller.override_controller import (
 from controller.reference_controller import get_unresolved_references, remove_reference
 from database.models.instance_content import (
     BulkFlagsPayload,
+    DistributeTiersPayload,
     InstanceContentUpdate,
     ReorderPayload,
     ResetOverridesPayload,
@@ -198,6 +200,26 @@ async def delete_instance_category_endpoint(
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> dict[str, Any]:
     return await remove_reference(db, app_instance_id=id, item_type="category", item_id=catId)
+
+
+@router.post("/distribute-tiers", dependencies=[Depends(require_scope("assets:write"))])
+async def distribute_instance_tiers_endpoint(
+    id: str,
+    payload: DistributeTiersPayload,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> dict[str, Any]:
+    return await distribute_item_tiers(
+        db,
+        app_instance_id=id,
+        scope_type=payload.scope_type,
+        scope_id=payload.scope_id,
+        target_type=payload.target_type,
+        premium_count=payload.premium_count,
+        rewarded_count=payload.rewarded_count,
+        normal_frequency=payload.normal_frequency,
+        premium_frequency=payload.premium_frequency,
+        rewarded_frequency=payload.rewarded_frequency,
+    )
 
 
 @router.post("/reorder", dependencies=[Depends(require_scope("assets:write"))])

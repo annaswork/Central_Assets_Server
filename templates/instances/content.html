@@ -180,7 +180,8 @@
                   <span class="badge badge-secondary folder-seq-badge" style="font-size:0.75rem;">#{{ loop.index
                     }}</span>
                   <span class="badge badge-secondary" style="font-size:0.75rem;">Category Folder</span>
-                  <span class="asset-card-premium-pill" data-premium-tag="{{ cat.id }}"{% if not cat.is_premium %} hidden{% endif %}>Premium</span>
+                  <span class="asset-card-premium-pill" data-premium-tag="{{ cat.id }}"{% if not cat.is_premium %} style="display:none;" hidden{% endif %}>Premium</span>
+                  <span class="asset-card-premium-pill asset-card-rewarded-pill" data-rewarded-tag="{{ cat.id }}"{% if not (cat.is_rewarded or cat.isRewarded) %} style="display:none;" hidden{% endif %}>Rewarded</span>
                 </h3>
                 <div style="display:flex; gap:0.4rem; font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
                   <span>📂 {{ cat.subcategories_count | default(0) }} Sub-folders</span>
@@ -201,6 +202,18 @@
                 title="Import Central Items into this Folder">
                 📥 Import Central Data
               </a>
+              <button type="button" class="btn btn-outlined btn-distribute-tiers"
+                style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;"
+                data-scope-type="category"
+                data-scope-id="{{ cat.id }}"
+                data-scope-name="{{ cat.name|escape }}"
+                data-total-count="{{ cat.subcategories_count or 0 }}"
+                data-target-type="subcategory"
+                data-tier-settings='{{ (cat.tier_distribution_settings or cat.tierDistributionSettings or {}) | tojson }}'
+                onclick="openTierDistributionModalFromElem(this)"
+                title="Distribute Normal, Premium, and Rewarded Tiers across Subcategories in this Category">
+                ⚡ Distribute Tiers
+              </button>
               <button type="button" class="btn btn-outlined"
                 style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;"
                 onclick="openCreateFolderModal('subcategory', '{{ cat.sourceId or cat.id }}')">
@@ -271,7 +284,8 @@
                         title="{{ sub.name }}">{{ sub.name }}</strong>
                       <span class="badge badge-secondary admin-sub-seq-badge" style="font-size:0.7rem;">#{{ loop.index
                         }}</span>
-                      <span class="asset-card-premium-pill" data-premium-tag="{{ sub.id }}"{% if not sub.is_premium %} hidden{% endif %}>Premium</span>
+                      <span class="asset-card-premium-pill" data-premium-tag="{{ sub.id }}"{% if not sub.is_premium %} style="display:none;" hidden{% endif %}>Premium</span>
+                      <span class="asset-card-premium-pill asset-card-rewarded-pill" data-rewarded-tag="{{ sub.id }}"{% if not (sub.is_rewarded or sub.isRewarded) %} style="display:none;" hidden{% endif %}>Rewarded</span>
                     </div>
                     <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">
                       🖼️ {{ sub.assets_count | default(0) }} Assets
@@ -280,6 +294,17 @@
                 </div>
 
                 <div style="display:flex; gap:0.35rem; align-items:center; flex-wrap:wrap; justify-content:flex-end; width:100%;">
+                  <button type="button" class="btn btn-outlined btn-distribute-tiers" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;"
+                    data-scope-type="subcategory"
+                    data-scope-id="{{ sub.id }}"
+                    data-scope-name="{{ sub.name|escape }}"
+                    data-total-count="{{ sub.assets_count or 0 }}"
+                    data-target-type="asset"
+                    data-tier-settings='{{ (sub.tier_distribution_settings or sub.tierDistributionSettings or {}) | tojson }}'
+                    onclick="openTierDistributionModalFromElem(this)"
+                    title="Distribute Normal, Premium, and Rewarded Tiers across Assets in this Sub-folder">
+                    ⚡ Distribute Assets
+                  </button>
                   <a href="/admin/instances/{{ instance.id }}/picker?target_category_id={{ cat.sourceId or cat.id }}&target_sub_category_id={{ sub.sourceId or sub.id }}&tab=assets"
                     class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;"
                     title="Import into Sub-folder">
@@ -374,8 +399,9 @@
           onchange="handleCategoryFilterChange(this.value)">
           <option value="">All Categories</option>
           {% for cat in all_categories %}
-          <option value="{{ cat.id }}" data-source-id="{{ cat.sourceId or cat.id }}" data-super-id="{{ cat.superCategoryId or '' }}" {% if selected_cat==(cat.id|string)
-            or selected_cat==(cat.sourceId|string) %}selected{% endif %}>{{ cat.name }}</option>
+          <option value="{{ cat.id }}" data-source-id="{{ cat.sourceId or cat.id }}" data-super-id="{{ cat.superCategoryId or '' }}"
+            data-tier-settings='{{ (cat.tier_distribution_settings or cat.tierDistributionSettings or {}) | tojson }}'
+            {% if selected_cat==(cat.id|string) or selected_cat==(cat.sourceId|string) %}selected{% endif %}>{{ cat.name }}</option>
           {% endfor %}
         </select>
 
@@ -383,9 +409,9 @@
           onchange="handleSubCategoryFilterChange(this)">
           <option value="">All Subcategories</option>
           {% for sub in all_subcategories %}
-          <option value="{{ sub.id }}" data-category-id="{{ sub.canonicalCategoryId or sub.categoryId }}" {% if
-            selected_subcat==(sub.id|string) or selected_subcat==(sub.sourceId|string) %}selected{% endif %}>{{ sub.name
-            }}</option>
+          <option value="{{ sub.id }}" data-category-id="{{ sub.canonicalCategoryId or sub.categoryId }}"
+            data-tier-settings='{{ (sub.tier_distribution_settings or sub.tierDistributionSettings or {}) | tojson }}'
+            {% if selected_subcat==(sub.id|string) or selected_subcat==(sub.sourceId|string) %}selected{% endif %}>{{ sub.name }}</option>
           {% endfor %}
         </select>
 
@@ -417,6 +443,11 @@
         <a href="javascript:void(0)" id="assetFilterClearBtn" onclick="handleClearAssetFilters(event, 'filters')"
           class="btn btn-outlined btn-filter"
           style="display:{% if selected_super or selected_cat or selected_subcat or selected_type or (current_sort and current_sort not in ('sequence', '')) %}inline-flex{% else %}none{% endif %};">Clear</a>
+        <button type="button" id="btnDistributeFilteredAssets" class="btn btn-outlined btn-filter"
+          style="display:{% if selected_subcat or selected_cat %}inline-flex{% else %}none{% endif %}; font-size:0.82rem; align-items:center; gap:0.35rem;"
+          onclick="openTierDistributionForCurrentFilter()">
+          ⚡ Distribute Tiers
+        </button>
       </div>
 
       <div class="search-group-right"
@@ -848,5 +879,6 @@
   </div>
 </div>
 
+{% include "partials/tier_distribution_modal.html" %}
 
 {% endblock %}
