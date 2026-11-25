@@ -1131,11 +1131,15 @@
         return;
       }
 
-      const isAudio = key.toLowerCase().includes('audio') || block.some(it => it && ((it.mime && it.mime.startsWith('audio/')) || (it.url && /\.(mp3|wav|ogg|aac|m4a)$/i.test(it.url))));
-      const isVideo = key.toLowerCase().includes('video') || block.some(it => it && ((it.mime && it.mime.startsWith('video/')) || (it.url && /\.(mp4|webm|mov)$/i.test(it.url))));
+      const isAudio = key.toLowerCase().includes('audio') || block.some(it => it && ((it.mime && it.mime.startsWith('audio/')) || (it.url && /\.(mp3|wav|ogg|aac|m4a|flac)(\?|$)/i.test(it.url))));
+      const isVideo = key.toLowerCase().includes('video') || block.some(it => it && ((it.mime && it.mime.startsWith('video/')) || (it.url && /\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(it.url))));
       const isSvg = key.toLowerCase().includes('svg') || (block.length > 0 && block.every(it => it && /\.svg(\?|$)/i.test(typeof it === 'string' ? it : (it.url || it.filename || ''))));
+      const isHtml = key.toLowerCase().includes('html') || (block.length > 0 && block.every(it => it && ((it.mime && it.mime.startsWith('text/html')) || /\.(html|htm)(\?|$)/i.test(typeof it === 'string' ? it : (it.url || it.filename || '')))));
+      const isFile = key.toLowerCase().includes('file') || (block.length > 0 && block.every(it => it && /\.(xml|pdf|txt|csv|doc|docx|xls|xlsx|zip|rar|7z|tar|gz)(\?|$)/i.test(typeof it === 'string' ? it : (it.url || it.filename || ''))));
       let inferredType = 'image';
       if (isSvg) inferredType = 'svg';
+      else if (isHtml) inferredType = 'html';
+      else if (isFile) inferredType = 'file';
       else if (isAudio) inferredType = 'audio';
       else if (isVideo) inferredType = 'video';
 
@@ -3238,7 +3242,7 @@
       }
 
       // === STANDARDIZED OUTPUT: Frames blocks → clean object {image_url, coordinates} ===
-      if (block.type === 'frames' || key.toLowerCase().includes('frame') || Array.isArray(block.coordinates)) {
+      if (block.type === 'frames' || (!Array.isArray(block.items) && (key.toLowerCase().includes('frame') || Array.isArray(block.coordinates)))) {
         const rawCoords = Array.isArray(block.coordinates) ? block.coordinates : (Array.isArray(block.placeholders) ? block.placeholders : []);
         const cleanCoords = rawCoords.map((c, idx) => {
           let rot = parseFloat(c.rotation || 0) || 0;
@@ -3271,9 +3275,10 @@
             url: it.url || '',
             filename: it.filename || (it.url ? it.url.split('/').pop() : 'file')
           };
-          const isAudioItem = String(it.mime || '').startsWith('audio/') || key.toLowerCase().includes('audio');
-          const isHtmlItem = String(it.mime || '').startsWith('text/html') || key.toLowerCase().includes('html');
-          const isFileItem = ['file', 'file_list', 'document', 'document_list'].includes(block.type) || key.toLowerCase().includes('file') || key.toLowerCase().includes('doc');
+          const isExplicitVisual = ['image', 'image_list', 'svg', 'video', 'video_list'].includes(block.type);
+          const isAudioItem = block.type === 'audio' || block.type === 'audio_list' || String(it.mime || '').startsWith('audio/') || (!isExplicitVisual && key.toLowerCase().includes('audio'));
+          const isHtmlItem = block.type === 'html' || block.type === 'html_list' || String(it.mime || '').startsWith('text/html') || (!isExplicitVisual && key.toLowerCase().includes('html'));
+          const isFileItem = ['file', 'file_list', 'document', 'document_list'].includes(block.type) || (!isExplicitVisual && (key.toLowerCase().includes('file') || key.toLowerCase().includes('doc')));
           if (!isAudioItem && !isHtmlItem && !isFileItem) {
             if (it.width !== undefined && it.width !== null) itemObj.width = it.width;
             if (it.height !== undefined && it.height !== null) itemObj.height = it.height;

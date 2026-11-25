@@ -729,7 +729,12 @@ def enrich_more_fields_metadata(more_fields: dict[str, Any]) -> dict[str, Any]:
                     _enrich_single_item_metadata(item, block_type=block_key)
         elif isinstance(block_val, dict):
             block_type = (block_val.get("type") or block_key).lower()
-            if "frame" in block_type or "frame" in str(block_key).lower():
+            if (
+                "frame" in block_type
+                or "frame" in str(block_key).lower()
+                or isinstance(block_val.get("coordinates"), list)
+                or isinstance(block_val.get("placeholders"), list)
+            ):
                 _enrich_frames_block(block_val)
             if isinstance(block_val.get("items"), list):
                 for item in block_val["items"]:

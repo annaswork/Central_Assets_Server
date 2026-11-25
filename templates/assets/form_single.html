@@ -19,6 +19,47 @@
   #stagedSection .staged-status-cell {
     white-space: nowrap;
   }
+  .staged-bulk-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.55rem 0.75rem;
+    padding: 0.7rem 0.85rem;
+    margin-bottom: 0.85rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    background: var(--md-sys-color-surface-container);
+  }
+  .staged-block-input {
+    min-height: 32px;
+    padding: 0.2rem 0.45rem;
+    width: 100%;
+    box-sizing: border-box;
+    font-family: monospace;
+    font-size: 0.83rem;
+  }
+  .staged-block-hint {
+    margin-top: 0.22rem;
+    font-size: 0.72rem;
+    line-height: 1.25;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+  .btn-inline-split {
+    border: 1px solid var(--md-sys-color-outline-variant);
+    background: var(--md-sys-color-surface);
+    color: var(--md-sys-color-primary);
+    border-radius: 4px;
+    padding: 0.05rem 0.35rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-inline-split:hover {
+    border-color: var(--md-sys-color-primary);
+  }
 </style>
 <div style="margin-bottom:1.5rem;">
   <a href="{{ return_url or '/admin/assets' }}" id="backToListLink" style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
@@ -189,10 +230,16 @@
     <div id="matchedThumbStatus" style="margin-top:0.4rem; font-size:0.82rem; color:var(--app-success); font-weight:500;"></div>
   </div>
 
-  <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.75rem; font-size:0.88rem; cursor:pointer;" title="Files that share the same name (e.g. cat.webp, cat.json, cat.mp3) are added to one asset">
-    <input type="checkbox" id="bulkGroupSameName" checked onchange="renderStaged()" style="accent-color:var(--md-sys-color-primary);">
-    🔗 Group files with the same name into one asset <span style="color:var(--md-sys-color-on-surface-variant); font-size:0.78rem;">(e.g. cat.webp + cat.json + cat.mp3)</span>
-  </label>
+  <div style="display:flex; flex-wrap:wrap; gap:0.75rem 1.5rem; margin-bottom:0.75rem; align-items:center;">
+    <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.88rem; cursor:pointer;" title="Files that share the same Asset Name (e.g. cat.webp, cat.json, cat.mp3) are added to one asset">
+      <input type="checkbox" id="bulkGroupSameName" checked onchange="onGroupingOrSeparateOptionChange()" style="accent-color:var(--md-sys-color-primary);">
+      🔗 Group files with the same name into one asset <span style="color:var(--md-sys-color-on-surface-variant); font-size:0.78rem;">(e.g. cat.webp + cat.json + cat.mp3)</span>
+    </label>
+    <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.88rem; cursor:pointer;" title="Automatically assign separate block keys (e.g. image, image_2) when multiple files share a type in the same asset">
+      <input type="checkbox" id="bulkAutoSeparateBlocks" onchange="onGroupingOrSeparateOptionChange()" style="accent-color:var(--md-sys-color-primary);">
+      🧩 Separate duplicate blocks in same asset automatically <span style="color:var(--md-sys-color-on-surface-variant); font-size:0.78rem;">(e.g. image, image_2)</span>
+    </label>
+  </div>
 
   <div class="dropzone" id="bulkDropzone" onclick="onBulkDropzoneClick(event)">
     <div style="font-size:3rem; margin-bottom:0.75rem;">📁</div>
@@ -215,26 +262,59 @@
     <button type="button" class="btn btn-outlined" onclick="clearStaged()">Clear All</button>
   </div>
 
+  <div id="stagedBulkToolbar" class="staged-bulk-toolbar">
+    <span id="stagedSelectedCount" class="badge badge-primary" style="font-size:0.75rem;">0 selected</span>
+    <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
+      <input type="text" id="bulkBlockNameInput" class="input" placeholder="Block name (e.g. background)" style="min-height:30px; padding:0.2rem 0.5rem; width:195px; font-family:monospace; font-size:0.82rem;">
+      <label style="display:inline-flex; align-items:center; gap:0.3rem; font-size:0.78rem; cursor:pointer; color:var(--md-sys-color-on-surface-variant);" title="Append _1, _2, _3 across selected rows so each becomes a separate block">
+        <input type="checkbox" id="bulkBlockSequential" style="accent-color:var(--md-sys-color-primary);">
+        _1, _2...
+      </label>
+      <button type="button" class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.6rem; font-size:0.78rem;" onclick="applyBulkBlockName()" title="Set block name on checked rows">
+        Apply Block Name
+      </button>
+    </div>
+    <button type="button" class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.6rem; font-size:0.78rem;" onclick="applyFilenameStemAsBlock()" title="Use each selected row's filename stem (e.g. bg.png -> bg) as its Block Name">
+      📄 Use Filename as Block
+    </button>
+    <button type="button" class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.6rem; font-size:0.78rem;" onclick="splitDuplicateBlocksInStaged()" title="Give duplicate blocks inside an asset distinct keys (image, image_2, ...)">
+      🔀 Split Duplicate Blocks
+    </button>
+    <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap; margin-left:auto;">
+      <input type="text" id="bulkGroupAssetInput" class="input" placeholder="Shared asset name..." style="min-height:30px; padding:0.2rem 0.5rem; width:165px; font-size:0.82rem;">
+      <button type="button" class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.6rem; font-size:0.78rem;" onclick="groupSelectedUnderAsset()" title="Assign the same Asset Name to checked rows so they combine into one asset with separate blocks">
+        🔗 Group Selected
+      </button>
+    </div>
+  </div>
+
   <div class="table-responsive" style="overflow-x:auto;">
-    <table class="data-table" style="table-layout:fixed; width:100%; min-width:850px;">
+    <table class="data-table" style="table-layout:fixed; width:100%; min-width:1040px;">
       <colgroup>
-        <col style="width:44px;">
-        <col style="width:26%;">
-        <col style="width:26%;">
+        <col style="width:64px;">
+        <col style="width:20%;">
+        <col style="width:20%;">
+        <col style="width:20%;">
         <col style="width:110px;">
-        <col style="width:85px;">
-        <col style="width:160px;">
-        <col style="width:165px;">
+        <col style="width:80px;">
+        <col style="width:135px;">
+        <col style="width:185px;">
       </colgroup>
       <thead>
         <tr>
-          <th style="width:44px; text-align:center;">#</th>
+          <th style="width:64px; text-align:center;">
+            <label style="display:inline-flex; align-items:center; gap:0.25rem; cursor:pointer;" title="Select / deselect all staged items">
+              <input type="checkbox" id="stagedSelectAll" onchange="toggleSelectAllStaged(this.checked)" style="accent-color:var(--md-sys-color-primary);">
+              <span>#</span>
+            </label>
+          </th>
           <th>Generated Asset Name</th>
+          <th>Block Name (Key)</th>
           <th>File Name</th>
           <th style="width:110px;">Data Type</th>
-          <th style="width:85px;">File Size</th>
-          <th style="width:160px;">Status</th>
-          <th style="width:165px; text-align:right;">Actions</th>
+          <th style="width:80px;">File Size</th>
+          <th style="width:135px;">Status</th>
+          <th style="width:185px; text-align:right;">Actions</th>
         </tr>
       </thead>
       <tbody id="stagedTableBody">
@@ -536,7 +616,106 @@ function getNextCandidateName(filename, takenSet) {
 
 const rawStem = n => n.replace(/\.[^/.]+$/, '');
 const stemOf = n => n.replace(/\.[^/.]+$/, '').toLowerCase();
+const extOf = n => {
+  const dot = n.lastIndexOf('.');
+  return dot !== -1 ? n.slice(dot) : '';
+};
 const isGroupingOn = () => document.getElementById('bulkGroupSameName')?.checked !== false;
+const isAutoSeparateOn = () => Boolean(document.getElementById('bulkAutoSeparateBlocks')?.checked);
+
+const defaultBlockTypeOf = t => (t === 'videos' ? 'video' : (t || 'image'));
+
+function sanitizeBlockKey(raw, fallbackType = 'image') {
+  const fb = defaultBlockTypeOf(fallbackType);
+  const cleaned = String(raw || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return cleaned || fb;
+}
+
+function groupKeyOf(item) {
+  const assetTitle = String(item?.name || '').trim();
+  const base = assetTitle || rawStem(item?.file?.name || '');
+  return base.toLowerCase();
+}
+
+function groupStagedIndices(items = stagedFiles, groupOn = isGroupingOn(), includeUploaded = false) {
+  const groups = [];
+  const byGroup = new Map();
+  items.forEach((it, idx) => {
+    if (!includeUploaded && it.status === 'Uploaded') return;
+    const key = groupOn ? groupKeyOf(it) : `__single_${idx}`;
+    if (groupOn && byGroup.has(key)) byGroup.get(key).push(idx);
+    else {
+      const grp = [idx];
+      groups.push(grp);
+      if (groupOn) byGroup.set(key, grp);
+    }
+  });
+  return groups;
+}
+
+function recomputeAutoBlockNames(items = stagedFiles, groupOn = isGroupingOn(), autoSep = isAutoSeparateOn()) {
+  const groups = groupStagedIndices(items, groupOn, true);
+  for (const idxs of groups) {
+    const used = new Set();
+    for (const idx of idxs) {
+      const it = items[idx];
+      if (it.blockNameCustom) {
+        used.add(sanitizeBlockKey(it.blockName, it.detectedType));
+      }
+    }
+    for (const idx of idxs) {
+      const it = items[idx];
+      if (it.blockNameCustom) continue;
+      const base = defaultBlockTypeOf(it.detectedType);
+      if (!autoSep) {
+        it.blockName = base;
+        continue;
+      }
+      let candidate = base, n = 2;
+      while (used.has(candidate)) candidate = `${base}_${n++}`;
+      it.blockName = candidate;
+      used.add(candidate);
+    }
+  }
+}
+
+function analyzeStagedRows(items = stagedFiles, groupOn = isGroupingOn()) {
+  const analysis = new Array(items.length);
+  const groups = groupStagedIndices(items, groupOn, true);
+  for (const idxs of groups) {
+    const byBlock = new Map();
+    for (const idx of idxs) {
+      const bk = sanitizeBlockKey(items[idx].blockName, items[idx].detectedType);
+      if (!byBlock.has(bk)) byBlock.set(bk, []);
+      byBlock.get(bk).push(idx);
+    }
+    for (const idx of idxs) {
+      const it = items[idx];
+      const effectiveBlock = sanitizeBlockKey(it.blockName, it.detectedType);
+      const peers = byBlock.get(effectiveBlock) || [idx];
+      const baseType = defaultBlockTypeOf(it.detectedType);
+      analysis[idx] = {
+        groupIndices: idxs,
+        isGrouped: groupOn && idxs.length > 1,
+        effectiveBlock,
+        peersCount: peers.length,
+        hasBlockCollision: peers.length > 1,
+        isDictBlock: baseType === 'json' || baseType === 'frames'
+      };
+    }
+  }
+  return analysis;
+}
+
+function defaultDisplayNameFromFilename(filename) {
+  const cleanName = rawStem(filename).replace(/[_-]+/g, ' ').trim();
+  if (!cleanName) return filename;
+  return cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+}
+
 // With grouping on, same-name files are meant to share one asset: only one filename per stem is conflict-checked
 function uniqueStemNames(names, skipStems = new Set()) {
   const seen = new Set(skipStems), out = [];
@@ -670,15 +849,18 @@ async function handleFileSelect(files, forceCrop = false) {
 
     takenInSession.add(file.name.toLowerCase());
 
-    const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ").trim();
-    const displayName = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
-    const fileStem = file.name.replace(/\.[^/.]+$/, "").toLowerCase();
+    const displayName = defaultDisplayNameFromFilename(file.name);
+    const fileStem = stemOf(file.name);
     const matchedThumb = stagedCustomThumbs.get(fileStem) || null;
     stagedFiles.push({
       file: file,
       customThumbFile: matchedThumb,
       name: displayName,
+      nameCustom: false,
       detectedType: fileItem.detectedType,
+      blockName: defaultBlockTypeOf(fileItem.detectedType),
+      blockNameCustom: false,
+      selected: false,
       size: (file.size / 1024).toFixed(1) + ' KB',
       status: 'Ready',
       hasConflict: isClash,
@@ -687,6 +869,7 @@ async function handleFileSelect(files, forceCrop = false) {
       suggestedFilename: suggestedName
     });
   }
+  recomputeAutoBlockNames();
   renderStaged();
 
   // Clear file inputs so the same file selection can be re-triggered if chosen again
@@ -702,11 +885,28 @@ async function checkStagedConflicts() {
   if (!catId || !subId || stagedFiles.length === 0) return;
 
   try {
+    const groupOn = isGroupingOn();
+    const groups = groupStagedIndices(stagedFiles, groupOn, true);
+    const probeNames = [];
+    const probeToIndices = new Map();
+
+    for (const idxs of groups) {
+      const rep = stagedFiles[idxs[0]];
+      const probe = (groupOn && rep.nameCustom && rep.name.trim())
+        ? `${rep.name.trim().replace(/[^a-zA-Z0-9._-]+/g, '_')}${extOf(rep.file.name)}`
+        : rep.file.name;
+      if (!probeToIndices.has(probe)) {
+        probeNames.push(probe);
+        probeToIndices.set(probe, []);
+      }
+      probeToIndices.get(probe).push(...idxs);
+    }
+
     const res = await fetch('/api/v1/media/check-similarity', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        filenames: isGroupingOn() ? uniqueStemNames(stagedFiles.map(it => it.file.name)) : stagedFiles.map(it => it.file.name),
+        filenames: probeNames,
         categoryId: catId,
         subCategoryId: subId
       })
@@ -715,42 +915,43 @@ async function checkStagedConflicts() {
     const json = await res.json();
     if (!json.matches) return;
 
-    const takenInSession = new Set();
-    for (let i = 0; i < stagedFiles.length; i++) {
-      const match = json.matches.find(m => m.filename === stagedFiles[i].file.name);
-      if (match) {
-        stagedFiles[i].hasConflict = match.has_conflict;
-        stagedFiles[i].conflictType = match.conflict_type;
-        stagedFiles[i].matchedName = match.matched_name;
-        let suggested = match.suggested_filename;
-        if (suggested && takenInSession.has(suggested.toLowerCase())) {
-          suggested = getNextCandidateName(suggested, takenInSession);
-        }
-        stagedFiles[i].suggestedFilename = suggested;
+    const takenInSession = new Set(stagedFiles.map(it => it.file.name.toLowerCase()));
+    for (const match of json.matches) {
+      const idxs = probeToIndices.get(match.filename) || [];
+      if (idxs.length === 0) continue;
 
-        if (match.has_conflict) {
-          const renamed = await showRenameModal({
-            filename: stagedFiles[i].file.name,
-            existingMatch: match.matched_name,
-            conflictType: match.conflict_type,
-            suggestedFilename: suggested,
-            title: 'Rename File — Filename Conflict Detected'
+      let suggested = match.suggested_filename;
+      if (suggested && takenInSession.has(suggested.toLowerCase())) {
+        suggested = getNextCandidateName(suggested, takenInSession);
+      }
+
+      for (const idx of idxs) {
+        stagedFiles[idx].hasConflict = match.has_conflict;
+        stagedFiles[idx].conflictType = match.conflict_type;
+        stagedFiles[idx].matchedName = match.matched_name;
+        stagedFiles[idx].suggestedFilename = suggested;
+      }
+
+      if (match.has_conflict) {
+        const primaryIdx = idxs[0];
+        const renamed = await showRenameModal({
+          filename: stagedFiles[primaryIdx].file.name,
+          existingMatch: match.matched_name,
+          conflictType: match.conflict_type,
+          suggestedFilename: suggested,
+          title: 'Rename File — Filename Conflict Detected'
+        });
+        if (renamed && renamed !== stagedFiles[primaryIdx].file.name) {
+          const newTitle = defaultDisplayNameFromFilename(renamed);
+          idxs.forEach((idx, pos) => {
+            const nextFile = pos === 0 ? renamed : (rawStem(renamed) + extOf(stagedFiles[idx].file.name));
+            applyRenameToStaged(idx, nextFile, true, newTitle);
           });
-          if (renamed && renamed !== stagedFiles[i].file.name) {
-            const oldStem = stemOf(stagedFiles[i].file.name);
-            applyRenameToStaged(i, renamed);
-            if (isGroupingOn()) {
-              stagedFiles.forEach((it, k) => {
-                if (k === i || stemOf(it.file.name) !== oldStem) return;
-                const dot = it.file.name.lastIndexOf('.');
-                applyRenameToStaged(k, rawStem(renamed) + (dot !== -1 ? it.file.name.slice(dot) : ''));
-              });
-            }
-          }
+          takenInSession.add(renamed.toLowerCase());
         }
       }
-      takenInSession.add(stagedFiles[i].file.name.toLowerCase());
     }
+    recomputeAutoBlockNames();
     renderStaged();
   } catch (e) {
     console.warn('Failed to check staged conflicts:', e);
@@ -800,32 +1001,228 @@ function updateStagedRowStatus(idx, status) {
   }
 }
 
-function applyRenameToStaged(idx, newFilename) {
+function applyRenameToStaged(idx, newFilename, updateAssetName = false, explicitTitle = null) {
   const item = stagedFiles[idx];
   if (!item) return;
   const oldFile = item.file;
   item.file = new File([oldFile], newFilename, { type: oldFile.type, lastModified: oldFile.lastModified || Date.now() });
-  const cleanName = newFilename.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ").trim();
-  item.name = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+  if (updateAssetName || !item.nameCustom) {
+    item.name = explicitTitle || defaultDisplayNameFromFilename(newFilename);
+    if (explicitTitle) item.nameCustom = true;
+  }
   item.hasConflict = false;
   item.conflictType = null;
   item.status = 'Ready';
 
-  const tr = document.getElementById(`stagedRow_${idx}`);
-  if (tr) {
-    const nameInput = tr.querySelector('.staged-name-input');
-    if (nameInput) nameInput.value = item.name;
-    const fileCell = tr.querySelector('.staged-filename-cell');
-    if (fileCell) {
-      fileCell.innerHTML = `
-        <span style="font-family:monospace; font-weight:500;" title="${escapeHtml(item.file.name)}">${escapeHtml(item.file.name)}</span>
-        ${item.customThumbFile ? `<span class="badge badge-success" style="margin-left:0.5rem; font-size:0.7rem;" title="Custom thumbnail matched by filename stem">📸 ${escapeHtml(item.customThumbFile.name)}</span>` : ''}
-      `;
-    }
-    updateStagedRowStatus(idx, 'Ready');
-  } else {
-    renderStaged();
+  recomputeAutoBlockNames();
+  renderStaged();
+}
+
+function getSelectedIndices() {
+  const out = [];
+  stagedFiles.forEach((it, idx) => {
+    if (it.selected) out.push(idx);
+  });
+  return out;
+}
+
+function updateBulkSelectionSummary() {
+  const badge = document.getElementById('stagedSelectedCount');
+  const selectAll = document.getElementById('stagedSelectAll');
+  const selCount = stagedFiles.filter(it => it.selected).length;
+  if (badge) badge.textContent = `${selCount} selected`;
+  if (selectAll) {
+    selectAll.checked = stagedFiles.length > 0 && selCount === stagedFiles.length;
+    selectAll.indeterminate = selCount > 0 && selCount < stagedFiles.length;
   }
+}
+
+function toggleSelectAllStaged(checked) {
+  stagedFiles.forEach(it => { it.selected = Boolean(checked); });
+  renderStaged();
+}
+
+function onStagedRowSelectChange(idx, checked) {
+  if (stagedFiles[idx]) {
+    stagedFiles[idx].selected = Boolean(checked);
+    updateBulkSelectionSummary();
+  }
+}
+
+function onGroupingOrSeparateOptionChange() {
+  recomputeAutoBlockNames();
+  renderStaged();
+}
+
+function onStagedAssetNameChange(idx, value) {
+  const item = stagedFiles[idx];
+  if (!item) return;
+  item.name = value;
+  item.nameCustom = true;
+  recomputeAutoBlockNames();
+  renderStaged();
+}
+
+function formatBlockHintHtml(info, item, idx) {
+  if (!info) return '';
+  if (info.hasBlockCollision && !info.isDictBlock) {
+    return `<span style="color:#d97706;">⚠️ merges ${info.peersCount} into <code>${escapeHtml(info.effectiveBlock)}</code></span> <button type="button" class="btn-inline-split" onclick="splitBlockGroup(${idx})" title="Separate colliding blocks in this asset">Split</button>`;
+  }
+  if (info.hasBlockCollision && info.isDictBlock) {
+    return `<span style="color:#d97706;">⚠️ duplicate key (auto-suffixes)</span> <button type="button" class="btn-inline-split" onclick="splitBlockGroup(${idx})" title="Separate colliding blocks in this asset">Split</button>`;
+  }
+  if (info.isGrouped) {
+    return `<span style="color:var(--app-success);">✓ separate block <code>${escapeHtml(info.effectiveBlock)}</code></span>`;
+  }
+  if (item.blockNameCustom && info.effectiveBlock !== defaultBlockTypeOf(item.detectedType)) {
+    return `<span style="color:var(--md-sys-color-primary);">✏️ key: <code>${escapeHtml(info.effectiveBlock)}</code></span>`;
+  }
+  return '';
+}
+
+function refreshStagedBlockHints() {
+  const groupOn = isGroupingOn();
+  const analysis = analyzeStagedRows(stagedFiles, groupOn);
+  stagedFiles.forEach((item, idx) => {
+    const tr = document.getElementById(`stagedRow_${idx}`);
+    if (!tr) return;
+    const hintEl = tr.querySelector('.staged-block-hint');
+    if (hintEl) {
+      hintEl.innerHTML = formatBlockHintHtml(analysis[idx], item, idx);
+    }
+  });
+}
+
+function onStagedBlockInput(idx, inputEl) {
+  const item = stagedFiles[idx];
+  if (!item) return;
+  item.blockName = inputEl.value;
+  item.blockNameCustom = true;
+  refreshStagedBlockHints();
+}
+
+function onStagedBlockChange(idx, inputEl) {
+  const item = stagedFiles[idx];
+  if (!item) return;
+  const clean = sanitizeBlockKey(inputEl.value, item.detectedType);
+  item.blockName = clean;
+  item.blockNameCustom = true;
+  inputEl.value = clean;
+  recomputeAutoBlockNames();
+  renderStaged();
+}
+
+function applyBulkBlockName() {
+  const selected = getSelectedIndices();
+  if (selected.length === 0) {
+    if (typeof showToast === 'function') showToast('Check one or more rows first to rename their blocks.', 'warning');
+    return;
+  }
+  const input = document.getElementById('bulkBlockNameInput');
+  const rawBase = input ? input.value.trim() : '';
+  if (!rawBase) {
+    if (input) input.focus();
+    if (typeof showToast === 'function') showToast('Enter a block name first (e.g. background).', 'warning');
+    return;
+  }
+  const sequential = Boolean(document.getElementById('bulkBlockSequential')?.checked);
+  selected.forEach((idx, pos) => {
+    const it = stagedFiles[idx];
+    const targetRaw = sequential ? `${rawBase}_${pos + 1}` : rawBase;
+    it.blockName = sanitizeBlockKey(targetRaw, it.detectedType);
+    it.blockNameCustom = true;
+  });
+  recomputeAutoBlockNames();
+  renderStaged();
+}
+
+function applyFilenameStemAsBlock() {
+  const selected = getSelectedIndices();
+  if (selected.length === 0) {
+    if (typeof showToast === 'function') showToast('Check one or more rows first.', 'warning');
+    return;
+  }
+  selected.forEach(idx => {
+    const it = stagedFiles[idx];
+    it.blockName = sanitizeBlockKey(rawStem(it.file.name), it.detectedType);
+    it.blockNameCustom = true;
+  });
+  recomputeAutoBlockNames();
+  renderStaged();
+}
+
+function splitDuplicateBlocks(targetIndices = null, items = stagedFiles, groupOn = isGroupingOn()) {
+  const groups = groupStagedIndices(items, groupOn, true);
+  const targetSet = (Array.isArray(targetIndices) && targetIndices.length > 0) ? new Set(targetIndices) : null;
+  let changed = false;
+
+  for (const idxs of groups) {
+    if (targetSet && !idxs.some(i => targetSet.has(i))) continue;
+    const seen = new Set();
+    for (const idx of idxs) {
+      const it = items[idx];
+      let candidate = sanitizeBlockKey(it.blockName, it.detectedType);
+      if (seen.has(candidate)) {
+        const base = candidate;
+        let n = 2;
+        while (seen.has(`${base}_${n}`)) n++;
+        candidate = `${base}_${n}`;
+        it.blockName = candidate;
+        it.blockNameCustom = true;
+        changed = true;
+      }
+      seen.add(candidate);
+    }
+  }
+  return changed;
+}
+
+function splitDuplicateBlocksInStaged() {
+  const selected = getSelectedIndices();
+  const changed = splitDuplicateBlocks(selected.length > 0 ? selected : null);
+  if (!changed && typeof showToast === 'function') {
+    showToast('All blocks in each asset already have separate keys.', 'info');
+  }
+  renderStaged();
+}
+
+function splitBlockGroup(idx) {
+  const analysis = analyzeStagedRows(stagedFiles, isGroupingOn());
+  const idxs = analysis[idx]?.groupIndices || [idx];
+  splitDuplicateBlocks(idxs);
+  renderStaged();
+}
+
+function groupSelectedUnderAsset() {
+  const selected = getSelectedIndices();
+  if (selected.length === 0) {
+    if (typeof showToast === 'function') showToast('Check the rows you want to group into one asset.', 'warning');
+    return;
+  }
+  const input = document.getElementById('bulkGroupAssetInput');
+  let sharedName = input ? input.value.trim() : '';
+  if (!sharedName) {
+    const first = stagedFiles[selected[0]];
+    sharedName = (first?.name || '').trim() || defaultDisplayNameFromFilename(first?.file?.name || 'Asset');
+    if (input) input.value = sharedName;
+  }
+  const groupCb = document.getElementById('bulkGroupSameName');
+  if (groupCb && !groupCb.checked) {
+    groupCb.checked = true;
+  }
+  selected.forEach(idx => {
+    stagedFiles[idx].name = sharedName;
+    stagedFiles[idx].nameCustom = true;
+  });
+  recomputeAutoBlockNames();
+  renderStaged();
+}
+
+function removeStagedRow(idx) {
+  if (idx < 0 || idx >= stagedFiles.length) return;
+  stagedFiles.splice(idx, 1);
+  recomputeAutoBlockNames();
+  renderStaged();
 }
 
 function renderStaged() {
@@ -836,6 +1233,7 @@ function renderStaged() {
   if (stagedFiles.length === 0) {
     section.style.display = 'none';
     tbody.replaceChildren();
+    updateBulkSelectionSummary();
     return;
   }
   
@@ -844,23 +1242,31 @@ function renderStaged() {
   const activeTypes = getSelectedDataTypes();
   const fragment = document.createDocumentFragment();
   
-  const groupOn = document.getElementById('bulkGroupSameName')?.checked !== false;
-  const stemCount = {};
-  stagedFiles.forEach(it => { const s = it.file.name.replace(/\.[^/.]+$/, '').toLowerCase(); stemCount[s] = (stemCount[s] || 0) + 1; });
+  const groupOn = isGroupingOn();
+  const analysis = analyzeStagedRows(stagedFiles, groupOn);
 
   stagedFiles.forEach((item, idx) => {
-    const grouped = groupOn && stemCount[item.file.name.replace(/\.[^/.]+$/, '').toLowerCase()] > 1;
+    const info = analysis[idx] || { isGrouped: false, groupSize: 1, effectiveBlock: defaultBlockTypeOf(item.detectedType) };
     const tr = document.createElement('tr');
     tr.id = `stagedRow_${idx}`;
     const isVisual = item.detectedType === 'image' || item.detectedType === 'frames';
     tr.innerHTML = `
-      <td style="text-align:center; color:var(--md-sys-color-on-surface-variant); font-size:0.85rem;">${idx + 1}</td>
+      <td style="text-align:center; color:var(--md-sys-color-on-surface-variant); font-size:0.85rem;">
+        <label style="display:inline-flex; align-items:center; gap:0.25rem; cursor:pointer;">
+          <input type="checkbox" ${item.selected ? 'checked' : ''} onchange="onStagedRowSelectChange(${idx}, this.checked)" style="accent-color:var(--md-sys-color-primary);">
+          <span>${idx + 1}</span>
+        </label>
+      </td>
       <td>
-        <input type="text" class="input staged-name-input" value="${escapeHtml(item.name)}" onchange="stagedFiles[${idx}].name = this.value" style="min-height:34px; padding:0.25rem 0.5rem; width:100%; box-sizing:border-box;">
+        <input type="text" class="input staged-name-input" value="${escapeHtml(item.name)}" onchange="onStagedAssetNameChange(${idx}, this.value)" style="min-height:34px; padding:0.25rem 0.5rem; width:100%; box-sizing:border-box;">
+      </td>
+      <td class="staged-block-cell">
+        <input type="text" class="input staged-block-input" value="${escapeHtml(item.blockName || defaultBlockTypeOf(item.detectedType))}" oninput="onStagedBlockInput(${idx}, this)" onchange="onStagedBlockChange(${idx}, this)" placeholder="${escapeHtml(defaultBlockTypeOf(item.detectedType))}">
+        <div class="staged-block-hint">${formatBlockHintHtml(info, item, idx)}</div>
       </td>
       <td class="staged-filename-cell" style="color:var(--md-sys-color-on-surface-variant); font-size:0.85rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
         <span style="font-family:monospace; font-weight:500;" title="${escapeHtml(item.file.name)}">${escapeHtml(item.file.name)}</span>
-        ${grouped ? '<span class="badge badge-primary" style="margin-left:0.5rem; font-size:0.7rem;" title="Merged into one asset with same-name files">🔗 grouped</span>' : ''}
+        ${info.isGrouped ? `<span class="badge badge-primary" style="margin-left:0.5rem; font-size:0.7rem;" title="Merged into one asset (${info.groupIndices.length} files)">🔗 grouped</span>` : ''}
         ${item.hasConflict ? `<span class="badge ${item.conflictType === 'exact' ? 'badge-error' : 'badge-warning'}" style="margin-left:0.5rem; font-size:0.7rem;">${item.conflictType === 'exact' ? 'Collision' : 'Similar Name'}</span>` : ''}
         ${item.customThumbFile ? `<span class="badge badge-success" style="margin-left:0.5rem; font-size:0.7rem;" title="Custom thumbnail matched by filename stem">📸 ${escapeHtml(item.customThumbFile.name)}</span>` : ''}
       </td>
@@ -870,14 +1276,16 @@ function renderStaged() {
       <td style="font-size:0.85rem; white-space:nowrap;">${item.size}</td>
       <td class="staged-status-cell">${getStatusBadgeHtml(item.status)}</td>
       <td style="text-align:right; white-space:nowrap;">
-        ${isVisual ? `<button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.75rem; margin-right:0.35rem;" onclick="openCropModalForStaged(${idx})" title="Crop / Cut File">✂️ Crop data</button>` : ''}
-        <button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.5rem; font-size:0.75rem;" onclick="openRenameModalForStaged(${idx})" title="Rename File">✏️ Rename</button>
+        ${isVisual ? `<button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.45rem; font-size:0.74rem; margin-right:0.25rem;" onclick="openCropModalForStaged(${idx})" title="Crop / Cut File">✂️ Crop</button>` : ''}
+        <button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.45rem; font-size:0.74rem; margin-right:0.25rem;" onclick="openRenameModalForStaged(${idx})" title="Rename File">✏️</button>
+        <button type="button" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.45rem; font-size:0.74rem; color:var(--md-sys-color-error);" onclick="removeStagedRow(${idx})" title="Remove from queue">✕</button>
       </td>
     `;
     fragment.appendChild(tr);
   });
   
   tbody.replaceChildren(fragment);
+  updateBulkSelectionSummary();
 }
 
 function renderDataTypeCell(item, idx, activeTypes) {
@@ -909,6 +1317,7 @@ function renderDataTypeCell(item, idx, activeTypes) {
 function updateStagedType(idx, newType) {
   if (stagedFiles[idx]) {
     stagedFiles[idx].detectedType = newType;
+    recomputeAutoBlockNames();
     renderStaged();
   }
 }
@@ -920,10 +1329,12 @@ async function openCropModalForStaged(idx) {
     const cropped = await window.MediaCropper.open(item.file);
     if (cropped && !cropped.cropCancelled && cropped !== item.file) {
       item.file = cropped;
-      const cleanName = cropped.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ").trim();
-      item.name = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+      if (!item.nameCustom) {
+        item.name = defaultDisplayNameFromFilename(cropped.name);
+      }
       item.size = (cropped.size / 1024).toFixed(1) + ' KB';
       item.status = 'Ready';
+      recomputeAutoBlockNames();
       renderStaged();
     }
   } catch (e) {
@@ -959,7 +1370,10 @@ dropzone.addEventListener('drop', (e) => {
 
 function mergeBlocks(target, part) {
   for (const [key, val] of Object.entries(part)) {
-    if (Array.isArray(val)) { target[key] = (target[key] || []).concat(val); continue; }
+    if (Array.isArray(val) && (!(key in target) || Array.isArray(target[key]))) {
+      target[key] = (target[key] || []).concat(val);
+      continue;
+    }
     let k = key, n = 2;
     while (k in target) k = `${key}_${n++}`;
     target[k] = val;
@@ -973,6 +1387,7 @@ async function buildBlocks(item, uploadData) {
       // Step 2: Create Central Asset with valid typed block based on detectedType
       const rawType = item.detectedType || 'image';
       const detectedType = (rawType === 'videos') ? 'video' : rawType;
+      const blockKey = sanitizeBlockKey(item.blockName, detectedType);
       let moreFieldsPayload = {};
 
       if (detectedType === 'json') {
@@ -984,7 +1399,7 @@ async function buildBlocks(item, uploadData) {
           console.warn('Failed to parse JSON file content', pe);
         }
         moreFieldsPayload = {
-          json: {
+          [blockKey]: {
             type: 'json',
             data: (typeof parsedData === 'object' && parsedData !== null && !Array.isArray(parsedData)) ? parsedData : { data: parsedData, file_url: mediaUrl }
           }
@@ -1038,7 +1453,7 @@ async function buildBlocks(item, uploadData) {
         });
 
         moreFieldsPayload = {
-          frames: {
+          [blockKey]: {
             image_url: frameImgUrl,
             coordinates: cleanCoordinates
           }
@@ -1047,12 +1462,12 @@ async function buildBlocks(item, uploadData) {
         const blockMeta = {
           url: mediaUrl,
           filename: uploadData.filename || item.file.name,
-          mime: item.file.type || 'text/html',
+          mime: item.file.type || uploadData.mime || 'text/html',
           filesize: uploadData.filesize || uploadData.size_bytes || item.file.size,
           size_bytes: uploadData.size_bytes || uploadData.filesize || item.file.size
         };
         moreFieldsPayload = {
-          html: [blockMeta]
+          [blockKey]: [blockMeta]
         };
       } else if (detectedType === 'file') {
         const blockMeta = {
@@ -1063,18 +1478,21 @@ async function buildBlocks(item, uploadData) {
           size_bytes: uploadData.size_bytes || uploadData.filesize || item.file.size
         };
         moreFieldsPayload = {
-          file: [blockMeta]
+          [blockKey]: [blockMeta]
         };
       } else {
-        // Media types: image, video, audio
+        // Media types: image, svg, video, audio
+        const fallbackMime = detectedType === 'audio'
+          ? 'audio/mpeg'
+          : (detectedType === 'video' ? 'video/mp4' : (detectedType === 'svg' ? 'image/svg+xml' : 'image/png'));
         const blockMeta = {
           url: mediaUrl,
           filename: uploadData.filename || item.file.name,
-          mime: item.file.type || (detectedType === 'audio' ? 'audio/mpeg' : (detectedType === 'video' ? 'video/mp4' : 'image/png')),
+          mime: item.file.type || uploadData.mime || fallbackMime,
           filesize: uploadData.filesize || uploadData.size_bytes || item.file.size,
           size_bytes: uploadData.size_bytes || uploadData.filesize || item.file.size
         };
-        if (detectedType !== 'audio' && detectedType !== 'html') {
+        if (detectedType !== 'audio' && detectedType !== 'html' && detectedType !== 'file') {
           if (uploadData.width) blockMeta.width = uploadData.width;
           if (uploadData.height) blockMeta.height = uploadData.height;
           if (uploadData.dimensions) blockMeta.dimensions = uploadData.dimensions;
@@ -1084,7 +1502,7 @@ async function buildBlocks(item, uploadData) {
         if (uploadData.duration_ms) blockMeta.duration_ms = uploadData.duration_ms;
 
         moreFieldsPayload = {
-          [detectedType]: [blockMeta]
+          [blockKey]: [blockMeta]
         };
       }
   return moreFieldsPayload;
@@ -1108,23 +1526,32 @@ async function startBulkUpload() {
   btn.disabled = true;
   btn.textContent = 'Ingesting assets...';
   
-  const groupOn = document.getElementById('bulkGroupSameName')?.checked !== false;
-  const groups = [];
-  const byStem = new Map();
-  stagedFiles.forEach((it, idx) => {
-    if (it.status === 'Uploaded') return;
-    const stem = it.file.name.replace(/\.[^/.]+$/, '').toLowerCase();
-    if (groupOn && byStem.has(stem)) byStem.get(stem).push(idx);
-    else { const grp = [idx]; groups.push(grp); if (groupOn) byStem.set(stem, grp); }
-  });
+  const groupOn = isGroupingOn();
+  const groups = groupStagedIndices(stagedFiles, groupOn, false);
 
   groupLoop:
   for (let g = 0; g < groups.length; g++) {
     const idxs = groups[g];
+    const rank = { image: 0, svg: 0, video: 1, videos: 1, frames: 2, audio: 3 };
+    const members = idxs.map(k => stagedFiles[k]);
+    const primaryItem = members.slice().sort((a, b) => (rank[a.detectedType] ?? 9) - (rank[b.detectedType] ?? 9))[0];
+    const groupAssetName = (primaryItem.name || '').trim() || rawStem(primaryItem.file.name);
+    const usedGroupFilenames = new Set();
+    for (const k of idxs) {
+      if (stagedFiles[k].uploadData) {
+        usedGroupFilenames.add((stagedFiles[k].uploadData.filename || stagedFiles[k].file.name).toLowerCase());
+      }
+    }
+
     try {
       for (const i of idxs) {
       const item = stagedFiles[i];
       if (item.uploadData) continue;
+      if (usedGroupFilenames.has(item.file.name.toLowerCase())) {
+        const dedupName = getNextCandidateName(item.file.name, usedGroupFilenames);
+        item.file = new File([item.file], dedupName, { type: item.file.type, lastModified: item.file.lastModified || Date.now() });
+      }
+      usedGroupFilenames.add(item.file.name.toLowerCase());
       updateStagedRowStatus(i, 'Uploading...');
       // Step 1: Upload media file to hierarchical storage
       let uploadData = null;
@@ -1134,7 +1561,7 @@ async function startBulkUpload() {
             folder: 'assets',
             categoryId: catId,
             subCategoryId: subId,
-            assetName: item.name,
+            assetName: groupAssetName,
             onProgress: (p) => {
               updateStagedRowStatus(i, `Uploading (${p.percent}%)...`);
             }
@@ -1149,7 +1576,7 @@ async function startBulkUpload() {
               title: 'Filename Collision — Rename File'
             });
             if (renamed && renamed !== item.file.name) {
-              applyRenameToStaged(i, renamed);
+              applyRenameToStaged(i, renamed, false);
               g--;
               continue groupLoop;
             }
@@ -1162,8 +1589,8 @@ async function startBulkUpload() {
         formData.append('folder', 'assets');
         formData.append('categoryId', catId);
         formData.append('subCategoryId', subId);
-        if (item.name) {
-          formData.append('assetName', item.name);
+        if (groupAssetName) {
+          formData.append('assetName', groupAssetName);
         }
         
         const upRes = await fetch('/api/v1/media/upload', {
@@ -1182,7 +1609,7 @@ async function startBulkUpload() {
               title: 'Filename Collision — Rename File'
             });
             if (renamed && renamed !== item.file.name) {
-              applyRenameToStaged(i, renamed);
+              applyRenameToStaged(i, renamed, false);
               g--;
               continue groupLoop;
             }
@@ -1194,10 +1621,8 @@ async function startBulkUpload() {
       item.uploadData = uploadData;
       }
 
-      // Step 2: one asset per group; every member file becomes a block
-      const rank = { image: 0, video: 1, videos: 1, frames: 2, audio: 3 };
-      const members = idxs.map(k => stagedFiles[k]);
-      const item = members.slice().sort((a, b) => (rank[a.detectedType] ?? 9) - (rank[b.detectedType] ?? 9))[0];
+      // Step 2: one asset per group; every member file becomes a named block
+      const item = primaryItem;
       const i = stagedFiles.indexOf(item);
       const uploadData = item.uploadData;
       const mediaUrl = uploadData.url || '';
@@ -1233,7 +1658,7 @@ async function startBulkUpload() {
       }
 
       if (!finalThumbUrl) {
-        if (thumbMode === 'original' && detectedType === 'image') {
+        if (thumbMode === 'original' && (detectedType === 'image' || detectedType === 'svg')) {
           finalThumbUrl = mediaUrl;
         } else if (detectedType === 'audio' || detectedType === 'json' || detectedType === 'html' || detectedType === 'file') {
           finalThumbUrl = '/static/thumbnail_default.png';
@@ -1243,7 +1668,7 @@ async function startBulkUpload() {
           const isVideoUrl = uploadData.thumbnail_url && /\.(mp4|webm|mov|avi|mkv)(\?.*)?$/i.test(uploadData.thumbnail_url);
           if (uploadData.thumbnail_url && !isVideoUrl) {
             finalThumbUrl = uploadData.thumbnail_url;
-          } else if (detectedType === 'image') {
+          } else if (detectedType === 'image' || detectedType === 'svg') {
             finalThumbUrl = mediaUrl;
           } else {
             finalThumbUrl = null;
@@ -1252,7 +1677,7 @@ async function startBulkUpload() {
       }
 
       const assetPayload = {
-        name: item.name,
+        name: groupAssetName,
         description: `Imported asset from ${item.file.name}`,
         categoryId: catId,
         subCategoryId: subId,
@@ -1272,12 +1697,21 @@ async function startBulkUpload() {
         if (createRes.status === 409 || msg.includes('already exists') || msg.includes('clash')) {
           const renamed = await showRenameModal({
             filename: item.file.name,
-            existingMatch: item.name,
+            existingMatch: groupAssetName,
             conflictType: 'exact',
-            title: 'Asset Name Clash — Rename Filename'
+            title: 'Asset Name Clash — Rename Asset'
           });
           if (renamed && renamed !== item.file.name) {
-            applyRenameToStaged(i, renamed);
+            const nextTitle = defaultDisplayNameFromFilename(renamed);
+            applyRenameToStaged(i, renamed, true, nextTitle);
+            if (groupOn) {
+              idxs.forEach(k => {
+                if (k !== i) {
+                  stagedFiles[k].name = nextTitle;
+                  stagedFiles[k].nameCustom = true;
+                }
+              });
+            }
             g--;
             continue groupLoop;
           }
