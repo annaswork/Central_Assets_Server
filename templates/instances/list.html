@@ -58,7 +58,8 @@
             <div style="font-size:0.8rem; font-family:monospace; color:var(--md-sys-color-on-surface-variant);">ID: {{ inst.id }}</div>
           </td>
           <td data-label="Package">
-            <code>{{ inst.packageName or '—' }}</code>
+            {% set pkg = inst.package_name or inst.packageName %}
+            <code>{{ pkg if (pkg and pkg != 'None') else '—' }}</code>
           </td>
           <td data-label="Created">
             {{ (inst.created_at|string)[:10] if inst.created_at else 'N/A' }}

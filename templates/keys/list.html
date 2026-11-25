@@ -29,7 +29,8 @@
       <select name="app_instance_id" class="select">
         <option value="">-- Global / Unscoped --</option>
         {% for inst in instances %}
-          <option value="{{ inst.id }}">{{ inst.name }} ({{ inst.packageName or 'No pkg' }})</option>
+          {% set pkg = inst.package_name or inst.packageName %}
+          <option value="{{ inst.id }}">{{ inst.name }} ({{ pkg if (pkg and pkg != 'None') else 'No pkg' }})</option>
         {% endfor %}
       </select>
     </div>

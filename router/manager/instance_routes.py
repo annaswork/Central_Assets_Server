@@ -116,7 +116,7 @@ async def manager_list_instances(
         other_instances.append({
             "id": oid_str,
             "name": o.get("name", "Untitled"),
-            "package_name": o.get("package_name"),
+            "package_name": o.get("package_name") or o.get("packageName"),
             "is_pending_request": oid_str in pending_app_ids,
         })
 

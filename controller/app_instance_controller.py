@@ -1,5 +1,6 @@
 """App Instance controller managing application entities and branding icons."""
 
+import re
 from typing import Any
 
 import anyio
@@ -29,17 +30,22 @@ async def list_app_instances(
     instance_ids: list[str] | None = None,
     owner_id: str | None = None,
 ) -> dict[str, Any]:
-    """List app instances with pagination, optionally scoped by IDs or owner."""
-    query: dict[str, Any] = {}
+    """List app instances with pagination, optionally scoped by IDs, owner, or name/package search."""
+    conditions: list[dict[str, Any]] = []
     if search and search.strip():
-        query["name"] = {"$regex": search.strip(), "$options": "i"}
+        regex = {"$regex": re.escape(search.strip()), "$options": "i"}
+        conditions.append({"$or": [{"name": regex}, {"package_name": regex}, {"packageName": regex}]})
 
     if instance_ids is not None:
-        query["_id"] = {"$in": [to_object_id(i) for i in instance_ids]}
+        conditions.append({"_id": {"$in": [to_object_id(i) for i in instance_ids]}})
 
     if owner_id:
         m_oid = to_object_id(owner_id)
-        query["$or"] = [{"owner_id": m_oid}, {"owner_id": str(m_oid)}]
+        conditions.append({"$or": [{"owner_id": m_oid}, {"owner_id": str(m_oid)}]})
+
+    query: dict[str, Any] = (
+        {"$and": conditions} if len(conditions) > 1 else (conditions[0] if conditions else {})
+    )
 
     skip = (page - 1) * page_size
     total = await db[APP_INSTANCES].count_documents(query)

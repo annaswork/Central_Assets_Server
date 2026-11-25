@@ -55,7 +55,8 @@
                 </div>
               </td>
               <td>
-                <code>{{ inst.package_name or 'Not configured' }}</code>
+                {% set pkg = inst.package_name or inst.packageName %}
+                <code>{{ pkg if (pkg and pkg != 'None') else 'Not configured' }}</code>
               </td>
               <td style="text-align:center;">
                 <span class="badge badge-primary">Active</span>
