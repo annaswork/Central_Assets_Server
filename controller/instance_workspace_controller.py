@@ -558,8 +558,18 @@ def parse_asset_override_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 break
 
     overrides: dict[str, Any] = {}
-    if payload.get("name") is not None:
-        overrides["name"] = str(payload["name"]).strip()
+    if "name" in payload:
+        overrides["name"] = str(payload["name"] or "").strip() or None
+    if "description" in payload:
+        desc_val = payload["description"]
+        overrides["description"] = str(desc_val).strip() if desc_val is not None else None
+    thumb_key = "thumbnail_url" if "thumbnail_url" in payload else ("thumbnailUrl" if "thumbnailUrl" in payload else None)
+    if thumb_key:
+        overrides["thumbnail_url"] = str(payload[thumb_key] or "").strip() or None
+    mf_key = "more_fields" if "more_fields" in payload else ("moreFields" if "moreFields" in payload else None)
+    if mf_key:
+        mf_val = payload[mf_key]
+        overrides["more_fields"] = mf_val if isinstance(mf_val, dict) else None
     if "tags" in payload:
         overrides["tags"] = _parse_tags(payload.get("tags"))
 
@@ -580,7 +590,7 @@ FOLDER_TYPES = {"super_category", "category", "subcategory"}
 def parse_folder_override_payload(folder_type: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Normalize a folder override body into update_item_settings_and_overrides kwargs.
 
-    An empty name clears the rename, so the folder shows its original name again.
+    An empty string for name, thumbnail_url, or image_url clears that override back to central defaults.
     """
     if folder_type not in FOLDER_TYPES:
         raise ValidationError(f"Unknown folder type: {folder_type}")
@@ -597,6 +607,12 @@ def parse_folder_override_payload(folder_type: str, payload: dict[str, Any]) -> 
     overrides: dict[str, Any] = {}
     if "name" in payload:
         overrides["name"] = str(payload["name"] or "").strip() or None
+    thumb_key = "thumbnail_url" if "thumbnail_url" in payload else ("thumbnailUrl" if "thumbnailUrl" in payload else None)
+    if thumb_key:
+        overrides["thumbnail_url"] = str(payload[thumb_key] or "").strip() or None
+    img_key = "image_url" if "image_url" in payload else ("imageUrl" if "imageUrl" in payload else None)
+    if img_key:
+        overrides["image_url"] = str(payload[img_key] or "").strip() or None
     if "tags" in payload:
         overrides["tags"] = _parse_tags(payload["tags"])
     if overrides:

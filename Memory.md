@@ -3,7 +3,7 @@
 > **Single Source of Truth** for the Creative Asset Library & App Instance Management Platform.  
 > **Purpose:** This document provides an exhaustive, authoritative reference for the architecture, data models, business logic, endpoints, asset processing pipelines, and chronological changelog of the entire codebase. Future modifications should reference this file directly without needing to re-analyze the entire codebase.
 >
-> **Last Updated:** October 26, 2026 (Instance content page scales with large instances)
+> **Last Updated:** November 26, 2026 (Manager Direct Uploads -> Central Sync, App-Level Content Editing + Admin Proposal Review, Non-Destructive Manager Deletion, and 2FA API Key Reveal)
 
 ---
 
@@ -21,23 +21,25 @@
    - [Interactive Developer Docs (`/docs`, `/redoc`)](#34-interactive-developer-docs-docs-redoc)
 4. [Database Collections & Schemas (MongoDB / Motor)](#4-database-collections--schemas-mongodb--motor)
 5. [Asset Pipeline & Supported Media Formats](#5-asset-pipeline--supported-media-formats)
-   - [Supported Formats (Images, Videos, Animations, HTML)](#51-supported-formats)
+   - [Supported Formats (Images, SVG, Videos, Animations, HTML, Documents)](#51-supported-formats)
    - [Alpha Transparency, Non-Destructive Cropping & GIF Dither Suppression](#52-alpha-transparency-non-destructive-cropping--gif-dither-suppression)
    - [OpenCV Transparent Frame Placeholder Detection](#53-opencv-transparent-frame-placeholder-detection)
    - [HTML Asset Support & Iframe Sandboxing](#54-html-asset-support--iframe-sandboxing)
+   - [Bulk Single-File Add, Asset-Name Grouping & Custom Block Keys (`moreFields`)](#55-bulk-single-file-add-asset-name-grouping--custom-block-keys-morefields)
 6. [App Instance Hierarchy & Import Workflow](#6-app-instance-hierarchy--import-workflow)
    - [Auto-Tab Switching in Content Pickers](#61-auto-tab-switching-in-content-pickers)
    - [Scoped Import into Target Folders](#62-scoped-import-into-target-folders)
    - [Custom Folder Creation (Admin & Manager)](#63-custom-folder-creation-admin--manager)
    - [Detaching & Reference Removal](#64-detaching--reference-removal)
    - [Tagging, Reordering, and Monetization Overrides](#65-tagging-reordering-and-monetization-overrides)
+   - [Tier & Frequency Distribution Engine (`N-1` Cap, Alternate Paid & Bulk Rules)](#66-tier--frequency-distribution-engine-n-1-cap-alternate-paid--bulk-rules)
 7. [API Endpoints Reference](#7-api-endpoints-reference)
    - [Client API (`/api/v1`)](#71-client-api-apiv1)
    - [Admin Portal Endpoints (`/admin`)](#72-admin-portal-endpoints-admin)
    - [Manager Portal Endpoints (`/manager`)](#73-manager-portal-endpoints-manager)
 8. [Chronological Project Changelog & All Updates Done](#8-chronological-project-changelog--all-updates-done)
 9. [Project Directory Tree & Key File Map](#9-project-directory-tree--key-file-map)
-10. [Configuration, CLI Scripts & Operational Rules](#10-configuration-cli-scripts--operational-rules)
+10. [Configuration, CLI Scripts, Operational Rules & Change Playbook](#10-configuration-cli-scripts-operational-rules--change-playbook)
 
 ---
 
@@ -128,10 +130,12 @@ The platform strictly separates content authoring from content delivery through 
     - 1-Click quick import of entire categories, subcategories, or individual assets.
     - Import central data directly into target categories and subcategories.
     - Drag-and-drop sequencing for folders, subcategories, and assets.
+    - Direct asset creation (`Bulk Single-File Add` and `Multi-File Asset`) inside assigned App Instances that automatically creates or reuses Categories/Subcategories in Central Data and links items into the app (`detach` removes only the instance link).
+    - App-level editing of Category, Subcategory (`name`, `thumbnail_url`, `image_url`, `tags`), and Asset content (`name`, `description`, `thumbnail_url`, `more_fields` via `instance_*.overrides` + isolated `instance_overrides/<app_id>/` storage), automatically sending structured `asset_update` diff proposals to Admin Inbox when asset content changes.
     - Monetization controls: toggle `is_premium`, `is_rewarded`, and set `rewarded_credits`.
     - Single and bulk asset tagging with live DOM updates.
     - Detach folders and assets safely without mutating central records.
-  - Manage API keys for assigned instances (create, revoke, configure IP limits and surge ceilings).
+  - Manage API keys for assigned instances (create, 2FA-verified full key reveal, revoke, configure IP limits and surge ceilings).
   - Dedicated Manager Analytics: view impressions, downloads, bandwidth, and daily trend charts.
   - Direct 2-way messaging with Admin operators.
 - **Session:** Signed HTTP-only cookie `manager_session` verified via `authorization/manager_session.py`.
@@ -164,30 +168,35 @@ Database Name: `admin_assets_db` (configured via `MONGODB_DB_NAME`).
 | `SUPER_CATEGORIES` | `super_categories` | Central optional top level grouping categories | `_id`, `name`, `folder_name` (`_super/<slug>`), `thumbnail_url`, `image_url`, `sequence`, `deleted_at`. Unique ci index on `name`. |
 | `CATEGORIES` | `categories` | Central library categories (`super_category_id`: optional parent) | `_id`, `name`, `thumbnail_url`, `sequence`, `is_enabled`, `deleted_at`. Unique index on `name` where `deleted_at: null`. |
 | `SUBCATEGORIES` | `subcategories` | Central library subcategories | `_id`, `category_id`, `name`, `thumbnail_url`, `sequence`, `is_enabled`, `deleted_at`. Compound index on `(category_id, name)`. |
-| `ASSETS` | `assets` | Central library assets | `_id`, `category_id`, `sub_category_id`, `name`, `type` (`image`, `video`, `html`, etc.), `file_url`, `thumbnail_url`, `tags`, `frame_metadata`, `deleted_at`. |
-| `APP_INSTANCES` | `app_instances` | Client app delivery configurations | `_id`, `name`, `package_name`, `owner_id`, `is_active`, `created_at`. Unique index on `package_name`. |
-| `INSTANCE_SUPER_CATEGORIES` | `instance_super_categories` | Super categories linked or created in an app instance | `_id`, `app_instance_id`, `source_id` (ObjectId or None), `name`, `sequence`, `is_enabled`, `overrides: {}`, `deleted_at`. Unique `(app_instance_id, source_id)`. |
-| `INSTANCE_CATEGORIES` | `instance_categories` | Categories linked or created in an app instance (`super_category_id` → instance super category `_id`, or None) | `_id`, `app_instance_id`, `source_id` (ObjectId or None), `name`, `sequence`, `is_enabled`, `overrides: {}`, `deleted_at`. Compound index on `(app_instance_id, source_id)`. |
-| `INSTANCE_SUBCATEGORIES` | `instance_subcategories` | Subcategories linked or created in an app instance | `_id`, `app_instance_id`, `source_id` (ObjectId or None), `category_id` (parent link), `name`, `sequence`, `is_enabled`, `overrides: {}`, `deleted_at`. |
-| `INSTANCE_ASSETS` | `instance_assets` | Assets linked into an app instance | `_id`, `app_instance_id`, `source_id`, `category_id`, `sub_category_id`, `sequence`, `is_enabled`, `is_premium`, `is_rewarded`, `rewarded_credits`, `tags`, `overrides: {}`, `deleted_at`. |
-| `MANAGERS` | `managers` | Product manager operator accounts | `_id`, `username`, `email`, `password_hash`, `is_active`, `status`, `two_factor_enabled`, `totp_secret`, `created_at`. |
-| `MANAGER_ACCESS_REQUESTS`| `manager_access_requests` | Requests for instance access or creation | `_id`, `manager_id`, `request_type` (`access_instance`, `create_instance`), `app_instance_id`, `status` (`pending`, `approved`, `rejected`), `notes`. |
-| `MANAGER_MESSAGES` | `manager_messages` | In-app messaging between managers & admins | `_id`, `sender_type` (`manager`, `admin`), `sender_id`, `recipient_id`, `subject`, `message`, `is_read`, `created_at`. |
-| `API_KEYS` | `api_keys` | Authenticated client app API keys | `_id`, `key_prefix`, `key_hash`, `app_instance_id`, `owner_id`, `scopes`, `user_ip_limit`, `app_surge_ceiling`, `status` (`active`, `revoked`). |
-| `ANALYTICS_EVENTS` | `analytics_events` | Raw client tracking events (`view`, `download`) | `_id`, `app_instance_id`, `asset_id`, `event_type`, `client_ip`, `user_agent`, `created_at`. Time-series or 30-day TTL. |
-| `ANALYTICS_ROLLUPS` | `analytics_rollups` | Pre-aggregated daily/monthly metrics | `_id`, `app_instance_id`, `date`, `total_views`, `total_downloads`, `unique_ips`. |
+| `ASSETS` | `assets` | Central library assets | `_id`, `category_id`, `sub_category_id`, `name`, `folder_name`, `thumbnail_url`, `more_fields` (polymorphic named blocks), `is_enabled`, `is_premium`, `sequence`, `views`, `downloads`, `deleted_at`. |
+| `APP_INSTANCES` | `app_instances` | Client app delivery configurations | `_id`, `name`, `package_name`, `app_icon`, `owner_id`, `ownership_transferred_to`, `previous_owner_username`, `tags` (app tag presets), `bulk_asset_tier_distribution_settings`, `created_at`. Unique index on `package_name`. |
+| `INSTANCE_SUPER_CATEGORIES` | `instance_super_categories` | Super categories linked or created in an app instance | `_id`, `app_instance_id`, `source_id` (ObjectId or None), `name`, `sequence`, `is_enabled`, `is_premium`, `overrides: {}`, `deleted_at`. Unique `(app_instance_id, source_id)`. |
+| `INSTANCE_CATEGORIES` | `instance_categories` | Categories linked or created in an app instance (`super_category_id` → instance super category `_id`, or None) | `_id`, `app_instance_id`, `source_id` (ObjectId or None), `super_category_id`, `name`, `sequence`, `is_enabled`, `is_premium`, `is_rewarded`, `tags`, `tier_distribution_settings`, `bulk_asset_tier_distribution_settings`, `overrides: {}`, `deleted_at`. |
+| `INSTANCE_SUBCATEGORIES` | `instance_subcategories` | Subcategories linked or created in an app instance | `_id`, `app_instance_id`, `source_id` (ObjectId or None), `category_id`, `name`, `sequence`, `is_enabled`, `is_premium`, `is_rewarded`, `tags`, `tier_distribution_settings`, `overrides: {}`, `deleted_at`. |
+| `INSTANCE_ASSETS` | `instance_assets` | Assets linked into an app instance | `_id`, `app_instance_id`, `source_id`, `category_id`, `sub_category_id`, `sequence`, `is_enabled`, `is_premium`, `is_rewarded`, `rewarded_credits`, `views`, `downloads`, `tags`, `overrides: {}` (`name`, `description`, `thumbnail_url`, `more_fields`, `is_priced`, `tags`), `deleted_at`. |
+| `ADMIN_USERS` | `admin_users` | Super Admin operator accounts | `_id`, `username`, `email`, `password_hash`, `is_active`, `is_2fa_enabled`, `totp_secret`, `created_at`. |
+| `MANAGERS` | `managers` | Product manager operator accounts | `_id`, `username`, `email`, `password_hash`, `is_active`, `status`, `is_2fa_enabled`, `totp_secret`, `created_at`. |
+| `APP_INSTANCE_ACCESS` | `app_instance_access` | Granted manager ↔ app instance access links | `_id`, `manager_id`, `app_instance_id`, `created_at`. |
+| `APP_INSTANCE_ACCESS_REQUESTS` | `app_instance_access_requests` | Requests for instance access or creation | `_id`, `manager_id`, `request_type`, `app_instance_id`, `status` (`pending`, `approved`, `rejected`), `notes`. |
+| `MESSAGES` | `messages` | In-app messaging & structured proposals between managers & admins | `_id`, `manager_id`, `sender_role`, `sender_name`, `subject`, `content`, `payload_type` (`category`, `subcategory`, `asset`, `asset_update`), `data_payload`, `status` (`unread`, `read`, `applied`, `kept_app_only`), `created_at`. |
+| `API_KEYS` | `api_keys` | Authenticated client app API keys | `_id`, `key_prefix`, `secret_hash`, `encrypted_key` (Fernet cipher for 2FA reveal), `app_instance_id`, `owner_id`, `owner_role`, `previous_owner_username`, `scopes`, `rate_limit_per_min`, `app_surge_ceiling_per_min`, `is_active`, `last_revealed_at`. |
+| `MONITORED_ENDPOINTS` | `monitored_endpoints` | Registered route templates for analytics tracking | `_id`, `path_template`, `method`, `name`. |
+| `ANALYTICS_EVENTS` | `analytics_events` | Raw client tracking events (`view`, `download`) | `_id`, `app_instance_id`, `asset_id`, `event_type`, `client_ip`, `user_agent`, `created_at`. |
+| `ANALYTICS_HOURLY` | `analytics_hourly` | Pre-aggregated hourly analytics metrics | `_id`, `app_instance_id`, `hour`, `total_views`, `total_downloads`, `unique_ips`. |
+| `MIGRATIONS` | `_migrations` | Startup schema & link reconciliation markers | `_id`, `name`, `applied_at`. |
 
 ---
 
 ## 5. Asset Pipeline & Supported Media Formats
 
 ### 5.1 Supported Formats
-The platform supports five primary categories of assets:
-1. **Static Images:** `PNG`, `JPG`, `JPEG`, `WEBP`.
-2. **Videos:** `MP4`, `WEBM`, `MOV` (with automatic FFmpeg duration, dimensions, and poster frame extraction).
-3. **Animations:** `GIF`, `APNG`, Animated `WEBP`, and Lottie `JSON` animations.
-4. **Interactive HTML:** `.html` / `text/html` rich widgets, mini-games, and custom web components.
-5. **Documents & Generic Files:** `.xml`, `.pdf`, `.txt`, `.csv`, `.doc`, `.docx`, `.xls`, `.xlsx`, `.zip`, `.rar`, `.7z`, `.tar`, `.gz`, and arbitrary documents with automatic MIME classification, default document thumbnail assignment, download/preview links, and dedicated filter tags.
+The platform supports six categories of assets across `ASSET_TYPE_RULES` (`controller/asset_controller.py`):
+1. **Static Images:** `PNG`, `JPG`, `JPEG`, `WEBP`, `BMP`, `AVIF`.
+2. **SVG Vectors:** `.svg` / `image/svg+xml`, validated with `is_safe_svg()` (`utils/file_utils.py`) to reject scripts/event handlers/`foreignObject`, stored as its own thumbnail, and served with `Content-Security-Policy: default-src 'none'`.
+3. **Videos:** `MP4`, `WEBM`, `MOV`, `AVI`, `MKV` (with automatic FFmpeg duration, dimensions, and poster frame extraction).
+4. **Animations:** `GIF`, `APNG`, Animated `WEBP`, and Lottie `JSON` animations.
+5. **Audio:** `MP3`, `WAV`, `OGG`, `M4A`, `AAC`, `FLAC`, `OPUS`, `WMA` (dimensions stripped by rule).
+6. **Interactive HTML & Documents/Generic Files:** `.html`/`.htm` (`text/html`, previewed in sandboxed iframes) and `.xml`, `.pdf`, `.txt`, `.csv`, `.doc*`, `.xls*`, `.zip`, `.rar`, `.7z`, `.tar`, `.gz` with automatic MIME classification and `file` block assignment.
 
 ### 5.2 Alpha Transparency, Non-Destructive Cropping & GIF Dither Suppression
 - **Zero Background Contamination:** The media cropper strictly preserves transparent PNG/WEBP alpha channels. Cropping operations never apply black or white letterbox fills.
@@ -215,6 +224,18 @@ The platform supports five primary categories of assets:
 - Validates file extensions (`.html`) and MIME type (`text/html`).
 - Generates or allows custom thumbnail assignments for UI cards.
 - Previews render inside sandboxed iframes (`sandbox="allow-scripts"`) to prevent CSS/JS leakage into Admin and Manager dashboards.
+
+### 5.5 Bulk Single-File Add, Asset-Name Grouping & Custom Block Keys (`moreFields`)
+Implemented in `templates/assets/form_single.html` (`GET /admin/assets/new-single`) with backend/editor safeguards in `controller/asset_controller.py` and `templates/assets/form_multi.html`:
+- **Per-Item Custom Block Key (`blockName`):** Each staged row exposes an editable monospace **Block Name (Key)** input sanitized via `sanitizeBlockKey()` (`[a-zA-Z0-9_-]`), defaulting to its detected type (`image`, `svg`, `video`, `audio`, `json`, `frames`, `html`, `file`).
+- **Auto-Separate & Bulk Staged Toolbar:**
+  - `#bulkAutoSeparateBlocks` toggle calls `recomputeAutoBlockNames()` to assign distinct block keys (`image`, `image_2`, ...) automatically within an asset group while preserving manually edited keys (`blockNameCustom: true`).
+  - `#stagedBulkToolbar` provides batch controls for checked rows: **Apply Block Name** (with optional sequential `_1, _2...` numbering), **Use Filename as Block**, **Split Duplicate Blocks** (`splitDuplicateBlocks()`), **Group Selected** (`groupSelectedUnderAsset()`), plus single-row `✕` removal (`removeStagedRow()`).
+  - Live inline hints (`formatBlockHintHtml()` / `refreshStagedBlockHints()`) show whether blocks in the same asset are separate, merging into an array, or colliding on dict keys (`json`/`frames`), with an inline **Split** button.
+- **Asset-Name Grouping & Upload Collision Protection:**
+  - When `#bulkGroupSameName` is checked, `groupStagedIndices()` groups items by normalized **Generated Asset Name** (`groupKeyOf()`), enabling multiple files with different OS filenames (e.g., `bg.png` + `overlay.png`) to be bundled into one asset under separate blocks (`{"background": [...], "foreground": [...]}`).
+  - `startBulkUpload()` uploads all group members under the shared `groupAssetName` folder and deduplicates colliding disk filenames within the group (`usedGroupFilenames` + `getNextCandidateName()`), while `mergeBlocks()` concatenates matching array keys, keeps distinct keys separate, and auto-suffixes dict-vs-array collisions.
+- **Safeguards:** `enrich_more_fields_metadata()` (`controller/asset_controller.py`) detects frames blocks by `coordinates`/`placeholders` lists regardless of block key name; `form_multi.html` (`normalizeBlock()` and save serialization) infers `.html`/documents by extension/MIME and avoids misclassifying custom visual blocks named `*frame*`, `*audio*`, `*html*`, or `*file*`.
 
 ---
 
@@ -267,27 +288,47 @@ Implemented in `controller/reference_controller.py` (`add_references`):
 - **Central Library data is never modified or deleted.**
 
 ### 6.5 Tagging, Reordering, and Monetization Overrides
-- **Bulk & Single Tagging:** `POST /{admin|manager}/instances/{id}/assets/bulk-tags` supports `add`, `replace`, and `remove` operations with instant client DOM updates.
-- **Drag-and-Drop Reordering:** `POST /{admin|manager}/instances/{id}/reorder` updates integer sequences for folders, subcategories, or assets.
-- **Monetization Tiers:** Managed via `PATCH /{admin|manager}/instances/{id}/assets/{assetId}/override`:
-  - `is_premium: true|false`
-  - `is_rewarded: true|false`
-  - `rewarded_credits: integer`
+- **Bulk & Single Asset Tagging:** `POST /{admin|manager}/instances/{id}/assets/bulk-tags` supports `add`, `replace`, and `remove` operations across assets (in both List and Block views via `templates/js/instance_asset_selection.js`) with instant client DOM updates and loading dialog feedback (`withLoading()`).
+- **Folder Tagging & App Tag Bubbles:**
+  - Categories and subcategories support individual and multi-select bulk tagging (`POST /{admin|manager}/instances/{id}/folders/bulk-tags` via `bulk_update_folder_tags()`).
+  - App instances maintain reusable tag bubble presets (`PUT /{admin|manager}/instances/{id}/tags` -> `app_instances.tags`) rendered as clickable pills inside the folder tag modal.
+- **Drag-and-Drop Reordering:** `POST /{admin|manager}/instances/{id}/reorder` updates integer sequences for super categories, categories, subcategories, or assets.
+- **Monetization & Content Overrides:** Managed via `PATCH /{admin|manager}/instances/{id}/assets/{assetId}/override`, `POST /{admin|manager}/instances/{id}/assets/{assetId}/edit`, `PATCH /{admin|manager}/instances/{id}/folders/{folder_type}/{folder_id}/override`, and `POST .../reset-override`:
+  - Assets: `is_premium`, `is_rewarded`, `rewarded_credits`, `overrides.is_priced`, `name`, `description`, `thumbnail_url`, `more_fields` (media uploaded in edit mode stores isolated files in `/static/central_data/instance_overrides/<app_id>/`). Manager asset edits also send `payload_type: "asset_update"` diff proposals to Admin Inbox (`apply-proposal` vs `dismiss-proposal`).
+  - Categories / Subcategories: `is_premium`, `is_rewarded`, `name`, `thumbnail_url`, `image_url`, and `tags`.
+
+### 6.6 Tier & Frequency Distribution Engine (`N-1` Cap, Alternate Paid & Bulk Rules)
+Implemented in `controller/override_controller.py` (`compute_tier_distribution()`, `distribute_item_tiers()`, `bulk_distribute_subcategory_assets()`, `clamp_counts_for_total()`, `resolve_effective_counts()`) and shared frontend UI (`templates/partials/tier_distribution_modal.html`, `templates/js/tier_distribution.js` parameterized by `window.TIER_PORTAL_BASE` and `window.INSTANCE_BULK_SUB_META`):
+- **`N - 1` Normal Preservation Rule:** Out of $N$ items in a container (`subcategories` in a category, or `assets` in a subcategory/category), at most $N - 1$ items combined may be Premium + Rewarded so at least 1 item remains Normal/Free.
+- **Sequential Frequency Cycles:** Accepts batch lengths (`normal_frequency`, `premium_frequency`, `rewarded_frequency`):
+  - **Combined mode (`alternate_paid: false`):** Emits `N` → `P` → `R` per cycle until paid budgets exhaust, filling remaining slots with `N`.
+  - **Alternating Paid mode (`alternate_paid: true`):** Alternates paid batches across cycles after Free batches (e.g., `2N, 1P, 1R` over 10 assets produces `N, N, P, N, N, R, N, N, P, N`).
+- **Bulk Multi-Subcategory Assets Distribution (`POST /{admin|manager}/instances/{id}/bulk-distribute-assets`):**
+  - Targets explicit `subcategory_ids`, all subcategories inside a `parent_category_id`, or `apply_to_all: true` across the entire app instance (e.g., 50+ subcategories) in one MongoDB query + batched `bulk_write`.
+  - Supports `count_mode: "fixed"` (proportionally clamped to `total - 1` per subcategory when a subcategory has fewer assets) and `count_mode: "percentage"` (e.g. `40%` Premium, `20%` Rewarded, combined strictly `< 100%`).
+- **Persistent Settings Memory:** Last-used configuration saves automatically to `tier_distribution_settings` (per category/subcategory) and `bulk_asset_tier_distribution_settings` (per category or app instance), pre-populating the modal on reopen and updating `data-tier-settings` / `window.INSTANCE_BULK_SUB_META` immediately.
+- **Badge Visibility Rule:** `templates/css/components.css` defines `[hidden] { display: none !important; }` at the top of the stylesheet so `.badge` utility display rules never override `element.hidden = true` on `REWARDED` / `PREMIUM` pills.
 
 ---
 
 ## 7. API Endpoints Reference
 
 ### 7.1 Client API (`/api/v1`)
-All endpoints require `X-API-Key: <key>` header.
+All endpoints require `X-API-Key: <key>` header (or `api_key` query / `Authorization: Bearer <key>`), and `/app-instances/{id}` / `/instance/{id}` routes enforce `require_instance_access`.
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/v1/instance/{instanceId}/catalog` | Preload entire enabled hierarchy (Categories → Subcategories → Assets) |
-| `GET` | `/api/v1/instance/{instanceId}/categories` | List active categories for this app instance |
+| `GET` | `/api/v1/instance/{instanceId}/catalog` | Preload entire enabled hierarchy (`super_categories` → `categories` → `subcategories` → `assets`) |
+| `GET` | `/api/v1/app-instances/{id}/super-categories` | List super categories in an app instance |
+| `GET` | `/api/v1/instance/{instanceId}/categories` | List active categories for this app instance (`?superCategoryId=`) |
 | `GET` | `/api/v1/instance/{instanceId}/subcategories` | List subcategories (optional filter: `?categoryId=...`) |
 | `GET` | `/api/v1/instance/{instanceId}/assets` | Paginated assets list (filters: `categoryId`, `subCategoryId`, `type`, `search`) |
 | `GET` | `/api/v1/instance/{instanceId}/assets/{assetId}` | Get single asset details with overrides applied |
+| `POST` | `/api/v1/app-instances/{id}/distribute-tiers` | Distribute Premium/Rewarded tiers sequentially in a category or subcategory |
+| `POST` | `/api/v1/app-instances/{id}/bulk-distribute-assets` | Bulk distribute Premium/Rewarded asset tiers across multiple or all subcategories |
+| `POST` | `/api/v1/app-instances/{id}/reorder` | Reorder `super_category`, `category`, `subcategory`, or `asset` items |
+| `POST` | `/api/v1/app-instances/{id}/bulk-flags` | Bulk update `is_enabled` / `is_premium` flags |
+| `GET` | `/api/v1/app-instances/{id}/unresolved` | List broken central asset references in instance |
 | `POST` | `/api/v1/instance/{instanceId}/events` | Ingest analytics tracking events (`view`, `download`) |
 | `GET` | `/api/v1/search` | Full-text and tag search across accessible catalog assets |
 
@@ -297,20 +338,32 @@ Requires `admin_session` cookie.
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/admin/dashboard` | Main system dashboard with KPI metrics and recent activity |
-| `GET/POST` | `/admin/categories` | Manage central categories (list, create, edit, delete; accepts `page_size`, `pageSize`, `limit`: 20-200, default 20) |
-| `GET/POST` | `/admin/subcategories`| Manage central subcategories (list, create, edit, delete; accepts `categoryId`, `page_size`: 20-200, default 20) |
-| `GET/POST` | `/admin/assets` | Central asset library (upload, filter, delete; accepts `page_size`: 20, 40, 60, 100, 200 up to 500) |
-| `GET` | `/admin/instances` | List and create App Instances |
-| `GET` | `/admin/instances/{id}/content` | App instance working set management (folders & assets) |
-| `GET` | `/admin/instances/{id}/picker` | Central content picker with auto-tab switching |
-| `POST` | `/admin/instances/{id}/references` | Import central categories, subcategories, or assets |
-| `POST` | `/admin/instances/{id}/folders/create` | Create custom category or subcategory folder in instance |
+| `GET/POST` | `/admin/super-categories` | Manage central super categories (`super_categories`) |
+| `GET/POST` | `/admin/categories` | Manage central categories (`?superCategoryId=`, `?page_size=`: 20-500, CSV column updates) |
+| `GET/POST` | `/admin/subcategories`| Manage central subcategories (`?categoryId=`, `?page_size=`: 20-500, CSV column updates) |
+| `GET/POST` | `/admin/assets` | Central asset library (filter/search, `?page_size=`: 20-500, CSV column updates) |
+| `GET` | `/admin/assets/new-single` | Bulk Single-File Add UI with custom/separate `moreFields` block renaming & grouping |
+| `GET` | `/admin/assets/new-multi` | Multi-block polymorphic asset creation/edit form |
+| `GET` | `/admin/instances` | List/search App Instances (by instance name or `package_name`) and create new instances |
+| `GET` | `/admin/instances/{id}/content` | App instance working set management (super categories, folders, assets, tier distribution) |
+| `GET` | `/admin/instances/{id}/picker` | Central content picker with super-category filter & auto-tab switching |
+| `POST` | `/admin/instances/{id}/references` | Import central super categories, categories, subcategories, or assets |
+| `POST` | `/admin/instances/{id}/folders/create` | Create custom super category, category, or subcategory folder in instance |
+| `PATCH` | `/admin/instances/{id}/folders/{folder_type}/{folder_id}/override` | Update folder `is_enabled`, `is_premium`, `is_rewarded`, `name`, `thumbnail_url`, `image_url`, or `tags` |
+| `POST` | `/admin/instances/{id}/folders/{folder_type}/{folder_id}/reset-override` | Clear app-level folder overrides back to Central defaults |
+| `GET/POST` | `/admin/instances/{id}/assets/{assetId}/edit` | Edit asset content at app level only (`instance_assets.overrides`) |
+| `GET/POST` | `/admin/instances/{id}/assets/{assetId}/frames` | App-level Interactive Frame Placeholder Editor (`instance_assets.overrides`) |
+| `POST` | `/admin/instances/{id}/assets/{assetId}/reset-override` | Clear app-level asset overrides back to Central defaults |
+| `PUT` | `/admin/instances/{id}/tags` | Replace app-wide tag preset bubble list |
+| `POST` | `/admin/instances/{id}/folders/bulk-tags` | Batch add, remove, or replace tags across selected categories & subcategories |
+| `POST` | `/admin/instances/{id}/distribute-tiers` | Sequential Premium/Rewarded tier distribution (`subcategories` or `assets`) |
+| `POST` | `/admin/instances/{id}/bulk-distribute-assets` | Bulk distribute asset tiers across selected, category-wide, or all subcategories |
 | `DELETE` | `/admin/instances/{id}/categories/{catId}` | Detach category folder from instance |
 | `DELETE` | `/admin/instances/{id}/subcategories/{subId}` | Detach subcategory folder from instance |
 | `DELETE` | `/admin/instances/{id}/assets/{assetId}` | Detach asset reference from instance |
-| `GET/POST` | `/admin/managers` | Approve/reject manager registrations and assign instances |
-| `GET/POST` | `/admin/messages` | Admin-manager messaging threads and direct replies |
-| `GET/POST` | `/admin/keys` | Generate and manage global API keys |
+| `GET/POST` | `/admin/managers` | Approve/reject manager registrations, non-destructively delete managers (transferring apps & API keys to Admin), and assign instances |
+| `GET/POST` | `/admin/messages` | Admin-manager messaging threads, central creation/update proposal diff review (`apply-proposal`, `dismiss-proposal`) |
+| `GET/POST` | `/admin/keys` | Generate, inspect (`POST /admin/keys/{id}/reveal` via Admin 2FA), and manage global & transferred API keys |
 
 ### 7.3 Manager Portal Endpoints (`/manager`)
 Requires `manager_session` cookie.
@@ -318,25 +371,41 @@ Requires `manager_session` cookie.
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/manager/dashboard` | Manager overview of assigned instances and aggregate traffic |
-| `GET` | `/manager/instances` | List accessible instances and request access to others |
-| `GET` | `/manager/instances/{id}/content` | Manage working set, custom folders, and asset overrides |
+| `GET` | `/manager/instances` | List/search accessible instances (shows `package_name`), request access or creation |
+| `GET` | `/manager/instances/{id}/content` | Manage working set, custom folders, tags, tier distribution & asset overrides |
 | `GET` | `/manager/categories` | Manager view of central categories (supports `page_size`, `pageSize`, `limit`: 20-200) |
 | `GET` | `/manager/subcategories` | Manager view of central subcategories (supports `categoryId`, `page_size`: 20-200) |
 | `GET` | `/manager/assets` | Manager central asset catalog (filter by cat/sub/type/search; supports `page_size`: 20-200) |
-| `GET` | `/manager/instances/{id}/picker` | Manager central content picker (with auto-tab routing) |
-| `GET` | `/manager/instances/{id}/picker/categories` | JSON search for central categories |
+| `GET` | `/manager/instances/{id}/picker` | Manager central content picker (with super-category filter & auto-tab routing) |
+| `GET` | `/manager/instances/{id}/picker/categories` | JSON search for central categories (`?superCategoryId=`) |
 | `GET` | `/manager/instances/{id}/picker/subcategories` | JSON search for central subcategories |
 | `GET` | `/manager/instances/{id}/picker/assets` | JSON search for central assets |
 | `POST` | `/manager/instances/{id}/references` | Import central items into instance or target folders |
-| `POST` | `/manager/instances/{id}/folders/create` | Create custom category or subcategory folder in instance |
-| `DELETE` | `/manager/instances/{id}/categories/{cat_id}` | Detach category folder and child items from instance |
-| `DELETE` | `/manager/instances/{id}/subcategories/{sub_id}` | Detach subcategory folder from instance |
-| `DELETE` | `/manager/instances/{id}/assets/{assetId}` | Detach individual asset from instance |
-| `PATCH` | `/manager/instances/{id}/assets/{assetId}/override` | Update sequence, premium flag, rewarded credits, tags |
+| `POST` | `/manager/instances/{id}/folders/create` | Create category/subcategory folder (auto-synced to Central Data) or custom super category in instance |
+| `POST` | `/manager/instances/{id}/folders/ensure-central` | Idempotent inline folder creation/reuse in Central Data for upload forms |
+| `GET` | `/manager/instances/{id}/assets/new-single` | Manager Bulk Single-File Add UI (auto-syncs to Central Data + links to app) |
+| `GET` | `/manager/instances/{id}/assets/new-multi` | Manager Multi-File Asset creation UI (auto-syncs to Central Data + links to app) |
+| `POST` | `/manager/instances/{id}/assets/create` | JSON asset creation (Central + app link, `409` on duplicate in central subcat) |
+| `POST` | `/manager/instances/{id}/assets/save` | Multi-file / bulk text asset submission (Central + app link) |
+| `GET/POST` | `/manager/instances/{id}/assets/{assetId}/edit` | App-level asset edit (`instance_assets.overrides`) + automatic `asset_update` Admin proposal message |
+| `GET/POST` | `/manager/instances/{id}/assets/{assetId}/frames` | Scoped Interactive Frame Placeholder Editor saving to `instance_assets.overrides` + Admin proposal |
+| `POST` | `/manager/instances/{id}/assets/{assetId}/reset-override` | Clear app-level asset overrides back to Central defaults |
+| `GET/POST` | `/manager/instances/{id}/media/{upload,crop,check-similarity,detect-frames}` | Scoped media operations (`?scope=override` isolates files into `instance_overrides/<id>/`) |
+| `DELETE` | `/manager/instances/{id}/super-categories/{super_id}` | Detach super category folder and child categories from instance |
+| `DELETE` | `/manager/instances/{id}/categories/{cat_id}` | Detach category folder and child items from instance (central untouched) |
+| `DELETE` | `/manager/instances/{id}/subcategories/{sub_id}` | Detach subcategory folder from instance (central untouched) |
+| `DELETE` | `/manager/instances/{id}/assets/{assetId}` | Detach individual asset from instance (central untouched) |
+| `PATCH` | `/manager/instances/{id}/assets/{assetId}/override` | Update sequence, flags, credits, name (with optional `propose_to_central`), description, `thumbnail_url`, `more_fields`, tags |
+| `PATCH` | `/manager/instances/{id}/folders/{folder_type}/{folder_id}/override` | Update folder `is_enabled`, `is_premium`, `is_rewarded`, `name`, `thumbnail_url`, `image_url`, or `tags` |
+| `POST` | `/manager/instances/{id}/folders/{folder_type}/{folder_id}/reset-override` | Clear app-level folder overrides back to Central defaults |
+| `PUT` | `/manager/instances/{id}/tags` | Replace app-wide tag preset bubble list |
+| `POST` | `/manager/instances/{id}/folders/bulk-tags` | Batch add, remove, or replace tags on categories/subcategories |
 | `POST` | `/manager/instances/{id}/assets/bulk-tags` | Batch add, remove, or replace tags on assets |
+| `POST` | `/manager/instances/{id}/distribute-tiers` | Sequential Premium/Rewarded tier distribution (`subcategories` or `assets`) |
+| `POST` | `/manager/instances/{id}/bulk-distribute-assets` | Bulk distribute asset tiers across selected, category-wide, or all subcategories |
 | `POST` | `/manager/instances/{id}/reorder` | Drag-and-drop sequencing of folders or assets |
-| `GET/POST` | `/manager/keys` | Create and manage API keys for accessible instances |
-| `GET/POST` | `/manager/messages` | Send and view messages to/from Super Admin operators |
+| `GET/POST` | `/manager/keys` | Create, inspect (`POST /manager/keys/{id}/reveal` via Manager 2FA), and manage API keys |
+| `GET/POST` | `/manager/messages` | Send and view messages & proposals to/from Super Admin operators |
 
 ---
 
@@ -667,72 +736,157 @@ Requires `manager_session` cookie.
 - **Measured (50k assets in one instance):** default page 2.2s → 0.17s, unresolved count 1.3s → 0.02s.
 - **Still scanning every asset:** text search, type filter, and the name/newest/oldest/views/downloads sorts (~2–6s at 50k).
 
+### Update 23: Super Category Picker Filter & Multi-Super-Category Membership
+- **Picker Super Category Filter (`bc946fd`):** Added `superCategoryId` scoping to Admin and Manager pickers (`instance_workspace_controller.py`, `templates/instances/picker.html`, `templates/manager/instances/picker.html`) across Categories, Subcategories, and Assets tabs.
+- **Category in Multiple Super Categories (`1f771ad`):** Updated `database/indexes.py`, `reference_controller.py`, and `instance_workspace_controller.py` so the unique instance category index includes `super_category_id`, letting the same central category sit under multiple super categories as independent links while preserving shared subcategories/assets when removing one placement.
+
+### Update 24: Streaming CSV Column Updates with Batched `bulk_write`
+- Updated `utils/csv_utils.py` (`iter_csv_rows`) and `controller/csv_update_controller.py` (`BULK_BATCH_SIZE = 1000`, `MAX_REPORTED_ROWS = 500`) to stream CSV rows lazily from uploaded files instead of buffering the full file in RAM, apply MongoDB updates via batched `bulk_write`, and cap UI row report payloads while preserving full summary counts (`tests/test_csv_update_large.py`).
+
+### Update 25: Same-Name Asset Grouping in Bulk Upload & Multi-Form JSON Upload
+- Updated `templates/assets/form_single.html` with `#bulkGroupSameName` grouping and `mergeBlocks()` / `buildBlocks()` so matching-stem files (`cat.webp + cat.json + cat.mp3`) bundle into a single central asset with separate typed blocks (`image`, `json`, `audio`) and single-group conflict checking.
+- Added `.json` file button/drop support inside `templates/assets/form_multi.html` JSON blocks.
+
+### Update 26: Instance Folder Tagging, App Tag Bubbles, Rewarded Badges (`[hidden]` Fix) & Action Loading Spinner
+- Added folder-level (`category` / `subcategory`) individual and bulk tagging (`bulk_update_folder_tags` in `controller/override_controller.py`, `POST /{admin|manager}/instances/{id}/folders/bulk-tags`), plus per-app tag preset bubbles (`PUT /{admin|manager}/instances/{id}/tags` -> `available_tags`) in `templates/partials/instance_super_categories.html` & `instance_folder_controls.html` (`tests/test_bulk_folder_tags.py`).
+- Added Rewarded pill (`asset-card-rewarded-pill`) and bulk Rewarded actions, and added `[hidden] { display: none !important; }` at the top of `templates/css/components.css` so `.badge` CSS does not override the HTML `hidden` attribute on folder Rewarded badges (`481736e`).
+- Added `.asset-loading-dialog` / `.asset-loading-spinner` (`withLoading` in `templates/js/instance_asset_selection.js`) and automatic unselection after bulk operations (`66b041a`, `d1f2801`).
+
+### Update 27: Sequential Tier Distribution Model, Alternate Pro/Rewarded & Bulk Subcategory Asset Rules
+- Implemented sequential tier distribution (`814cca6`, `1c2c945`) in `controller/override_controller.py` (`compute_tier_distribution()`, `distribute_item_tiers()`, `bulk_distribute_subcategory_assets()`):
+  - Enforces $N - 1$ max combined Premium + Rewarded count per container so at least 1 item remains Normal/Free.
+  - Supports customizable consecutive frequency batches (`normal_frequency`, `premium_frequency`, `rewarded_frequency`) and **Alternate Paid** mode (`alternate_paid: true`), alternating Premium and Rewarded blocks across Free cycles (`N, N, P, N, N, R...`).
+  - Supports bulk asset distribution across multiple selected subcategories, a whole category, or all subcategories in an app instance (50+) using either fixed counts (proportionally clamped per subcategory) or percentage targets (`< 100%`), batched in MongoDB `bulk_write`.
+  - Saves and restores previous settings (`tier_distribution_settings` and `bulk_asset_tier_distribution_settings`) across MongoDB, `controller/catalog_controller.py`, DOM `data-tier-settings`, and shared `templates/js/tier_distribution.js` + `templates/partials/tier_distribution_modal.html` (`tests/test_tier_distribution.py`).
+
+### Update 28: App Instance `package_name` Display & Package Search
+- Fixed `app_instances` listings (`f4b781d`): normalized empty/`"None"` `package_name` handling in `controller/app_instance_controller.py` (`create_app_instance()`, `update_app_instance()`), added `package_name` / `packageName` regex matching to `list_app_instances(search=...)`, and ensured `templates/instances/list.html`, `templates/manager/instances/list.html`, `templates/instances/content.html`, and `templates/keys/list.html` render `inst.package_name or inst.packageName` safely.
+
+### Update 29: Custom & Separate Block Names (`more_fields` Keys) in Bulk Single-File Add
+- Updated `templates/assets/form_single.html` (`59f4a71`): added per-row editable **Block Name (Key)** (`sanitizeBlockKey()`), `#bulkAutoSeparateBlocks` checkbox (`recomputeAutoBlockNames()`), live merge/collision hints with inline `Split` button (`formatBlockHintHtml()` / `splitBlockGroup()`), `#stagedBulkToolbar` (`Apply Block Name` with `_1, _2...`, `Use Filename as Block`, `Split Duplicate Blocks`, `Group Selected`, single-row `✕` remove), Normalized Asset Name grouping (`groupKeyOf()`), and intra-group upload filename deduplication (`usedGroupFilenames`).
+- Updated `controller/asset_controller.py` (`enrich_more_fields_metadata()`) to recognize custom-keyed frames blocks via `coordinates`/`placeholders` lists regardless of key name, and updated `templates/assets/form_multi.html` (`normalizeBlock()` and save serialization) so HTML/document blocks and custom visual blocks (`photo_frame`, `audio_cover`, etc.) preserve their true types when edited (`tests/test_bulk_single_blocks.py`).
+
+### Update 30: Manager Central Uploads, App-Level Content Overrides + Admin Proposals, Non-Destructive Manager Deletion & 2FA API Key Reveal
+- **Manager Direct Authoring -> Central Library Auto-Sync (`controller/manager_upload_controller.py`, `router/manager/upload_routes.py`):**
+  - Added dedicated Bulk Single-File Add (`/manager/instances/{id}/assets/new-single`) and Multi-File Asset (`/manager/instances/{id}/assets/new-multi`) flows inside Manager App Instances reusing parameterized `templates/assets/form_single.html` & `form_multi.html`, `uploader.js`, and `media_cropper.js`.
+  - Automatically reuses or creates Central `CATEGORIES` and `SUBCATEGORIES` (plus inline `+ New Category` / `+ New Subcategory` creation and `+ Create Folder` sync), creates Central `ASSETS` with `409` duplicate protection, stamps `created_by_role="manager"` metadata, and attaches only the targeted items to the App Instance (`ensure_category_link`, `ensure_subcategory_link`, `add_references`), preserving detach-only removal without mutating `test_instance_isolation.py` boundaries.
+- **App-Level Editing (`instance_*.overrides`) + Admin Proposal Diff Workflow:**
+  - Extended `parse_folder_override_payload()` and `parse_asset_override_payload()` (`controller/instance_workspace_controller.py`) plus shared `templates/partials/edit_folder_modal.html` and `form_multi.html` (`app_override_edit` mode) so managers and admins can edit Categories/Subcategories (`name`, `thumbnail_url`, `image_url`, `tags`) and Assets (`name`, `description`, `thumbnail_url`, `more_fields`) strictly at app level with isolated media storage (`central_data/instance_overrides/<app_id>/`).
+  - Editing an asset from Manager Portal (or checking optional *"propose rename"* in inline Rename) dispatches a structured `payload_type: "asset_update"` diff proposal via `send_manager_message`.
+  - Updated `controller/admin_manager_controller.py`, `router/admin/admin_message_routes.py`, and `templates/admin/messages/index.html` to render a before/proposed field diff table with **`Apply Update to Central Data`** (`apply_message_proposal_to_central()` promoting override media cleanly to central asset folder & calling `update_asset()`) vs **`Keep as App-Only Change`** (`dismiss_message_proposal()` marking status `kept_app_only`).
+- **Non-Destructive Manager Deletion -> Ownership Transfer (`controller/admin_manager_controller.py`):**
+  - Updated `delete_manager_account(db, manager_id, admin_id)` to preserve all manager-owned `APP_INSTANCES` (plus `instance_*` hierarchies, overrides, and analytics) and `API_KEYS`, reassigning `owner_id` / `owner_role="admin"` / `previous_owner_username` metadata to Admin and preserving any unreviewed `asset_update` proposal messages (`tests/test_manager_uploads_and_deletion.py`).
+- **2FA-Protected API Key Reveal (`authorization/encryption.py`, `authorization/api_key.py`, `templates/partials/reveal_api_key_modal.html`):**
+  - Added Fernet key encryption (`encrypt_api_key` / `decrypt_api_key`) at key issuance/rotation while stripping `encrypted_key` & `secret_hash` from list queries (`can_reveal` flag only).
+  - Extracted shared `verify_actor_2fa()`, `reveal_api_key_for_admin()`, and `reveal_api_key_for_manager()` + `POST /{admin,manager}/keys/{id}/reveal` routes, fixed `templates/keys/list.html` prefix display & `templates/admin/managers/list.html` 2FA link (`/admin/settings/2fa/setup`), and verified via `tests/test_api_key_reveal_2fa.py`.
+
+### Update 31: Category/Subcategory Folder Block UI Overhaul & App-Scoped Interactive Frame Editor
+- **Outlined Button Border Specificity & Structured Folder Blocks (`templates/css/components.css`, `templates/manager/instances/content.html`, `templates/instances/content.html`, `templates/partials/instance_folder_controls.html`):**
+  - Fixed CSS specificity bug where `a.btn, button.btn { border: 1px solid transparent; }` (`0,1,1`) stripped borders from `.btn-outlined` `<button>` / `<a>` elements (`0,1,0`); elevated `.btn.btn-outlined`, `.btn.btn-destructive-outlined`, `.btn.btn-success-outlined`, and `.btn.btn-warning-outlined` + added `.btn-sm` / `.btn-xs` utility classes and bumped `components.css?v=7` in `templates/base.html` and `templates/manager/base.html`.
+  - Replaced cramped single-row flex wraps with clean Material 3 `.instance-cat-card` (header + toolbar bar) and `.instance-sub-grid` / `.instance-sub-card` (`minmax(310px, 1fr)` 3-band layout: full-width header, action strip, footer controls) while preserving all drag-and-drop, checkbox, collapse (`.subs-collapsed`), and tier distribution selectors.
+- **Scoped Interactive Frame Editor for Managers & App Instances (`controller/manager_upload_controller.py`, `router/manager/upload_routes.py`, `router/admin/instance_routes.py`, `templates/assets/frames_editor.html`, `templates/assets/form_multi.html`, `templates/js/asset_preview_modal.js`):**
+  - Fixed `'Not Found'` errors caused by hardcoded `/admin/assets/{id}/frames` links on instance asset edits (`instance_assets` IDs) and hidden preview modal links. Added `GET/POST /manager/instances/{instance_id}/assets/{asset_id}/frames` and `GET/POST /admin/instances/{id}/assets/{asset_id}/frames` backed by shared `apply_frame_editor_save()`, `find_frame_block_key()` (supporting custom frame keys), and partial-update preservation in `save_app_level_asset_edit_and_notify()`.
+  - Updated `form_multi.html` (`openFrameInteractiveEditor`) to automatically upload & save staged frame photos before entering the editor, and enabled scoped `Interactive Editor 🖼️` + `Edit` links in `asset_preview_modal.js` for `/manager/instances/*` and `/admin/instances/*`.
+
 ---
 
 ## 9. Project Directory Tree & Key File Map
 
 ```
 /Admin Assets App
+├── analytics/                       # Event collection, counters, rollups & PKT reporting
 ├── authorization/
 │   ├── admin_session.py             # Admin cookie session signing & validation
+│   ├── api_key.py                   # X-API-Key / Bearer / query hash verification
+│   ├── instance_guard.py            # Router-level require_instance_access & require_unbound_key
 │   ├── manager_session.py           # Manager cookie session signing & validation
+│   ├── rate_limiter.py              # Dual-layer IP & surge rate limiter
+│   ├── scopes.py                    # Scope enforcement dependencies
+│   ├── totp.py                      # 2FA TOTP verification
 │   └── encryption.py                # bcrypt password hashing & serializer tokens
 ├── config/
 │   ├── settings.py                  # Pydantic environment configuration (.env)
 │   ├── constants.py                 # Media formats, limits, defaults
 │   └── paths.py                     # Static, templates, and upload directory paths
 ├── controller/
-│   ├── asset_controller.py          # Central asset CRUD & upload validation
+│   ├── app_instance_controller.py   # App instance CRUD, unique package_name & search
+│   ├── asset_controller.py          # Central asset CRUD, ASSET_TYPE_RULES & metadata enrichment
+│   ├── asset_preview_controller.py  # Asset preview payload, media stats & frames blocks
 │   ├── super_category_controller.py # Central super categories (optional level above categories)
 │   ├── category_controller.py       # Central category business logic
 │   ├── subcategory_controller.py    # Central subcategory business logic
-│   ├── reference_controller.py      # Instance reference linking & destination scoping
-│   ├── override_controller.py       # Sparse field overrides, tags, monetization
-│   ├── instance_workspace_controller.py # Shared Admin/Manager instance content, picker & folder logic
-│   ├── manager_controller.py        # Manager auth, access verification, 2FA
+│   ├── catalog_controller.py        # Resolved instance catalog & parent/override pipelines
+│   ├── reference_controller.py      # Instance reference linking, ensure folder links & destination scoping
+│   ├── override_controller.py       # Sparse overrides, folder/asset tags & tier distribution engine
+│   ├── instance_workspace_controller.py # Shared Admin/Manager instance content, override parsers & folder logic
+│   ├── manager_upload_controller.py # Manager direct central uploads & app-level asset diff proposals
+│   ├── csv_update_controller.py     # Streaming CSV column updates via batched bulk_write
+│   ├── manager_controller.py        # Manager auth, access verification, 2FA & 2FA key reveal
+│   ├── admin_manager_controller.py  # Admin governance, non-destructive manager delete & proposal review
 │   ├── frame_controller.py          # Frame placeholder coordinate detection
-│   └── crop_controller.py           # Alpha-preserving image, GIF (dither-free) & video cropper
+│   ├── crop_controller.py           # Alpha-preserving image, GIF (dither-free) & video cropper
+│   ├── media_controller.py          # Media upload handler & thumbnail generation
+│   └── media_similarity.py          # Duplicate/similar filename detection in uploads
 ├── database/
-│   ├── collections.py               # MongoDB collection string constants
+│   ├── collections.py               # Canonical MongoDB collection constants
 │   ├── connection.py                # Async Motor client singleton & get_database()
-│   └── models/                      # Pydantic data schemas
+│   ├── indexes.py                   # Index declarations (unique compound hierarchy & sequence indexes)
+│   ├── repository.py                # CentralRepository / InstanceRepository & instance_collection guard
+│   └── models/                      # Pydantic schemas (asset.py, instance_content.py, more_fields.py, etc.)
 ├── router/
 │   ├── admin/                       # Super Admin web routes (/admin/...)
-│   │   ├── instance_routes.py       # Admin instance management & picker
-│   │   ├── asset_routes.py          # Central asset routes (dynamic pagination)
-│   │   ├── category_routes.py       # Central category routes (dynamic pagination)
-│   │   └── subcategory_routes.py    # Central subcategory routes (dynamic pagination)
+│   │   ├── instance_routes.py       # Admin instance CRUD, workspace content, app overrides & tier distribution
+│   │   ├── asset_routes.py          # Central asset list, new-single, new-multi & CSV update routes
+│   │   ├── admin_message_routes.py  # Manager inbox threads, proposal apply & dismiss-proposal routes
+│   │   ├── settings_routes.py       # Admin API key issuance, 2FA setup & 2FA API key reveal
+│   │   ├── super_category_routes.py # Central super category CRUD
+│   │   ├── category_routes.py       # Central category routes (dynamic pagination & CSV)
+│   │   └── subcategory_routes.py    # Central subcategory routes (dynamic pagination & CSV)
 │   ├── manager/                     # Manager web routes (/manager/...)
 │   │   ├── central_data_routes.py   # Manager central data browse (dynamic pagination)
-│   │   ├── instance_routes.py       # Manager instance management, picker & folders
-│   │   └── key_routes.py            # Manager API key issuance
-│   └── v1/                          # Client REST API (/api/v1/...)
+│   │   ├── instance_routes.py       # Manager instance workspace, picker, tags & tier distribution
+│   │   ├── upload_routes.py         # Manager direct upload -> central sync & app-level asset editing
+│   │   └── key_routes.py            # Manager API key issuance & 2FA API key reveal
+│   └── v1/                          # Client & integration REST API (/api/v1/...)
 │       ├── catalog_router.py        # Full catalog preload
-│       ├── instance_content_router.py# Scoped instance content delivery
-│       └── media_router.py          # Media stream & download proxy
+│       ├── instance_content_router.py # Scoped instance delivery, overrides, distribute-tiers & bulk-distribute
+│       └── media_router.py          # Media upload, similarity check & frame detection
 ├── static/
-│   └── central_data/                # Uploaded physical images, videos, frames
+│   └── central_data/                # Uploaded physical images, videos, frames (+ instance_overrides/)
 ├── templates/
 │   ├── base.html                    # Admin base layout (MD3 theme)
-│   ├── partials/
-│   │   └── pagination.html          # Shared pagination bar with dynamic page_size selector
-│   ├── assets/
-│   │   ├── list.html                # Admin asset catalog with page-size filter
-│   │   ├── form_single.html         # Single asset upload modal/form
-│   │   └── form_multi.html          # Multi-asset & polymorphic block upload form
-│   ├── instances/
-│   │   ├── content.html             # Admin instance working set UI
-│   │   └── picker.html              # Admin central picker UI
-│   └── manager/
-│       ├── base.html                # Manager base layout
-│       ├── assets/
-│       │   └── list.html            # Manager asset catalog with page-size filter
-│       └── instances/
-│           ├── content.html         # Manager instance working set UI
-│           └── picker.html          # Manager central picker UI
+│   ├── js/                          # Extracted cached client scripts (Admin + Manager)
+│   │   ├── tier_distribution.js     # Shared tier distribution & bulk subcategory modal logic
+│   │   ├── instance_content.js      # Admin instance content DOM/AJAX handlers
+│   │   ├── manager_instance_content.js # Manager instance content DOM/AJAX handlers
+│   │   ├── instance_asset_selection.js # Shared list/block checkbox swipe selection & loading modal
+│   │   ├── asset_preview_modal.js   # Central & instance preview modal + inline override toggles
+│   │   ├── bulk_actions.js          # Asset/folder bulk selection & tag bar actions
+│   │   ├── csv_update_modal.js      # CSV column update modal logic
+│   │   ├── uploader.js              # Background uploader with configurable uploadUrl endpoint
+│   │   ├── media_cropper.js         # Client crop/cut UI for images & videos (configurable cropUrl)
+│   │   └── security.js              # Portal anti-inspection protection
+│   ├── partials/                    # Shared Jinja components (edit_folder_modal.html, reveal_api_key_modal.html, tier_distribution_modal.html, ...)
+│   ├── assets/                      # list.html, form_single.html (Bulk Single-File Add), form_multi.html (Admin/Manager create + app_override_edit), editors
+│   ├── instances/                   # Admin instance list, form, content, picker, unresolved
+│   └── manager/                     # Manager portal templates matching Admin views
+├── tests/                           # Regression & feature verification scripts (run via .venv/bin/python)
+│   ├── test_bulk_single_blocks.py   # Bulk Single-File Add block rename, grouping & enrichment
+│   ├── test_manager_uploads_and_deletion.py # Manager direct uploads, app overrides, asset proposals & non-destructive deletion
+│   ├── test_api_key_reveal_2fa.py   # 2FA API key reveal (Admin, Manager, legacy keys, cross-tenant isolation)
+│   ├── test_tier_distribution.py    # Sequential tier distribution, alternate paid & bulk rules
+│   ├── test_bulk_folder_tags.py     # Folder tags & app tag preset bubbles
+│   ├── test_asset_type_rules.py     # ASSET_TYPE_RULES DB filter vs in-memory parity
+│   ├── test_instance_isolation.py   # Static AST check blocking central writes from instance modules
+│   ├── test_api_key_isolation.py    # HTTP tests for API key instance scoping
+│   ├── test_add_references.py       # Reference importer parity & race handling
+│   ├── test_super_categories.py     # 4-level hierarchy flows
+│   ├── test_csv_update_large.py     # Streaming CSV updates
+│   └── test_svg_upload.py           # SVG safety sanitization & CSP headers
 ├── scripts/
 │   ├── create_admin.py              # CLI: Bootstrap admin operator
 │   ├── issue_key.py                 # CLI: Issue client API key
+│   ├── migrate_instance_ids.py      # Backfill assigned instance parent IDs
 │   ├── crop_media.py                # CLI: Standalone image, GIF & video cropper
 │   └── reap_orphan_media.py         # CLI: Clean unreferenced media files
 └── main.py                          # ASGI application entrypoint
@@ -740,7 +894,7 @@ Requires `manager_session` cookie.
 
 ---
 
-## 10. Configuration, CLI Scripts & Operational Rules
+## 10. Configuration, CLI Scripts, Operational Rules & Change Playbook
 
 ### 10.1 Key `.env` Environment Variables
 
@@ -766,3 +920,15 @@ Requires `manager_session` cookie.
 7. **Duplicate Name Guards:** Folder creation must verify case-insensitive uniqueness within that instance and parent category to prevent user confusion.
 8. **Cascading Detach:** Detaching a category folder must soft-delete its child subcategories and referenced assets within that specific app instance. Detaching a super category detaches its categories the same way.
 9. **Super Category Link Direction:** Only categories reference a super category (`super_category_id`). Never add super-category ids to subcategories, assets or storage paths.
+10. **Shared Workspace Logic Rule:** Never duplicate instance workspace/picker/folder/tier logic separately in `router/admin/instance_routes.py` vs `router/manager/instance_routes.py` or `instance_content.js` vs `manager_instance_content.js`. Put shared backend logic in `controller/instance_workspace_controller.py` / `controller/override_controller.py` and shared frontend logic in `templates/js/*.js` + `templates/partials/*.html`.
+
+### 10.3 Change Playbook ("Where to Define New Features & Updates")
+
+| Type of Change | Primary Source Files to Update | Tests / Checks to Run |
+|---|---|---|
+| **New Asset Media Format / `more_fields` Block Type** | 1. `config/constants.py` (extensions/MIME)<br>2. `database/models/more_fields.py` (`TypedBlock`)<br>3. `controller/asset_controller.py` (`ASSET_TYPE_RULES`, `enrich_more_fields_metadata`)<br>4. `templates/assets/form_single.html` (`DATA_TYPE_CONFIG`, `classifyFile`, `buildBlocks`) & `form_multi.html` (`normalizeBlock`, serialization) | `.venv/bin/python tests/test_asset_type_rules.py`<br>`.venv/bin/python tests/test_bulk_single_blocks.py` |
+| **Instance Working-Set / Picker / Folder Features (Admin + Manager)** | 1. `controller/instance_workspace_controller.py` (`build_instance_content`, `build_picker_page`, folder helpers)<br>2. `router/admin/instance_routes.py` & `router/manager/instance_routes.py` (thin route wrappers)<br>3. `templates/partials/*.html` + `templates/js/instance_content.js` / `manager_instance_content.js` | `.venv/bin/python tests/test_instance_workspace.py`<br>`.venv/bin/python tests/test_shared_subfolder.py`<br>`.venv/bin/python tests/test_instance_isolation.py` |
+| **Monetization, Folder Tags, or Tier Distribution Rules** | 1. `database/models/instance_content.py` (payload schemas)<br>2. `controller/override_controller.py` (`compute_tier_distribution`, `distribute_item_tiers`, `bulk_distribute_subcategory_assets`, `bulk_update_folder_tags`)<br>3. `controller/catalog_controller.py` (project persisted fields/settings)<br>4. `templates/partials/tier_distribution_modal.html` + `templates/js/tier_distribution.js`<br>5. `router/{admin,manager}/instance_routes.py` & `router/v1/instance_content_router.py` | `.venv/bin/python tests/test_tier_distribution.py`<br>`.venv/bin/python tests/test_bulk_folder_tags.py`<br>`node --check` on modified `templates/js/*.js` |
+| **App Instance CRUD & API Key Scoping / 2FA Reveal** | 1. `database/models/app_instance.py`, `database/models/api_key.py`<br>2. `authorization/encryption.py`, `authorization/api_key.py`, `authorization/instance_guard.py`<br>3. `controller/authorization_controller.py`, `controller/manager_controller.py` (`verify_actor_2fa`, reveal helpers)<br>4. `templates/partials/reveal_api_key_modal.html`, `templates/keys/list.html`, `templates/manager/keys/list.html` | `.venv/bin/python tests/test_api_key_isolation.py`<br>`.venv/bin/python tests/test_api_key_reveal_2fa.py` |
+| **Manager Authoring, App Overrides, Proposals & Manager Lifecycle** | 1. `controller/manager_upload_controller.py`, `router/manager/upload_routes.py`<br>2. `controller/admin_manager_controller.py` (`delete_manager_account`, `apply_message_proposal_to_central`, `dismiss_message_proposal`)<br>3. `templates/partials/edit_folder_modal.html`, `templates/admin/messages/index.html`, `templates/assets/form_{single,multi}.html` | `.venv/bin/python tests/test_manager_uploads_and_deletion.py`<br>`.venv/bin/python tests/test_instance_isolation.py` |
+| **CSV Batch Update Columns or Limits** | `utils/csv_utils.py` (`iter_csv_rows`) & `controller/csv_update_controller.py` (`_convert_value`, `apply_csv_column_updates`) | `.venv/bin/python tests/test_csv_update_large.py` |

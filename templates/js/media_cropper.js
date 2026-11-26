@@ -1087,7 +1087,7 @@
         if (vEnd > vStart) formData.append('end_time', vEnd);
       }
 
-      const res = await fetch('/api/v1/media/crop', {
+      const res = await fetch(window.MEDIA_CROP_URL || '/api/v1/media/crop', {
         method: 'POST',
         body: formData,
         signal: this._abortController ? this._abortController.signal : undefined,
@@ -1112,7 +1112,7 @@
       formData.append('start_time', this._audioStartTime);
       formData.append('end_time', this._audioEndTime);
 
-      const res = await fetch('/api/v1/media/crop', {
+      const res = await fetch(window.MEDIA_CROP_URL || '/api/v1/media/crop', {
         method: 'POST',
         body: formData,
         signal: this._abortController ? this._abortController.signal : undefined,

@@ -1,28 +1,61 @@
-{% extends "base.html" %}
+{% extends layout_template | default('base.html') %}
 
-{% block title %}{% if asset %}Edit {{ asset.name }}{% else %}New Asset{% endif %} — Asset Admin{% endblock %}
+{% block title %}{% if form_mode == 'app_override_edit' %}Edit App Asset: {{ asset.name }} — {{ instance.name }}{% elif asset %}Edit {{ asset.name }} — Asset Admin{% elif portal_mode == 'manager_create' %}New Multi-File Asset — {{ instance.name }}{% else %}New Asset — Asset Admin{% endif %}{% endblock %}
 
 {% block content %}
 <div style="margin-bottom:1.5rem;">
   <a href="{{ return_url or '/admin/assets' }}" id="backToListLink"
     style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
-    ← Back to Assets
+    ← Back to {{ instance.name if (portal_mode in ['manager_create', 'manager_override_edit', 'admin_override_edit'] and instance) else 'Assets' }}
   </a>
   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
     <div>
-      <h1>{% if asset %}Edit Asset: {{ asset.name }}{% else %}New Multi-File Asset{% endif %}</h1>
+      <h1>
+        {% if form_mode == 'app_override_edit' %}
+          Edit App Asset: {{ asset.name }}
+        {% elif asset %}
+          Edit Asset: {{ asset.name }}
+        {% else %}
+          New Multi-File Asset
+        {% endif %}
+      </h1>
       <p style="color:var(--md-sys-color-on-surface-variant);">
-        Author centrally shippable creative assets with typed polymorphic payload blocks.
+        {% if form_mode == 'app_override_edit' %}
+          Customize this asset's name, description, thumbnail, and content blocks specifically for <strong>{{ instance.name }}</strong>.
+        {% else %}
+          Author centrally shippable creative assets with typed polymorphic payload blocks.
+        {% endif %}
       </p>
     </div>
-    {% if asset and ((asset.moreFields and asset.moreFields.frames) or (asset.more_fields and asset.more_fields.frames))
-    %}
-    <a href="/admin/assets/{{ asset.id }}/frames{% if return_url %}?return_url={{ return_url | urlencode }}{% endif %}" class="btn btn-outlined"
-      style="color:var(--app-premium); border-color:var(--app-premium);">
-      Launch Interactive Frame Editor 🖼️
-    </a>
+    {% if asset and asset.id %}
+      {% set header_frames_base = frames_editor_base_url if frames_editor_base_url is defined else ('/manager/instances/' ~ instance.id ~ '/assets/' ~ asset.id ~ '/frames' if (portal_mode == 'manager_override_edit' and instance) else ('/admin/instances/' ~ instance.id ~ '/assets/' ~ asset.id ~ '/frames' if (portal_mode == 'admin_override_edit' and instance) else ('/admin/assets/' ~ asset.id ~ '/frames'))) %}
+      {% set first_frame_key = namespace(val='') %}
+      {% set asset_mf = asset.moreFields or asset.more_fields or {} %}
+      {% for k, v in asset_mf.items() %}
+        {% if not first_frame_key.val and (k == 'frames' or (v is mapping and (v.get('type') == 'frames' or v.get('coordinates') is not none or 'frame' in k|lower))) %}
+          {% set first_frame_key.val = k %}
+        {% endif %}
+      {% endfor %}
+      {% if first_frame_key.val %}
+      <a href="{{ header_frames_base }}?block_key={{ first_frame_key.val | urlencode }}{% if return_url %}&return_url={{ return_url | urlencode }}{% endif %}" class="btn btn-outlined"
+        style="color:var(--app-premium); border-color:var(--app-premium);">
+        Launch Interactive Frame Editor 🖼️
+      </a>
+      {% endif %}
     {% endif %}
   </div>
+  {% if portal_mode == 'manager_create' and instance %}
+  <div style="margin-top:0.75rem; padding:0.75rem 1rem; border-radius:10px; background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.35); font-size:0.86rem; line-height:1.45;">
+    🔄 <strong>Direct Upload to {{ instance.name }}:</strong> This asset and any newly created Categories / Subcategories will be published to <strong>Central Data</strong> and linked into your app. Removing it from your app later only detaches it without deleting Central Data.
+  </div>
+  {% elif form_mode == 'app_override_edit' and instance %}
+  <div style="margin-top:0.75rem; padding:0.75rem 1rem; border-radius:10px; background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.35); font-size:0.86rem; line-height:1.45;">
+    🛡️ <strong>App-Level Edit Mode ({{ instance.name }}):</strong> Saving updates <strong>only</strong> this app's version (<code>instance_assets.overrides</code>) — Central Data is never altered directly.
+    {% if portal_mode == 'manager_override_edit' %}
+      A change summary will automatically be sent to Admin to decide whether to promote your edits to Central Data or keep them app-only.
+    {% endif %}
+  </div>
+  {% endif %}
 </div>
 
 {% if error %}
@@ -32,7 +65,7 @@
 </div>
 {% endif %}
 
-<form method="POST" action="/admin/assets/save" id="assetForm" class="asset-edit-grid"
+<form method="POST" action="{{ save_action_url or '/admin/assets/save' }}" id="assetForm" class="asset-edit-grid"
   style="display:grid; grid-template-columns:minmax(340px, 440px) 1fr; gap:1.5rem; align-items:start;">
   {% if asset and asset.id %}
   <input type="hidden" name="id" value="{{ asset.id }}">
@@ -73,9 +106,22 @@
         placeholder="Optional editorial note or usage description...">{{ asset.description if asset else '' }}</textarea>
     </div>
 
+    {% if form_mode == 'app_override_edit' %}
+    <div style="margin-bottom:1rem; padding:0.75rem 0.9rem; border-radius:8px; background:var(--md-sys-color-surface-container); border:1px solid var(--md-sys-color-outline-variant); font-size:0.84rem;">
+      <div style="font-weight:600; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.25rem;">Placement in {{ instance.name }}</div>
+      <div>📁 {{ asset.category_name or '—' }} &nbsp;→&nbsp; 📂 {{ asset.subcategory_name or '—' }}</div>
+      <input type="hidden" id="categorySelect" value="">
+      <input type="hidden" id="subCategorySelect" value="">
+    </div>
+    {% else %}
     <div class="grid grid-2">
       <div class="form-group">
-        <label class="label" for="categorySelect">Category *</label>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
+          <label class="label" for="categorySelect" style="margin:0;">Category *</label>
+          {% if ensure_folder_url %}
+          <button type="button" class="btn btn-text" style="font-size:0.76rem; padding:0.05rem 0.35rem;" onclick="toggleInlineFolderCreate('category')">+ New</button>
+          {% endif %}
+        </div>
         <select id="categorySelect" name="category_id" class="select" required
           onchange="currentSubId=''; onCategoryChanged(this.value, '')">
           <option value="">-- Select Category --</option>
@@ -84,10 +130,22 @@
             asset and selected_cat==cat.id) %}selected{% endif %}>{{ cat.name }}</option>
           {% endfor %}
         </select>
+        {% if ensure_folder_url %}
+        <div id="inlineNewCategoryBox" style="display:none; margin-top:0.4rem; gap:0.35rem; align-items:center;">
+          <input type="text" id="inlineNewCategoryName" class="input" placeholder="New category" style="flex:1; min-height:32px; font-size:0.82rem;" onkeydown="if(event.key==='Enter'){event.preventDefault(); createInlineCentralFolder('category');}">
+          <button type="button" class="btn btn-primary btn-sm" onclick="createInlineCentralFolder('category')">Add</button>
+          <button type="button" class="btn btn-text btn-sm" onclick="toggleInlineFolderCreate('category', false)">✕</button>
+        </div>
+        {% endif %}
       </div>
 
       <div class="form-group">
-        <label class="label" for="subCategorySelect">Subcategory *</label>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
+          <label class="label" for="subCategorySelect" style="margin:0;">Subcategory *</label>
+          {% if ensure_folder_url %}
+          <button type="button" class="btn btn-text" style="font-size:0.76rem; padding:0.05rem 0.35rem;" onclick="toggleInlineFolderCreate('subcategory')">+ New</button>
+          {% endif %}
+        </div>
         <select id="subCategorySelect" name="sub_category_id" class="select" required {% if not asset and not
           selected_cat %}disabled{% endif %}>
           {% if not asset and not selected_cat %}
@@ -100,8 +158,16 @@
           {% endfor %}
           {% endif %}
         </select>
+        {% if ensure_folder_url %}
+        <div id="inlineNewSubcategoryBox" style="display:none; margin-top:0.4rem; gap:0.35rem; align-items:center;">
+          <input type="text" id="inlineNewSubcategoryName" class="input" placeholder="New subcategory" style="flex:1; min-height:32px; font-size:0.82rem;" onkeydown="if(event.key==='Enter'){event.preventDefault(); createInlineCentralFolder('subcategory');}">
+          <button type="button" class="btn btn-primary btn-sm" onclick="createInlineCentralFolder('subcategory')">Add</button>
+          <button type="button" class="btn btn-text btn-sm" onclick="toggleInlineFolderCreate('subcategory', false)">✕</button>
+        </div>
+        {% endif %}
       </div>
     </div>
+    {% endif %}
 
     <!-- Thumbnail Upload -->
     <div style="margin-top:0.5rem;">
@@ -217,7 +283,7 @@
     style="display:flex; justify-content:flex-end; gap:0.75rem; border-top:1px solid var(--md-sys-color-outline-variant); padding-top:1.25rem;">
     <a href="{{ return_url or '/admin/assets' }}" id="cancelBtn" class="btn btn-outlined">Cancel</a>
     <button type="submit" class="btn btn-primary" id="saveAssetSubmitBtn">
-      {% if asset %}Save Asset Changes{% else %}Create Asset{% endif %}
+      {% if form_mode == 'app_override_edit' %}Save App Changes{% elif asset %}Save Asset Changes{% else %}Create Asset{% endif %}
     </button>
   </div>
 </form>
@@ -729,6 +795,92 @@
 </div>
 
 <script>
+  const PORTAL_MODE = {{ (portal_mode or 'admin') | tojson }};
+  const FORM_MODE = {{ (form_mode or 'admin') | tojson }};
+  const IS_APP_OVERRIDE_EDIT = FORM_MODE === 'app_override_edit';
+  const CURRENT_INSTANCE_ID = {{ (instance.id if instance else '') | tojson }};
+  const SUBCATEGORIES_API_URL = {{ (subcategories_api_url or '/admin/subcategories/api/list') | tojson }};
+  const CHECK_NAME_URL = {{ (check_name_url if check_name_url is defined else '/admin/assets/check-name') | tojson }};
+  const CHECK_SIMILARITY_URL = {{ (check_similarity_url or '/api/v1/media/check-similarity') | tojson }};
+  const DETECT_FRAMES_URL = {{ (detect_frames_url or '/api/v1/media/detect-frames') | tojson }};
+  const MEDIA_UPLOAD_URL = {{ (media_upload_url or '/api/v1/media/upload') | tojson }};
+  const MEDIA_CROP_URL = {{ (media_crop_url or '/api/v1/media/crop') | tojson }};
+  const ENSURE_FOLDER_URL = {{ (ensure_folder_url or '') | tojson }};
+  const DEFAULT_RETURN_URL = {{ (return_url or '/admin/assets') | tojson }};
+  const SAVE_ACTION_URL = {{ (save_action_url if save_action_url is defined and save_action_url else '/admin/assets/save') | tojson }};
+  const FRAMES_EDITOR_BASE_URL = {{ (frames_editor_base_url if frames_editor_base_url is defined else ('/manager/instances/' ~ instance.id ~ '/assets/' ~ asset.id ~ '/frames' if (portal_mode == 'manager_override_edit' and instance and asset and asset.id) else ('/admin/instances/' ~ instance.id ~ '/assets/' ~ asset.id ~ '/frames' if (portal_mode == 'admin_override_edit' and instance and asset and asset.id) else ('/admin/assets/' ~ asset.id ~ '/frames' if (asset and asset.id) else '')))) | tojson }};
+  window.MEDIA_UPLOAD_URL = MEDIA_UPLOAD_URL;
+  window.MEDIA_CROP_URL = MEDIA_CROP_URL;
+
+  function buildFrameEditorUrl(blockKey) {
+    if (!FRAMES_EDITOR_BASE_URL) return '';
+    const sep = FRAMES_EDITOR_BASE_URL.includes('?') ? '&' : '?';
+    let url = `${FRAMES_EDITOR_BASE_URL}${sep}block_key=${encodeURIComponent(blockKey || 'frames')}`;
+    if (DEFAULT_RETURN_URL) url += `&return_url=${encodeURIComponent(DEFAULT_RETURN_URL)}`;
+    return url;
+  }
+
+  function toggleInlineFolderCreate(type, forceState) {
+    const box = document.getElementById(type === 'category' ? 'inlineNewCategoryBox' : 'inlineNewSubcategoryBox');
+    const inp = document.getElementById(type === 'category' ? 'inlineNewCategoryName' : 'inlineNewSubcategoryName');
+    if (!box) return;
+    const show = forceState !== undefined ? forceState : (box.style.display === 'none' || !box.style.display);
+    box.style.display = show ? 'flex' : 'none';
+    if (show && inp) {
+      inp.value = '';
+      setTimeout(() => inp.focus(), 40);
+    }
+  }
+
+  async function createInlineCentralFolder(type) {
+    if (!ENSURE_FOLDER_URL) return;
+    const catSel = document.getElementById('categorySelect');
+    const subSel = document.getElementById('subCategorySelect');
+    const inp = document.getElementById(type === 'category' ? 'inlineNewCategoryName' : 'inlineNewSubcategoryName');
+    const name = inp ? inp.value.trim() : '';
+    if (!name) { alert('Please enter a name.'); return; }
+    if (type === 'subcategory' && (!catSel || !catSel.value)) {
+      alert('Please select or create a Category first.');
+      return;
+    }
+    try {
+      const res = await fetch(ENSURE_FOLDER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folder_type: type,
+          name,
+          parent_category_id: type === 'subcategory' ? catSel.value : ''
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+      if (type === 'category') {
+        let opt = Array.from(catSel.options).find(o => String(o.value) === String(data.id));
+        if (!opt) {
+          opt = new Option(data.name, data.id, true, true);
+          catSel.add(opt);
+        }
+        catSel.value = data.id;
+        currentSubId = '';
+        toggleInlineFolderCreate('category', false);
+        await onCategoryChanged(data.id, '');
+      } else {
+        let opt = Array.from(subSel.options).find(o => String(o.value) === String(data.id));
+        if (!opt) {
+          opt = new Option(data.name, data.id, true, true);
+          subSel.add(opt);
+        }
+        subSel.disabled = false;
+        subSel.value = data.id;
+        toggleInlineFolderCreate('subcategory', false);
+        checkAssetNameAvailability();
+      }
+    } catch (err) {
+      alert('Could not create central folder: ' + err.message);
+    }
+  }
+
   let existingMoreFields = {{ ((asset.moreFields or asset.more_fields) if (asset and(asset.moreFields or asset.more_fields)) else { }) | tojson }};
   let currentSubId = "{{ (asset.subCategoryId or asset.sub_category_id) if asset else (selected_sub or '') }}";
   let nameCheckTimeout = null;
@@ -759,13 +911,25 @@
       return;
     }
 
+    if (!CHECK_NAME_URL || IS_APP_OVERRIDE_EDIT) {
+      statusEl.innerHTML = '';
+      nameInput.style.borderColor = '';
+      isNameAvailable = true;
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.title = '';
+      }
+      return;
+    }
+
     statusEl.innerHTML = '<span style="color:var(--md-sys-color-on-surface-variant); font-size:0.8rem;">⏳ Checking availability...</span>';
 
     const catId = catSelect ? catSelect.value : '';
     const subId = subSelect ? subSelect.value : '';
 
     try {
-      let url = `/admin/assets/check-name?name=${encodeURIComponent(nameVal)}`;
+      const sep = CHECK_NAME_URL.includes('?') ? '&' : '?';
+      let url = `${CHECK_NAME_URL}${sep}name=${encodeURIComponent(nameVal)}`;
       if (subId) url += `&subCategoryId=${encodeURIComponent(subId)}`;
       if (catId) url += `&categoryId=${encodeURIComponent(catId)}`;
       if (currentAssetId) url += `&assetId=${encodeURIComponent(currentAssetId)}`;
@@ -1006,13 +1170,14 @@
 
     try {
       let items = [];
-      const res = await fetch(`/admin/subcategories/api/list?categoryId=${encodeURIComponent(categoryId)}`, {
+      const sep = SUBCATEGORIES_API_URL.includes('?') ? '&' : '?';
+      const res = await fetch(`${SUBCATEGORIES_API_URL}${sep}categoryId=${encodeURIComponent(categoryId)}`, {
         credentials: 'same-origin'
       });
       if (res.ok) {
         const json = await res.json();
         items = json.items || [];
-      } else {
+      } else if (PORTAL_MODE === 'admin') {
         const v1Res = await fetch(`/api/v1/subcategories?categoryId=${categoryId}&pageSize=100`);
         const v1Json = await v1Res.json();
         items = v1Json.data?.items || [];
@@ -1506,7 +1671,7 @@
                 🤖 Re-detect
               </button>
               {% if asset and asset.id %}
-                <a href="/admin/assets/{{ asset.id }}/frames{% if return_url %}?return_url={{ return_url | urlencode }}{% endif %}" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.55rem; font-size:0.75rem;">
+                <a href="${escapeHtml(buildFrameEditorUrl(key))}" class="btn btn-outlined" style="min-height:28px; padding:0.15rem 0.55rem; font-size:0.75rem;" onclick="return openFrameInteractiveEditor('${safeKey}', this.href, event)">
                   Interactive Editor 🖼️
                 </a>
               {% endif %}
@@ -1774,11 +1939,17 @@
     }
   }
 
-  // Upload single file to central media endpoint with conflict detection
+  // Upload single file to central media endpoint (or isolated app override dir) with conflict detection
   async function uploadFileToServer(file, folder, catId, subId, assetName, clientHints) {
-    if (catId && subId && typeof showRenameModal === 'function') {
+    if (IS_APP_OVERRIDE_EDIT) {
+      catId = '';
+      subId = '';
+      folder = CURRENT_INSTANCE_ID ? `instance_overrides/${CURRENT_INSTANCE_ID}` : 'instance_overrides';
+    }
+    if (!IS_APP_OVERRIDE_EDIT && catId && subId && typeof showRenameModal === 'function') {
       try {
-        let chkUrl = `/api/v1/media/check-similarity?filename=${encodeURIComponent(file.name)}&categoryId=${encodeURIComponent(catId)}&subCategoryId=${encodeURIComponent(subId)}`;
+        const simSep = CHECK_SIMILARITY_URL.includes('?') ? '&' : '?';
+        let chkUrl = `${CHECK_SIMILARITY_URL}${simSep}filename=${encodeURIComponent(file.name)}&categoryId=${encodeURIComponent(catId)}&subCategoryId=${encodeURIComponent(subId)}`;
         if (assetName) chkUrl += `&assetName=${encodeURIComponent(assetName)}`;
         if (typeof currentAssetId !== 'undefined' && currentAssetId) chkUrl += `&assetId=${encodeURIComponent(currentAssetId)}`;
         if (typeof currentAssetFolder !== 'undefined' && currentAssetFolder) chkUrl += `&assetFolder=${encodeURIComponent(currentAssetFolder)}`;
@@ -1841,8 +2012,8 @@
     if (catId) formData.append('categoryId', catId);
     if (subId) formData.append('subCategoryId', subId);
     if (assetName) formData.append('assetName', assetName);
-    if (typeof currentAssetFolder !== 'undefined' && currentAssetFolder) formData.append('assetFolder', currentAssetFolder);
-    if (typeof currentAssetId !== 'undefined' && currentAssetId) formData.append('assetId', currentAssetId);
+    if (!IS_APP_OVERRIDE_EDIT && typeof currentAssetFolder !== 'undefined' && currentAssetFolder) formData.append('assetFolder', currentAssetFolder);
+    if (!IS_APP_OVERRIDE_EDIT && typeof currentAssetId !== 'undefined' && currentAssetId) formData.append('assetId', currentAssetId);
     if (clientHints) {
       if (clientHints.duration_ms) formData.append('duration_ms', clientHints.duration_ms);
       if (clientHints.duration) formData.append('duration', clientHints.duration);
@@ -1854,7 +2025,7 @@
       formData.append('filesize', file.size);
     }
 
-    const res = await fetch('/api/v1/media/upload', {
+    const res = await fetch(MEDIA_UPLOAD_URL, {
       method: 'POST',
       body: formData
     });
@@ -2542,7 +2713,7 @@
       formData.append('file', file);
 
       try {
-        const detectRes = await fetch('/api/v1/media/detect-frames', {
+        const detectRes = await fetch(DETECT_FRAMES_URL, {
           method: 'POST',
           body: formData
         });
@@ -2587,12 +2758,13 @@
       if (block._file) {
         const formData = new FormData();
         formData.append('file', block._file);
-        detectRes = await fetch('/api/v1/media/detect-frames', {
+        detectRes = await fetch(DETECT_FRAMES_URL, {
           method: 'POST',
           body: formData
         });
       } else {
-        detectRes = await fetch(`/api/v1/media/detect-frames?imageUrl=${encodeURIComponent(photoUrl)}`);
+        const dfSep = DETECT_FRAMES_URL.includes('?') ? '&' : '?';
+        detectRes = await fetch(`${DETECT_FRAMES_URL}${dfSep}imageUrl=${encodeURIComponent(photoUrl)}`);
       }
 
       if (detectRes.ok) {
@@ -3205,6 +3377,39 @@
     if (submitBtn) submitBtn.textContent = 'Saving asset...';
 
     // Ensure all media blocks have synced url and urls fields, and sync JSON textareas
+    const serialized = serializeMoreFieldsPayload();
+    if (!serialized.ok) {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalBtnText;
+      }
+      return;
+    }
+
+    // If thumbnail is empty or pointing to an audio file, and the asset contains audio, default to /static/thumbnail_default.png
+    const thumbInputEl = document.getElementById('thumbnailUrlInput');
+    const curThumbVal = thumbInputEl ? thumbInputEl.value.trim() : '';
+    const isAudioThumb = /\.(mp3|wav|ogg|m4a|aac|flac)(\?.*)?$/i.test(curThumbVal);
+    if (!curThumbVal || isAudioThumb) {
+      const hasAudio = Object.keys(existingMoreFields).some(k => {
+        const b = existingMoreFields[k];
+        if (k.toLowerCase().includes('audio') || (b && b.type && b.type.toLowerCase().includes('audio'))) return true;
+        if (b && Array.isArray(b.items)) {
+          return b.items.some(it => String(it.mime || '').startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(it.filename || it.url || ''));
+        }
+        return false;
+      });
+      if (hasAudio && thumbInputEl) {
+        thumbInputEl.value = '/static/thumbnail_default.png';
+      }
+    }
+
+    document.getElementById('moreFieldsJsonInput').value = JSON.stringify(serialized.payload);
+    isSubmitting = true;
+    form.submit();
+  });
+
+  function serializeMoreFieldsPayload() {
     const finalPayload = {};
     for (const key of Object.keys(existingMoreFields)) {
       normalizeBlock(key);
@@ -3221,11 +3426,7 @@
         } catch (err) {
           alert(`Block "${key}" has invalid JSON: ${err.message}`);
           jsonArea.focus();
-          if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.textContent = originalBtnText;
-          }
-          return;
+          return { ok: false, payload: null };
         }
       }
 
@@ -3308,46 +3509,76 @@
       // Fallback: pass through as-is
       finalPayload[key] = block;
     }
+    return { ok: true, payload: finalPayload };
+  }
 
-    // If thumbnail is empty or pointing to an audio file, and the asset contains audio, default to /static/thumbnail_default.png
-    const thumbInputEl = document.getElementById('thumbnailUrlInput');
-    const curThumbVal = thumbInputEl ? thumbInputEl.value.trim() : '';
-    const isAudioThumb = /\.(mp3|wav|ogg|m4a|aac|flac)(\?.*)?$/i.test(curThumbVal);
-    if (!curThumbVal || isAudioThumb) {
-      const hasAudio = Object.keys(existingMoreFields).some(k => {
-        const b = existingMoreFields[k];
-        if (k.toLowerCase().includes('audio') || (b && b.type && b.type.toLowerCase().includes('audio'))) return true;
-        if (b && Array.isArray(b.items)) {
-          return b.items.some(it => String(it.mime || '').startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(it.filename || it.url || ''));
-        }
-        return false;
-      });
-      if (hasAudio && thumbInputEl) {
-        thumbInputEl.value = '/static/thumbnail_default.png';
+  async function openFrameInteractiveEditor(blockKey, targetHref, ev) {
+    const block = existingMoreFields[blockKey];
+    if (!block || !block._isStaged || !block._file) {
+      return true;
+    }
+    if (ev) ev.preventDefault();
+    const triggerEl = ev ? ev.currentTarget : null;
+    const origText = triggerEl ? triggerEl.textContent : '';
+    if (triggerEl) {
+      triggerEl.textContent = 'Saving photo...';
+      triggerEl.style.pointerEvents = 'none';
+    }
+    try {
+      const catEl = document.getElementById('categorySelect');
+      const subEl = document.getElementById('subCategorySelect');
+      const nameEl = document.getElementById('assetName');
+      const catId = catEl ? catEl.value : '';
+      const subId = subEl ? subEl.value : '';
+      const assetName = nameEl ? nameEl.value.trim() : '';
+      let fileToUpload = block._file;
+      if (block.filename && block.filename !== fileToUpload.name) {
+        fileToUpload = new File([fileToUpload], block.filename, { type: fileToUpload.type, lastModified: fileToUpload.lastModified || Date.now() });
+      }
+      const result = await uploadFileToServer(fileToUpload, 'more_fields', catId, subId, assetName, block);
+      block.imageUrl = result.url;
+      block.image_url = result.url;
+      if (result.width) block.width = Math.round(result.width);
+      if (result.height) block.height = Math.round(result.height);
+      block._isStaged = false;
+      delete block._file;
+
+      const serialized = serializeMoreFieldsPayload();
+      if (!serialized.ok) throw new Error('Invalid block payload');
+      document.getElementById('moreFieldsJsonInput').value = JSON.stringify(serialized.payload);
+      const fd = new FormData(document.getElementById('assetForm'));
+      const saveRes = await fetch(SAVE_ACTION_URL, { method: 'POST', body: fd });
+      if (!saveRes.ok) throw new Error(`HTTP ${saveRes.status}`);
+      window.location.href = targetHref;
+    } catch (err) {
+      alert('Failed to upload staged frame photo before opening editor: ' + (err.message || err));
+      if (triggerEl) {
+        triggerEl.textContent = origText;
+        triggerEl.style.pointerEvents = '';
       }
     }
-
-    document.getElementById('moreFieldsJsonInput').value = JSON.stringify(finalPayload);
-    isSubmitting = true;
-    form.submit();
-  });
+    return false;
+  }
 
   // Initial boot
-  const catVal = document.getElementById('categorySelect').value;
+  const catEl = document.getElementById('categorySelect');
+  const catVal = catEl ? catEl.value : '';
   const subSelect = document.getElementById('subCategorySelect');
-  if (currentSubId && subSelect) {
-    subSelect.value = currentSubId;
-  }
-  if (catVal && subSelect && subSelect.options.length <= 1) {
-    onCategoryChanged(catVal, currentSubId);
-  }
-  if (subSelect) {
-    subSelect.addEventListener('change', () => {
-      const nameInput = document.getElementById('assetName');
-      if (nameInput && nameInput.value.trim()) {
-        checkAssetNameAvailability();
-      }
-    });
+  if (!IS_APP_OVERRIDE_EDIT) {
+    if (currentSubId && subSelect) {
+      subSelect.value = currentSubId;
+    }
+    if (catVal && subSelect && subSelect.options && subSelect.options.length <= 1) {
+      onCategoryChanged(catVal, currentSubId);
+    }
+    if (subSelect && subSelect.tagName === 'SELECT') {
+      subSelect.addEventListener('change', () => {
+        const nameInput = document.getElementById('assetName');
+        if (nameInput && nameInput.value.trim()) {
+          checkAssetNameAvailability();
+        }
+      });
+    }
   }
   renderPayloadBlocks();
   checkAssetNameAvailability();
@@ -3357,7 +3588,7 @@
     const returnInput = document.getElementById('returnUrlInput');
     const backLink = document.getElementById('backToListLink');
     const cancelBtn = document.getElementById('cancelBtn');
-    if (returnInput && !returnInput.value) {
+    if (PORTAL_MODE === 'admin' && returnInput && !returnInput.value) {
       try {
         const saved = sessionStorage.getItem('admin_assets_filter_url');
         if (saved && saved.startsWith('/admin/assets')) {
@@ -3366,6 +3597,8 @@
           if (cancelBtn) cancelBtn.href = saved;
         }
       } catch (e) {}
+    } else if (returnInput && !returnInput.value) {
+      returnInput.value = DEFAULT_RETURN_URL;
     }
   })();
 </script>

@@ -331,6 +331,74 @@ async def add_references(
     return {"success": True, **counts}
 
 
+async def ensure_category_link(
+    db: AsyncIOMotorDatabase,
+    app_instance_id: str,
+    central_category_id: str,
+    super_category_id: str | None = None,
+) -> tuple[str, bool]:
+    """Ensure a single central category is linked into an app instance without importing its children.
+
+    Returns (instance_category_id, created_or_restored).
+    """
+    inst_oid = to_object_id(app_instance_id)
+    c_oid = to_object_id(central_category_id)
+    now = utc_now()
+    counts = {
+        "added_super_categories": 0,
+        "added_categories": 0,
+        "added_subcategories": 0,
+        "added_assets": 0,
+        "already_present": 0,
+    }
+    super_link = (
+        await _restore_target(
+            db, INSTANCE_SUPER_CATEGORIES, inst_oid, super_category_id, counts, "added_super_categories", now
+        )
+        if super_category_id
+        else None
+    )
+    inst_cat_id = await _ensure_category(db, inst_oid, c_oid, counts, now, super_link=super_link)
+    return str(inst_cat_id), counts["added_categories"] > 0
+
+
+async def ensure_subcategory_link(
+    db: AsyncIOMotorDatabase,
+    app_instance_id: str,
+    central_subcategory_id: str,
+    target_category_id: str | None = None,
+) -> tuple[str, bool]:
+    """Ensure a single central subcategory (and its parent category if needed) is linked without importing assets.
+
+    Returns (instance_subcategory_id, created_or_restored).
+    """
+    inst_oid = to_object_id(app_instance_id)
+    s_oid = to_object_id(central_subcategory_id)
+    central_sub = await db[SUBCATEGORIES].find_one({"_id": s_oid, "deleted_at": None})
+    if not central_sub:
+        raise NotFoundError("Central subcategory not found")
+
+    now = utc_now()
+    counts = {
+        "added_super_categories": 0,
+        "added_categories": 0,
+        "added_subcategories": 0,
+        "added_assets": 0,
+        "already_present": 0,
+    }
+    cat_link_id = await _restore_target(
+        db, INSTANCE_CATEGORIES, inst_oid, target_category_id, counts, "added_categories", now
+    )
+    if not cat_link_id:
+        cat_link_id = await _ensure_category(
+            db, inst_oid, central_sub["category_id"], counts, now, count_present=False
+        )
+    key = {"app_instance_id": inst_oid, "category_id": cat_link_id, "source_id": s_oid}
+    sub_link_id, status = await _ensure_link(db, INSTANCE_SUBCATEGORIES, key, now)
+    _tally(counts, "added_subcategories", status)
+    return str(sub_link_id), status != "present"
+
+
 async def copy_references_from_instance(
     db: AsyncIOMotorDatabase,
     target_instance_id: str,

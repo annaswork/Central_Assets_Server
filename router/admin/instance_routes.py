@@ -14,6 +14,7 @@ from controller.app_instance_controller import (
     update_app_instance,
 )
 from controller.base_controller import serialize_mongo_doc
+from controller.catalog_controller import get_resolved_single_asset
 from controller.instance_workspace_controller import (
     build_instance_content,
     build_picker_page,
@@ -28,11 +29,18 @@ from controller.instance_workspace_controller import (
     picker_subcategories,
     set_category_super_category,
 )
+from controller.manager_upload_controller import (
+    apply_frame_editor_save,
+    find_frame_block_key,
+    normalize_asset_aliases,
+    save_app_level_asset_edit_and_notify,
+)
 from controller.override_controller import (
     bulk_distribute_subcategory_assets,
     bulk_update_folder_tags,
     distribute_item_tiers,
     reorder_items,
+    reset_overrides,
     update_item_settings_and_overrides,
 )
 from controller.reference_controller import (
@@ -490,6 +498,224 @@ async def admin_instance_folder_override(
 
     res = await update_item_settings_and_overrides(
         db, app_instance_id=id, item_id=folder_id, **parse_folder_override_payload(folder_type, payload)
+    )
+    return JSONResponse(status_code=200, content={"success": True, "data": serialize_mongo_doc(res)})
+
+
+@router.post("/{id}/folders/{folder_type}/{folder_id}/reset-override")
+async def admin_instance_folder_reset_override(
+    request: Request,
+    id: str,
+    folder_type: str,
+    folder_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Clear app-level content overrides on a folder so it falls back to Central defaults."""
+    session = get_current_admin_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    res = await reset_overrides(
+        db,
+        app_instance_id=id,
+        item_type=folder_type,
+        item_id=folder_id,
+        fields=["name", "thumbnail_url", "image_url", "tags"],
+    )
+    return JSONResponse(status_code=200, content={"success": True, "data": serialize_mongo_doc(res)})
+
+
+@router.get("/{id}/assets/{asset_id}/edit")
+async def admin_edit_app_asset_page(
+    request: Request,
+    id: str,
+    asset_id: str,
+    return_url: str | None = Query(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Render App-Level Asset Edit page inside Admin Instance workspace."""
+    session = get_current_admin_session(request)
+    if not session:
+        return RedirectResponse(url="/admin/login", status_code=303)
+
+    from utils.errors import NotFoundError
+    from utils.responses import safe_redirect_url
+
+    instance = await get_app_instance(db, id)
+    asset = await get_resolved_single_asset(db, app_instance_id=id, asset_id=asset_id)
+    if not asset:
+        raise NotFoundError("App instance asset not found.")
+
+    normalize_asset_aliases(asset)
+
+    safe_return = safe_redirect_url(return_url, f"/admin/instances/{id}/content?active_section=assets&tab=assets")
+    return templates.TemplateResponse(
+        request=request,
+        name="assets/form_multi.html",
+        context={
+            "session": session,
+            "layout_template": "base.html",
+            "portal_mode": "admin_override_edit",
+            "form_mode": "app_override_edit",
+            "instance": instance,
+            "asset": asset,
+            "categories": [],
+            "subcategories": [],
+            "active_tab": "instances",
+            "return_url": safe_return,
+            "save_action_url": f"/admin/instances/{id}/assets/{asset['id']}/edit",
+            "frames_editor_base_url": f"/admin/instances/{id}/assets/{asset['id']}/frames",
+            "media_upload_url": "/api/v1/media/upload",
+            "media_crop_url": "/api/v1/media/crop",
+            "detect_frames_url": "/api/v1/media/detect-frames",
+            "check_similarity_url": "/api/v1/media/check-similarity",
+            "check_name_url": "",
+        },
+    )
+
+
+@router.get("/{id}/assets/{asset_id}/frames")
+async def admin_app_asset_frame_editor_page(
+    request: Request,
+    id: str,
+    asset_id: str,
+    block_key: str | None = Query(default=None),
+    return_url: str | None = Query(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Render Interactive Frame Placeholder Editor inside Admin App Instance workspace."""
+    session = get_current_admin_session(request)
+    if not session:
+        return RedirectResponse(url="/admin/login", status_code=303)
+
+    from utils.errors import NotFoundError
+    from utils.responses import append_query_params, safe_redirect_url
+
+    instance = await get_app_instance(db, id)
+    asset = await get_resolved_single_asset(db, app_instance_id=id, asset_id=asset_id)
+    if not asset:
+        raise NotFoundError("App instance asset not found.")
+    normalize_asset_aliases(asset)
+
+    safe_return = safe_redirect_url(return_url, f"/admin/instances/{id}/content?active_section=assets&tab=assets")
+    back_url = append_query_params(
+        f"/admin/instances/{id}/assets/{asset['id']}/edit",
+        {"return_url": safe_return} if safe_return else {},
+    )
+    frames_block_key = find_frame_block_key(asset.get("more_fields"), block_key)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="assets/frames_editor.html",
+        context={
+            "session": session,
+            "layout_template": "base.html",
+            "portal_mode": "admin_override_edit",
+            "instance": instance,
+            "asset": asset,
+            "active_tab": "instances",
+            "return_url": safe_return,
+            "back_url": back_url,
+            "frames_block_key": frames_block_key,
+            "media_upload_url": "/api/v1/media/upload",
+            "detect_frames_url": "/api/v1/media/detect-frames",
+            "save_frames_url": f"/admin/instances/{id}/assets/{asset['id']}/frames",
+        },
+    )
+
+
+@router.post("/{id}/assets/{asset_id}/frames")
+async def admin_save_app_asset_frames(
+    request: Request,
+    id: str,
+    asset_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Save Interactive Frame Editor updates at app level for an Admin App Instance."""
+    session = get_current_admin_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+
+    res = await apply_frame_editor_save(
+        db,
+        app_instance_id=id,
+        asset_id=asset_id,
+        payload=payload,
+        manager_user=None,
+    )
+    return JSONResponse(content=res)
+
+
+@router.post("/{id}/assets/{asset_id}/edit")
+async def admin_save_app_asset_edit(
+    request: Request,
+    id: str,
+    asset_id: str,
+    name: str | None = Form(default=None),
+    description: str = Form(default=""),
+    thumbnail_url: str | None = Form(default=None),
+    more_fields_json: str | None = Form(default=None),
+    return_url: str | None = Form(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Save app-level overrides on an asset for this Admin App Instance without mutating Central Data."""
+    session = get_current_admin_session(request)
+    if not session:
+        return RedirectResponse(url="/admin/login", status_code=303)
+
+    import json
+    from utils.responses import append_query_params, safe_redirect_url
+
+    more_fields: dict | None = None
+    if more_fields_json and more_fields_json.strip():
+        try:
+            parsed = json.loads(more_fields_json)
+            if isinstance(parsed, dict):
+                more_fields = parsed
+        except Exception:
+            pass
+
+    await save_app_level_asset_edit_and_notify(
+        db,
+        app_instance_id=id,
+        asset_id=asset_id,
+        payload={
+            "name": name,
+            "description": description,
+            "thumbnail_url": thumbnail_url,
+            "more_fields": more_fields,
+        },
+        manager_user=None,
+    )
+    target = safe_redirect_url(return_url, f"/admin/instances/{id}/content?active_section=assets&tab=assets")
+    return RedirectResponse(url=append_query_params(target, {"msg": "Saved app-level changes."}), status_code=303)
+
+
+@router.post("/{id}/assets/{asset_id}/reset-override")
+async def admin_reset_app_asset_override(
+    request: Request,
+    id: str,
+    asset_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Clear content overrides on an app asset so it falls back to Central Data."""
+    session = get_current_admin_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    res = await reset_overrides(
+        db,
+        app_instance_id=id,
+        item_type="asset",
+        item_id=asset_id,
+        fields=["name", "description", "thumbnail_url", "more_fields"],
     )
     return JSONResponse(status_code=200, content={"success": True, "data": serialize_mongo_doc(res)})
 

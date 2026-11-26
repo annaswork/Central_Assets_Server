@@ -17,7 +17,7 @@ from controller.admin_manager_controller import (
 )
 from controller.app_instance_controller import list_app_instances
 from database.collections import ADMIN_USERS
-from router.deps import get_db
+from router.deps import extract_2fa_code, get_db
 from utils.datetimes import format_datetime_display
 from utils.errors import AppError, ConflictError, NotFoundError
 from utils.ids import to_object_id
@@ -114,7 +114,7 @@ async def admin_delete_manager(
         return RedirectResponse(url="/admin/login", status_code=303)
 
     try:
-        res = await delete_manager_account(db, manager_id=manager_id)
+        res = await delete_manager_account(db, manager_id=manager_id, admin_id=session["user_id"])
         msg = quote_plus(res.get("message", "Manager deleted successfully."))
         return RedirectResponse(url=f"/admin/managers?msg={msg}&msg_type=success", status_code=303)
     except NotFoundError as e:
@@ -133,17 +133,7 @@ async def admin_view_manager_password(
     if not session:
         return JSONResponse(status_code=401, content={"success": False, "detail": "Session expired. Please log in again."})
 
-    code = ""
-    try:
-        content_type = request.headers.get("content-type", "")
-        if "application/json" in content_type:
-            data = await request.json()
-            code = data.get("code", "")
-        else:
-            form = await request.form()
-            code = str(form.get("code", ""))
-    except Exception:
-        code = ""
+    code = await extract_2fa_code(request)
 
     try:
         res = await admin_verify_and_reveal_manager_password(

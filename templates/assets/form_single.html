@@ -1,6 +1,6 @@
-{% extends "base.html" %}
+{% extends layout_template | default('base.html') %}
 
-{% block title %}Bulk Single-File Add — Asset Admin{% endblock %}
+{% block title %}{% if portal_mode == 'manager_create' %}Bulk Single-File Add — {{ instance.name }}{% else %}Bulk Single-File Add — Asset Admin{% endif %}{% endblock %}
 
 {% block content %}
 <style>
@@ -63,28 +63,50 @@
 </style>
 <div style="margin-bottom:1.5rem;">
   <a href="{{ return_url or '/admin/assets' }}" id="backToListLink" style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
-    ← Back to Assets
+    ← Back to {{ instance.name if portal_mode == 'manager_create' and instance else 'Assets' }}
   </a>
   <h1>Bulk Single-File Asset Intake</h1>
   <p style="color:var(--md-sys-color-on-surface-variant);">
     Drop multiple media files to automatically create individual standalone assets.
   </p>
+  {% if portal_mode == 'manager_create' and instance %}
+  <div style="margin-top:0.75rem; padding:0.75rem 1rem; border-radius:10px; background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.35); font-size:0.86rem; line-height:1.45;">
+    🔄 <strong>Direct Upload to {{ instance.name }}:</strong> Uploaded assets and any newly created Categories / Subcategories are automatically saved to <strong>Central Data</strong> and attached to your app. Removing an item from your app later only detaches it without deleting Central Data.
+  </div>
+  {% endif %}
 </div>
 
 <div class="card" style="margin-bottom:1.5rem;">
   <div class="grid grid-2" style="margin-bottom:1.5rem;">
     <div class="form-group">
-      <label class="label">Target Category *</label>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
+        <label class="label" style="margin:0;">Target Category *</label>
+        {% if ensure_folder_url %}
+        <button type="button" class="btn btn-text" style="font-size:0.78rem; padding:0.1rem 0.4rem;" onclick="toggleInlineFolderCreate('category')">+ New Category</button>
+        {% endif %}
+      </div>
       <select id="bulkCategory" class="select" required onchange="preselectedSubId=''; loadSubcategories(this.value, '')">
         <option value="">-- Select Category --</option>
         {% for cat in categories %}
           <option value="{{ cat.id }}" {% if selected_cat == cat.id %}selected{% endif %}>{{ cat.name }}</option>
         {% endfor %}
       </select>
+      {% if ensure_folder_url %}
+      <div id="inlineNewCategoryBox" style="display:none; margin-top:0.45rem; gap:0.4rem; align-items:center;">
+        <input type="text" id="inlineNewCategoryName" class="input" placeholder="New central category name" style="flex:1; min-height:34px; font-size:0.84rem;" onkeydown="if(event.key==='Enter'){event.preventDefault(); createInlineCentralFolder('category');}">
+        <button type="button" class="btn btn-primary btn-sm" onclick="createInlineCentralFolder('category')">Add</button>
+        <button type="button" class="btn btn-text btn-sm" onclick="toggleInlineFolderCreate('category', false)">✕</button>
+      </div>
+      {% endif %}
     </div>
 
     <div class="form-group">
-      <label class="label">Target Subcategory *</label>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
+        <label class="label" style="margin:0;">Target Subcategory *</label>
+        {% if ensure_folder_url %}
+        <button type="button" class="btn btn-text" style="font-size:0.78rem; padding:0.1rem 0.4rem;" onclick="toggleInlineFolderCreate('subcategory')">+ New Subcategory</button>
+        {% endif %}
+      </div>
       <select id="bulkSubcategory" class="select" required {% if not selected_cat %}disabled{% endif %} onchange="checkStagedConflicts()">
         {% if not selected_cat %}
           <option value="">-- Select Category First --</option>
@@ -95,6 +117,13 @@
           {% endfor %}
         {% endif %}
       </select>
+      {% if ensure_folder_url %}
+      <div id="inlineNewSubcategoryBox" style="display:none; margin-top:0.45rem; gap:0.4rem; align-items:center;">
+        <input type="text" id="inlineNewSubcategoryName" class="input" placeholder="New central subcategory name" style="flex:1; min-height:34px; font-size:0.84rem;" onkeydown="if(event.key==='Enter'){event.preventDefault(); createInlineCentralFolder('subcategory');}">
+        <button type="button" class="btn btn-primary btn-sm" onclick="createInlineCentralFolder('subcategory')">Add</button>
+        <button type="button" class="btn btn-text btn-sm" onclick="toggleInlineFolderCreate('subcategory', false)">✕</button>
+      </div>
+      {% endif %}
     </div>
   </div>
 
@@ -330,6 +359,79 @@
 </div>
 
 <script>
+const PORTAL_MODE = {{ (portal_mode or 'admin') | tojson }};
+const SUBCATEGORIES_API_URL = {{ (subcategories_api_url or '/admin/subcategories/api/list') | tojson }};
+const CHECK_SIMILARITY_URL = {{ (check_similarity_url or '/api/v1/media/check-similarity') | tojson }};
+const DETECT_FRAMES_URL = {{ (detect_frames_url or '/api/v1/media/detect-frames') | tojson }};
+const MEDIA_UPLOAD_URL = {{ (media_upload_url or '/api/v1/media/upload') | tojson }};
+const MEDIA_CROP_URL = {{ (media_crop_url or '/api/v1/media/crop') | tojson }};
+const CREATE_ASSET_URL = {{ (create_asset_url or '/api/v1/assets') | tojson }};
+const ENSURE_FOLDER_URL = {{ (ensure_folder_url or '') | tojson }};
+const DEFAULT_RETURN_URL = {{ (return_url or '/admin/assets') | tojson }};
+window.MEDIA_UPLOAD_URL = MEDIA_UPLOAD_URL;
+window.MEDIA_CROP_URL = MEDIA_CROP_URL;
+
+function toggleInlineFolderCreate(type, forceState) {
+  const box = document.getElementById(type === 'category' ? 'inlineNewCategoryBox' : 'inlineNewSubcategoryBox');
+  const inp = document.getElementById(type === 'category' ? 'inlineNewCategoryName' : 'inlineNewSubcategoryName');
+  if (!box) return;
+  const show = forceState !== undefined ? forceState : (box.style.display === 'none' || !box.style.display);
+  box.style.display = show ? 'flex' : 'none';
+  if (show && inp) {
+    inp.value = '';
+    setTimeout(() => inp.focus(), 40);
+  }
+}
+
+async function createInlineCentralFolder(type) {
+  if (!ENSURE_FOLDER_URL) return;
+  const catSel = document.getElementById('bulkCategory');
+  const subSel = document.getElementById('bulkSubcategory');
+  const inp = document.getElementById(type === 'category' ? 'inlineNewCategoryName' : 'inlineNewSubcategoryName');
+  const name = inp ? inp.value.trim() : '';
+  if (!name) { alert('Please enter a name.'); return; }
+  if (type === 'subcategory' && (!catSel || !catSel.value)) {
+    alert('Please select or create a Category first.');
+    return;
+  }
+  try {
+    const res = await fetch(ENSURE_FOLDER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        folder_type: type,
+        name,
+        parent_category_id: type === 'subcategory' ? catSel.value : ''
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+    if (type === 'category') {
+      let opt = Array.from(catSel.options).find(o => String(o.value) === String(data.id));
+      if (!opt) {
+        opt = new Option(data.name, data.id, true, true);
+        catSel.add(opt);
+      }
+      catSel.value = data.id;
+      preselectedSubId = '';
+      toggleInlineFolderCreate('category', false);
+      await loadSubcategories(data.id, '');
+    } else {
+      let opt = Array.from(subSel.options).find(o => String(o.value) === String(data.id));
+      if (!opt) {
+        opt = new Option(data.name, data.id, true, true);
+        subSel.add(opt);
+      }
+      subSel.disabled = false;
+      subSel.value = data.id;
+      toggleInlineFolderCreate('subcategory', false);
+      checkStagedConflicts();
+    }
+  } catch (err) {
+    alert('Could not create central folder: ' + err.message);
+  }
+}
+
 let stagedFiles = [];
 let stagedCustomThumbs = new Map(); // stem.toLowerCase() -> File
 let preselectedSubId = "{{ selected_sub or '' }}";
@@ -553,15 +655,16 @@ async function loadSubcategories(categoryId, targetSubId) {
 
   try {
     let items = [];
-    // 1. Try internal admin subcategories API
-    const res = await fetch(`/admin/subcategories/api/list?categoryId=${encodeURIComponent(categoryId)}`, {
+    // 1. Try scoped subcategories API
+    const sep = SUBCATEGORIES_API_URL.includes('?') ? '&' : '?';
+    const res = await fetch(`${SUBCATEGORIES_API_URL}${sep}categoryId=${encodeURIComponent(categoryId)}`, {
       credentials: 'same-origin'
     });
     if (res.ok) {
       const json = await res.json();
       items = json.items || [];
-    } else {
-      // 2. Fallback to API v1
+    } else if (PORTAL_MODE === 'admin') {
+      // 2. Fallback to API v1 (Admin session only)
       const v1Res = await fetch(`/api/v1/subcategories?categoryId=${categoryId}&pageSize=100`);
       const v1Json = await v1Res.json();
       items = v1Json.data?.items || [];
@@ -766,7 +869,7 @@ async function handleFileSelect(files, forceCrop = false) {
   let matchMap = {};
   if (catId && subId) {
     try {
-      const res = await fetch('/api/v1/media/check-similarity', {
+      const res = await fetch(CHECK_SIMILARITY_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -902,7 +1005,7 @@ async function checkStagedConflicts() {
       probeToIndices.get(probe).push(...idxs);
     }
 
-    const res = await fetch('/api/v1/media/check-similarity', {
+    const res = await fetch(CHECK_SIMILARITY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1422,7 +1525,8 @@ async function buildBlocks(item, uploadData) {
         // Auto-detect placeholders via API if not provided in JSON
         if (coordinates.length === 0 && frameImgUrl) {
           try {
-            const detectRes = await fetch(`/api/v1/media/detect-frames?imageUrl=${encodeURIComponent(frameImgUrl)}`);
+            const detectSep = DETECT_FRAMES_URL.includes('?') ? '&' : '?';
+          const detectRes = await fetch(`${DETECT_FRAMES_URL}${detectSep}imageUrl=${encodeURIComponent(frameImgUrl)}`);
             if (detectRes.ok) {
               const detectData = await detectRes.json();
               if (detectData.coordinates && Array.isArray(detectData.coordinates)) {
@@ -1593,7 +1697,7 @@ async function startBulkUpload() {
           formData.append('assetName', groupAssetName);
         }
         
-        const upRes = await fetch('/api/v1/media/upload', {
+        const upRes = await fetch(MEDIA_UPLOAD_URL, {
           method: 'POST',
           body: formData
         });
@@ -1647,7 +1751,7 @@ async function startBulkUpload() {
           thumbForm.append('folder', 'assets/thumbnails');
           thumbForm.append('categoryId', catId);
           thumbForm.append('subCategoryId', subId);
-          const tRes = await fetch('/api/v1/media/upload', { method: 'POST', body: thumbForm });
+          const tRes = await fetch(MEDIA_UPLOAD_URL, { method: 'POST', body: thumbForm });
           if (tRes.ok) {
             const tJson = await tRes.json();
             finalThumbUrl = (tJson.data && tJson.data.url) || tJson.url;
@@ -1685,7 +1789,7 @@ async function startBulkUpload() {
         moreFields: moreFieldsPayload
       };
       
-      const createRes = await fetch('/api/v1/assets', {
+      const createRes = await fetch(CREATE_ASSET_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(assetPayload)
@@ -1738,11 +1842,13 @@ async function startBulkUpload() {
     showToast('All assets uploaded successfully!', 'success');
     setTimeout(() => {
       const returnUrl = {{ (return_url or '') | tojson }} || (function() {
-        try {
-          const saved = sessionStorage.getItem('admin_assets_filter_url');
-          if (saved && saved.startsWith('/admin/assets')) return saved;
-        } catch (e) {}
-        return '/admin/assets';
+        if (PORTAL_MODE === 'admin') {
+          try {
+            const saved = sessionStorage.getItem('admin_assets_filter_url');
+            if (saved && saved.startsWith('/admin/assets')) return saved;
+          } catch (e) {}
+        }
+        return DEFAULT_RETURN_URL;
       })();
       window.location.href = returnUrl;
     }, 1200);
@@ -1762,7 +1868,7 @@ onDataTypeChange();
 
 (function() {
   const backLink = document.getElementById('backToListLink');
-  if (backLink && (!backLink.getAttribute('href') || backLink.getAttribute('href') === '/admin/assets')) {
+  if (PORTAL_MODE === 'admin' && backLink && (!backLink.getAttribute('href') || backLink.getAttribute('href') === '/admin/assets')) {
     try {
       const saved = sessionStorage.getItem('admin_assets_filter_url');
       if (saved && saved.startsWith('/admin/assets')) {

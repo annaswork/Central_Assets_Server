@@ -14,6 +14,7 @@ from controller.admin_manager_controller import (
     clear_admin_direct_conversation,
     clear_conversation,
     delete_chat_thread,
+    dismiss_message_proposal,
     get_admin_direct_messages,
     get_thread_messages,
     list_admin_conversations,
@@ -332,6 +333,31 @@ async def admin_apply_proposal(
         )
         return RedirectResponse(
             url=f"/admin/messages/{manager_id}?msg=Proposal+successfully+applied+to+central+data",
+            status_code=303,
+        )
+    except Exception as err:
+        return RedirectResponse(
+            url=f"/admin/messages/{manager_id}?error={quote_plus(str(err))}",
+            status_code=303,
+        )
+
+
+@router.post("/{message_id}/dismiss-proposal")
+async def admin_dismiss_proposal(
+    message_id: str,
+    request: Request,
+    manager_id: str = Form(...),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Keep a manager's asset edit as an app-only override without modifying Central Data."""
+    session = get_current_admin_session(request)
+    if not session:
+        return RedirectResponse(url="/admin/login", status_code=303)
+
+    try:
+        await dismiss_message_proposal(db, message_id=message_id, status="kept_app_only")
+        return RedirectResponse(
+            url=f"/admin/messages/{manager_id}?msg=Marked+as+app-only+change+(Central+Data+unchanged)",
             status_code=303,
         )
     except Exception as err:

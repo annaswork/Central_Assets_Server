@@ -292,45 +292,138 @@
                   <div style="margin-top:0.75rem; padding:0.85rem; border-radius:8px; background:var(--md-sys-color-surface); border:1px solid var(--md-sys-color-outline-variant); color:var(--md-sys-color-on-surface);">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
                       <span style="font-weight:700; font-size:0.8rem; text-transform:uppercase; color:var(--md-sys-color-primary);">
-                        📦 Proposed {{ msg.payload_type|replace('_', ' ')|title }}
+                        {% if msg.payload_type == 'asset_update' %}
+                          📝 App Asset Edit Proposal
+                        {% else %}
+                          📦 Proposed {{ msg.payload_type|replace('_', ' ')|title }}
+                        {% endif %}
                       </span>
                       {% if msg.status == 'applied' %}
                         <span class="badge badge-success" style="font-size:0.75rem;">✓ Applied to Central Data</span>
+                      {% elif msg.status == 'kept_app_only' %}
+                        <span class="badge badge-secondary" style="font-size:0.75rem;">🏠 Kept as App-Only</span>
                       {% else %}
                         <span class="badge badge-warning" style="font-size:0.75rem;">Pending Review</span>
                       {% endif %}
                     </div>
 
-                    <div style="font-size:0.85rem; margin-bottom:0.35rem;">
-                      <strong>Proposed Name:</strong> {{ msg.data_payload.name }}
-                    </div>
-                    {% if msg.data_payload.super_category_name %}
-                      <div style="font-size:0.85rem; margin-bottom:0.35rem;"><strong>Proposed Super Category:</strong> ⭐ {{ msg.data_payload.super_category_name }}</div>
-                    {% endif %}
-
-                    <!-- Media Information & Preview -->
-                    {% if msg.data_payload.thumbnail_url or msg.data_payload.media_url %}
-                      <div style="margin:0.5rem 0; padding:0.5rem; border-radius:6px; background:var(--md-sys-color-surface-container-low); display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
-                        {% if msg.data_payload.thumbnail_url %}
-                          <img src="{{ msg.data_payload.thumbnail_url }}" alt="Preview" style="width:52px; height:52px; object-fit:cover; border-radius:6px; border:1px solid var(--md-sys-color-outline-variant);" onerror="this.style.display='none'">
+                    {% if msg.payload_type == 'asset_update' %}
+                      {% set before_data = msg.data_payload.before or {} %}
+                      {% set prop_data = msg.data_payload.proposed or {} %}
+                      {% set changed = msg.data_payload.changed_fields or [] %}
+                      <div style="font-size:0.82rem; color:var(--md-sys-color-on-surface-variant); margin-bottom:0.6rem; display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center;">
+                        <span><strong>App:</strong> {{ msg.data_payload.app_instance_name or msg.data_payload.app_instance_id }}</span>
+                        {% if msg.data_payload.app_package_name %}
+                          <code>{{ msg.data_payload.app_package_name }}</code>
                         {% endif %}
-                        <div style="flex:1; min-width:180px;">
-                          <div style="font-size:0.82rem; font-weight:600; word-break:break-all;">
-                            {{ msg.data_payload.media_filename or 'Uploaded Media' }}
+                        {% if msg.data_payload.source_asset_id %}
+                          <span>•</span>
+                          <a href="/admin/assets/{{ msg.data_payload.source_asset_id }}/edit" target="_blank" style="color:var(--md-sys-color-primary); text-decoration:underline;">Open Central Asset ↗</a>
+                        {% endif %}
+                      </div>
+
+                      <div style="border:1px solid var(--md-sys-color-outline-variant); border-radius:6px; overflow:hidden; font-size:0.82rem; margin-bottom:0.65rem;">
+                        <div style="display:grid; grid-template-columns:110px 1fr 1fr; background:var(--md-sys-color-surface-container); font-weight:700; padding:0.4rem 0.6rem; border-bottom:1px solid var(--md-sys-color-outline-variant);">
+                          <span>Field</span>
+                          <span>Before (Current)</span>
+                          <span>Proposed (App Edit)</span>
+                        </div>
+                        {% if 'name' in changed %}
+                          <div style="display:grid; grid-template-columns:110px 1fr 1fr; gap:0.5rem; padding:0.45rem 0.6rem; border-bottom:1px solid var(--md-sys-color-outline-variant);">
+                            <strong>Name</strong>
+                            <span style="color:var(--md-sys-color-on-surface-variant); word-break:break-word;">{{ before_data.name or '—' }}</span>
+                            <span style="color:var(--md-sys-color-primary); font-weight:600; word-break:break-word;">{{ prop_data.name or '—' }}</span>
                           </div>
-                          <div style="font-size:0.75rem; color:var(--md-sys-color-outline); margin-top:0.15rem;">
-                            <a href="{{ msg.data_payload.media_url or msg.data_payload.thumbnail_url }}" target="_blank" style="color:var(--md-sys-color-primary); text-decoration:underline;">Open / View File ↗</a>
-                            {% if msg.data_payload.size_bytes %}
-                              • {{ (msg.data_payload.size_bytes / 1024)|round(1) }} KB
-                            {% endif %}
+                        {% endif %}
+                        {% if 'description' in changed %}
+                          <div style="display:grid; grid-template-columns:110px 1fr 1fr; gap:0.5rem; padding:0.45rem 0.6rem; border-bottom:1px solid var(--md-sys-color-outline-variant);">
+                            <strong>Description</strong>
+                            <span style="color:var(--md-sys-color-on-surface-variant); word-break:break-word;">{{ before_data.description or '—' }}</span>
+                            <span style="color:var(--md-sys-color-primary); font-weight:600; word-break:break-word;">{{ prop_data.description or '—' }}</span>
+                          </div>
+                        {% endif %}
+                        {% if 'thumbnail_url' in changed %}
+                          <div style="display:grid; grid-template-columns:110px 1fr 1fr; gap:0.5rem; padding:0.45rem 0.6rem; border-bottom:1px solid var(--md-sys-color-outline-variant); align-items:center;">
+                            <strong>Thumbnail</strong>
+                            <div>
+                              {% if before_data.thumbnail_url %}
+                                <img src="{{ before_data.thumbnail_url }}" alt="Before" style="width:44px; height:44px; object-fit:cover; border-radius:4px;">
+                              {% else %}
+                                <span style="color:var(--md-sys-color-on-surface-variant);">—</span>
+                              {% endif %}
+                            </div>
+                            <div>
+                              {% if prop_data.thumbnail_url %}
+                                <img src="{{ prop_data.thumbnail_url }}" alt="Proposed" style="width:44px; height:44px; object-fit:cover; border-radius:4px; border:1px solid var(--md-sys-color-primary);">
+                              {% else %}
+                                <span style="color:var(--md-sys-color-on-surface-variant);">(Cleared)</span>
+                              {% endif %}
+                            </div>
+                          </div>
+                        {% endif %}
+                        {% if 'more_fields' in changed %}
+                          {% set b_mf = before_data.more_fields or {} %}
+                          {% set p_mf = prop_data.more_fields or {} %}
+                          <div style="display:grid; grid-template-columns:110px 1fr 1fr; gap:0.5rem; padding:0.45rem 0.6rem;">
+                            <strong>Blocks</strong>
+                            <div style="color:var(--md-sys-color-on-surface-variant); word-break:break-word;">
+                              {{ b_mf.keys()|list|join(', ') or 'None' }} ({{ b_mf|length }} block(s))
+                            </div>
+                            <div style="color:var(--md-sys-color-primary); font-weight:600; word-break:break-word;">
+                              {{ p_mf.keys()|list|join(', ') or 'None' }} ({{ p_mf|length }} block(s))
+                            </div>
+                          </div>
+                        {% endif %}
+                      </div>
+                    {% else %}
+                      <div style="font-size:0.85rem; margin-bottom:0.35rem;">
+                        <strong>Proposed Name:</strong> {{ msg.data_payload.name }}
+                      </div>
+                      {% if msg.data_payload.super_category_name %}
+                        <div style="font-size:0.85rem; margin-bottom:0.35rem;"><strong>Proposed Super Category:</strong> ⭐ {{ msg.data_payload.super_category_name }}</div>
+                      {% endif %}
+
+                      <!-- Media Information & Preview -->
+                      {% if msg.data_payload.thumbnail_url or msg.data_payload.media_url %}
+                        <div style="margin:0.5rem 0; padding:0.5rem; border-radius:6px; background:var(--md-sys-color-surface-container-low); display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                          {% if msg.data_payload.thumbnail_url %}
+                            <img src="{{ msg.data_payload.thumbnail_url }}" alt="Preview" style="width:52px; height:52px; object-fit:cover; border-radius:6px; border:1px solid var(--md-sys-color-outline-variant);" onerror="this.style.display='none'">
+                          {% endif %}
+                          <div style="flex:1; min-width:180px;">
+                            <div style="font-size:0.82rem; font-weight:600; word-break:break-all;">
+                              {{ msg.data_payload.media_filename or 'Uploaded Media' }}
+                            </div>
+                            <div style="font-size:0.75rem; color:var(--md-sys-color-outline); margin-top:0.15rem;">
+                              <a href="{{ msg.data_payload.media_url or msg.data_payload.thumbnail_url }}" target="_blank" style="color:var(--md-sys-color-primary); text-decoration:underline;">Open / View File ↗</a>
+                              {% if msg.data_payload.size_bytes %}
+                                • {{ (msg.data_payload.size_bytes / 1024)|round(1) }} KB
+                              {% endif %}
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      {% endif %}
                     {% endif %}
 
                     <!-- Action: Apply to Central Data -->
-                    {% if msg.status != 'applied' %}
-                      {% if msg.payload_type == 'asset' %}
+                    {% if msg.status not in ['applied', 'kept_app_only'] %}
+                      {% if msg.payload_type == 'asset_update' %}
+                        <div style="margin-top:0.65rem; padding-top:0.65rem; border-top:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:flex-end; gap:0.5rem; flex-wrap:wrap;">
+                          <form method="POST" action="/admin/messages/{{ msg.id }}/dismiss-proposal" style="margin:0;" onsubmit="return confirm('Keep these changes at app level only? Central Data will remain untouched.');">
+                            <input type="hidden" name="manager_id" value="{{ current_thread.id }}">
+                            <button type="submit" class="btn btn-outlined btn-sm" style="display:inline-flex; align-items:center; gap:0.35rem;">
+                              <span>🏠</span>
+                              <span>Keep as App-Only Change</span>
+                            </button>
+                          </form>
+                          <form method="POST" action="/admin/messages/{{ msg.id }}/apply-proposal" style="margin:0;" onsubmit="return confirm('Apply these proposed edits to the Central Library asset for all apps?');">
+                            <input type="hidden" name="manager_id" value="{{ current_thread.id }}">
+                            <button type="submit" class="btn btn-primary btn-sm" style="display:inline-flex; align-items:center; gap:0.35rem;">
+                              <span>✨</span>
+                              <span>Apply Update to Central Data</span>
+                            </button>
+                          </form>
+                        </div>
+                      {% elif msg.payload_type == 'asset' %}
                         <!-- Asset Proposal: Must ask for Category AND Subcategory -->
                         <div style="margin-top:0.75rem; padding:0.75rem; border-radius:8px; background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant);">
                           <div style="font-weight:600; font-size:0.82rem; margin-bottom:0.5rem; color:var(--md-sys-color-primary); display:flex; align-items:center; gap:0.35rem;">

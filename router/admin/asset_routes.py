@@ -24,6 +24,7 @@ from controller.asset_controller import (
 )
 from controller.category_controller import in_super_category, list_categories
 from controller.csv_update_controller import apply_csv_column_updates
+from controller.manager_upload_controller import find_frame_block_key, normalize_asset_aliases
 from controller.subcategory_controller import get_subcategory, list_subcategories
 from controller.super_category_controller import list_super_categories
 from database.collections import ASSETS
@@ -434,6 +435,7 @@ async def admin_edit_asset_page(
 async def admin_frame_editor_page(
     request: Request,
     id: str,
+    block_key: str | None = Query(default=None),
     return_url: str | None = Query(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
@@ -442,18 +444,30 @@ async def admin_frame_editor_page(
         return RedirectResponse(url="/admin/login", status_code=303)
 
     asset = await get_asset(db, asset_id=id)
-    if "more_fields" in asset and "moreFields" not in asset:
-        asset["moreFields"] = asset["more_fields"]
-    if "moreFields" in asset and "more_fields" not in asset:
-        asset["more_fields"] = asset["moreFields"]
-    if "thumbnail_url" in asset and "thumbnailUrl" not in asset:
-        asset["thumbnailUrl"] = asset["thumbnail_url"]
+    normalize_asset_aliases(asset)
 
     safe_return = safe_redirect_url(return_url, "/admin/assets")
+    back_url = append_query_params(
+        f"/admin/assets/{asset['id']}/edit",
+        {"return_url": safe_return} if safe_return else {},
+    )
+    frames_block_key = find_frame_block_key(asset.get("more_fields"), block_key)
     return templates.TemplateResponse(
         request=request,
         name="assets/frames_editor.html",
-        context={"session": session, "asset": asset, "active_tab": "assets", "return_url": safe_return},
+        context={
+            "session": session,
+            "layout_template": "base.html",
+            "portal_mode": "admin",
+            "asset": asset,
+            "active_tab": "assets",
+            "return_url": safe_return,
+            "back_url": back_url,
+            "frames_block_key": frames_block_key,
+            "media_upload_url": "/api/v1/media/upload",
+            "detect_frames_url": "/api/v1/media/detect-frames",
+            "save_frames_url": f"/api/v1/assets/{asset['id']}",
+        },
     )
 
 

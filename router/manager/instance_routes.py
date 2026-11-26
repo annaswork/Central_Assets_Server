@@ -27,6 +27,11 @@ from controller.instance_workspace_controller import (
     picker_subcategories,
     set_category_super_category,
 )
+from controller.catalog_controller import get_resolved_single_asset
+from controller.manager_upload_controller import (
+    create_manager_folder_with_central_sync,
+    notify_asset_rename_proposal,
+)
 from controller.manager_controller import (
     create_access_request,
     create_instance_creation_request,
@@ -40,6 +45,7 @@ from controller.override_controller import (
     bulk_update_folder_tags,
     distribute_item_tiers,
     reorder_items,
+    reset_overrides,
     update_item_settings_and_overrides,
 )
 from controller.reference_controller import add_references, remove_reference
@@ -371,10 +377,22 @@ async def manager_instance_asset_override(
     except Exception:
         payload = {}
 
+    propose_to_central = bool(payload.get("propose_to_central")) and "name" in payload
+    before_asset = (
+        await get_resolved_single_asset(db, app_instance_id=instance_id, asset_id=assetId)
+        if propose_to_central
+        else None
+    )
+
     res = await update_item_settings_and_overrides(
         db, app_instance_id=instance_id, item_type="asset", item_id=assetId, **parse_asset_override_payload(payload)
     )
-    return JSONResponse(status_code=200, content={"success": True, "data": serialize_mongo_doc(res)})
+    message_sent = False
+    if propose_to_central and before_asset and payload.get("name"):
+        message_sent = await notify_asset_rename_proposal(
+            db, instance_id, before_asset, str(payload["name"]), manager_user=session
+        )
+    return JSONResponse(status_code=200, content={"success": True, "message_sent": message_sent, "data": serialize_mongo_doc(res)})
 
 
 @router.get("/api/assets/{asset_id}/preview")
@@ -528,6 +546,33 @@ async def manager_instance_folder_override(
 
     res = await update_item_settings_and_overrides(
         db, app_instance_id=instance_id, item_id=folder_id, **parse_folder_override_payload(folder_type, payload)
+    )
+    return JSONResponse(status_code=200, content={"success": True, "data": serialize_mongo_doc(res)})
+
+
+@router.post("/{instance_id}/folders/{folder_type}/{folder_id}/reset-override")
+async def manager_instance_folder_reset_override(
+    request: Request,
+    instance_id: str,
+    folder_type: str,
+    folder_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Clear app-level content overrides on a folder so it falls back to Central defaults."""
+    session = get_current_manager_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    await verify_manager_instance_access(db, session["user_id"], instance_id)
+    if folder_type not in {"super_category", "category", "subcategory"}:
+        return JSONResponse(status_code=400, content={"success": False, "message": "Invalid folder type"})
+
+    res = await reset_overrides(
+        db,
+        app_instance_id=instance_id,
+        item_type=folder_type,
+        item_id=folder_id,
+        fields=["name", "thumbnail_url", "image_url", "tags"],
     )
     return JSONResponse(status_code=200, content={"success": True, "data": serialize_mongo_doc(res)})
 
@@ -832,7 +877,10 @@ async def manager_instance_create_folder(
         data = {}
 
     try:
-        return JSONResponse(status_code=200, content=await create_instance_folder(db, instance_id, data))
+        res = await create_manager_folder_with_central_sync(
+            db, app_instance_id=instance_id, data=data, manager_user=session
+        )
+        return JSONResponse(status_code=200, content=res)
     except ValidationError as err:
         return JSONResponse(status_code=400, content={"success": False, "message": err.message})
 

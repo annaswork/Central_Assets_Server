@@ -28,6 +28,8 @@
   <script defer src="/admin-assets/js/theme.js"></script>
   <script defer src="/admin-assets/js/sidebar.js"></script>
   <script defer src="/admin-assets/js/dialogs.js"></script>
+  <script defer src="/admin-assets/js/uploader.js"></script>
+  <script defer src="/admin-assets/js/media_cropper.js?v=2"></script>
   <script defer src="/admin-assets/js/live_badges.js"></script>
   {% block head_extra %}{% endblock %}
 </head>
@@ -230,5 +232,7 @@
     </div>
   </div>
   <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <div id="bgUploadPopupContainer" class="bg-upload-container"></div>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

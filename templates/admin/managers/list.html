@@ -92,8 +92,8 @@
                   </button>
 
                   <!-- Delete Manager -->
-                  <form method="POST" action="/admin/managers/{{ m.id }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete manager \'{{ m.username }}\'? This will remove their account and all access grants.');">
-                    <button type="submit" class="btn btn-outlined btn-sm" style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);" title="Delete Manager">
+                  <form method="POST" action="/admin/managers/{{ m.id }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('Delete manager \'{{ m.username }}\'? Their App Instances, instance content, and API keys will be preserved and transferred to Admin.');">
+                    <button type="submit" class="btn btn-outlined btn-sm" style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);" title="Delete Manager (preserves apps & API keys)">
                       🗑️
                     </button>
                   </form>
@@ -180,7 +180,7 @@
                 Two-Factor Authentication is currently not enabled on your Admin account. Security policy requires active Admin 2FA verification to view manager credentials.
               </div>
               <div style="margin-top:0.75rem;">
-                <a href="/admin/security/2fa" class="btn btn-primary btn-sm" style="text-decoration:none; display:inline-block;">Configure Admin 2FA Now</a>
+                <a href="/admin/settings/2fa/setup" class="btn btn-primary btn-sm" style="text-decoration:none; display:inline-block;">Configure Admin 2FA Now</a>
               </div>
             </div>
           </div>

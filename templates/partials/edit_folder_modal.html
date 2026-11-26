@@ -1,0 +1,200 @@
+{# Shared App-Level Category / Subcategory Edit Modal (Admin + Manager).
+   Expected context variables:
+     portal_base : '/admin' | '/manager'
+     instance    : app instance object (.id, .name)
+#}
+{% set _folder_upload_url = ('/manager/instances/' ~ instance.id ~ '/media/upload?scope=override') if portal_base == '/manager' else ('/api/v1/media/upload') %}
+<div id="editInstanceFolderModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.68); z-index:9999; align-items:center; justify-content:center; padding:1rem; backdrop-filter:blur(4px);" onclick="if (event.target === this) closeEditFolderModal();">
+  <div class="card" style="width:100%; max-width:540px; padding:1.5rem; border:1px solid var(--md-sys-color-outline-variant); box-shadow:0 12px 36px rgba(0,0,0,0.45); max-height:92vh; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+      <div>
+        <h3 id="editFolderModalTitle" style="margin:0; font-size:1.15rem;">✏️ Edit Folder (App Level)</h3>
+        <div style="font-size:0.78rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.2rem;">
+          App-level customization only — Central Data will <strong>not</strong> be modified.
+        </div>
+      </div>
+      <button type="button" onclick="closeEditFolderModal()" style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:var(--md-sys-color-on-surface-variant);">✕</button>
+    </div>
+
+    <div id="editFolderAlert" style="display:none; padding:0.65rem 0.85rem; border-radius:8px; font-size:0.83rem; margin-bottom:0.85rem;"></div>
+
+    <form id="editInstanceFolderForm" onsubmit="submitEditFolderModal(event)">
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="label" for="editFolderNameInput">Display Name (App Override)</label>
+        <input type="text" id="editFolderNameInput" class="input" placeholder="Leave blank to inherit Central name" autocomplete="off">
+      </div>
+
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="label" for="editFolderThumbInput">Thumbnail URL</label>
+        <div style="display:flex; gap:0.65rem; align-items:center;">
+          <img id="editFolderThumbPreview" src="" alt="Thumb" style="display:none; width:46px; height:46px; border-radius:8px; object-fit:cover; border:1px solid var(--md-sys-color-outline-variant); flex-shrink:0;">
+          <input type="text" id="editFolderThumbInput" class="input" placeholder="/static/central_data/..." style="flex:1;" oninput="refreshFolderModalPreview('thumb')">
+          <label class="btn btn-outlined btn-sm" style="cursor:pointer; white-space:nowrap;">
+            Upload
+            <input type="file" accept="image/*" style="display:none;" onchange="uploadFolderOverrideMedia(this, 'thumb')">
+          </label>
+          <button type="button" class="btn btn-text btn-sm" onclick="clearFolderField('thumb')" title="Reset to Central default">Clear</button>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:1.25rem;">
+        <label class="label" for="editFolderImageInput">Banner / Image URL</label>
+        <div style="display:flex; gap:0.65rem; align-items:center;">
+          <img id="editFolderImagePreview" src="" alt="Banner" style="display:none; width:46px; height:46px; border-radius:8px; object-fit:cover; border:1px solid var(--md-sys-color-outline-variant); flex-shrink:0;">
+          <input type="text" id="editFolderImageInput" class="input" placeholder="/static/central_data/..." style="flex:1;" oninput="refreshFolderModalPreview('image')">
+          <label class="btn btn-outlined btn-sm" style="cursor:pointer; white-space:nowrap;">
+            Upload
+            <input type="file" accept="image/*" style="display:none;" onchange="uploadFolderOverrideMedia(this, 'image')">
+          </label>
+          <button type="button" class="btn btn-text btn-sm" onclick="clearFolderField('image')" title="Reset to Central default">Clear</button>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.65rem; border-top:1px solid var(--md-sys-color-outline-variant); padding-top:1rem;">
+        <button type="button" id="resetFolderOverrideBtn" class="btn btn-outlined btn-sm" onclick="resetFolderOverrides()" title="Clear app overrides and inherit Central Data">
+          ↺ Reset to Central
+        </button>
+        <div style="display:flex; gap:0.5rem;">
+          <button type="button" class="btn btn-outlined" onclick="closeEditFolderModal()">Cancel</button>
+          <button type="submit" id="saveEditFolderBtn" class="btn btn-primary">Save App Changes</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  let _editingFolderType = null;
+  let _editingFolderId = null;
+
+  function openEditFolderModal(folderType, folderId, btn) {
+    _editingFolderType = folderType;
+    _editingFolderId = folderId;
+    const modal = document.getElementById('editInstanceFolderModal');
+    const title = document.getElementById('editFolderModalTitle');
+    const alertBox = document.getElementById('editFolderAlert');
+    if (alertBox) { alertBox.style.display = 'none'; alertBox.textContent = ''; }
+    if (title) {
+      title.textContent = folderType === 'subcategory'
+        ? '✏️ Edit Subcategory (App Level)'
+        : '✏️ Edit Category (App Level)';
+    }
+    document.getElementById('editFolderNameInput').value = (btn && btn.dataset.name) ? btn.dataset.name : '';
+    document.getElementById('editFolderThumbInput').value = (btn && btn.dataset.thumb) ? btn.dataset.thumb : '';
+    document.getElementById('editFolderImageInput').value = (btn && btn.dataset.image) ? btn.dataset.image : '';
+    refreshFolderModalPreview('thumb');
+    refreshFolderModalPreview('image');
+    if (modal) {
+      modal.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    }
+  }
+
+  function closeEditFolderModal() {
+    const modal = document.getElementById('editInstanceFolderModal');
+    if (modal) modal.style.display = 'none';
+    document.body.style.overflow = '';
+    _editingFolderType = null;
+    _editingFolderId = null;
+  }
+
+  function refreshFolderModalPreview(kind) {
+    const input = document.getElementById(kind === 'thumb' ? 'editFolderThumbInput' : 'editFolderImageInput');
+    const img = document.getElementById(kind === 'thumb' ? 'editFolderThumbPreview' : 'editFolderImagePreview');
+    if (!input || !img) return;
+    const val = (input.value || '').trim();
+    if (val) {
+      img.src = val;
+      img.style.display = 'block';
+    } else {
+      img.src = '';
+      img.style.display = 'none';
+    }
+  }
+
+  function clearFolderField(kind) {
+    const input = document.getElementById(kind === 'thumb' ? 'editFolderThumbInput' : 'editFolderImageInput');
+    if (input) input.value = '';
+    refreshFolderModalPreview(kind);
+  }
+
+  function showEditFolderAlert(msg, isError) {
+    const el = document.getElementById('editFolderAlert');
+    if (!el) return;
+    el.style.display = 'block';
+    el.textContent = msg;
+    el.style.background = isError ? 'rgba(239,68,68,0.14)' : 'rgba(34,197,94,0.14)';
+    el.style.border = isError ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(34,197,94,0.4)';
+    el.style.color = isError ? '#ef4444' : '#22c55e';
+  }
+
+  async function uploadFolderOverrideMedia(fileInput, kind) {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('folder', `instance_overrides/{{ instance.id }}`);
+    try {
+      const res = await fetch({{ _folder_upload_url | tojson }}, {
+        method: 'POST',
+        body: formData,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error?.message || json.message || `Upload HTTP ${res.status}`);
+      const uploadedUrl = (json.data && json.data.url) || json.url || '';
+      if (!uploadedUrl) throw new Error('No URL returned by upload');
+      const targetInput = document.getElementById(kind === 'thumb' ? 'editFolderThumbInput' : 'editFolderImageInput');
+      if (targetInput) targetInput.value = uploadedUrl;
+      refreshFolderModalPreview(kind);
+      showEditFolderAlert('Image uploaded for this app override.', false);
+    } catch (err) {
+      showEditFolderAlert('Upload error: ' + err.message, true);
+    } finally {
+      fileInput.value = '';
+    }
+  }
+
+  async function submitEditFolderModal(event) {
+    event.preventDefault();
+    if (!_editingFolderType || !_editingFolderId) return;
+    const btn = document.getElementById('saveEditFolderBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    try {
+      const payload = {
+        name: document.getElementById('editFolderNameInput').value.trim(),
+        thumbnail_url: document.getElementById('editFolderThumbInput').value.trim(),
+        image_url: document.getElementById('editFolderImageInput').value.trim(),
+      };
+      const res = await fetch(`{{ portal_base }}/instances/{{ instance.id }}/folders/${_editingFolderType}/${_editingFolderId}/override`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+      closeEditFolderModal();
+      window.location.reload();
+    } catch (err) {
+      showEditFolderAlert('Save failed: ' + err.message, true);
+      btn.disabled = false;
+      btn.textContent = 'Save App Changes';
+    }
+  }
+
+  async function resetFolderOverrides() {
+    if (!_editingFolderType || !_editingFolderId) return;
+    if (!confirm('Reset this folder back to its Central Data defaults for this app?')) return;
+    try {
+      const res = await fetch(`{{ portal_base }}/instances/{{ instance.id }}/folders/${_editingFolderType}/${_editingFolderId}/reset-override`, {
+        method: 'POST',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+      closeEditFolderModal();
+      window.location.reload();
+    } catch (err) {
+      showEditFolderAlert('Reset failed: ' + err.message, true);
+    }
+  }
+</script>

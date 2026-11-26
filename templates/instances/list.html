@@ -55,6 +55,11 @@
         <tr class="clickable-row" onclick="if (!event.target.closest('a, button, form, input')) window.location='/admin/instances/{{ inst.id }}/content';" title="Click to browse content of {{ inst.name }}">
           <td data-label="Name">
             <strong>{{ inst.name }}</strong>
+            {% if inst.previous_owner_username %}
+              <span class="badge badge-neutral" style="font-size:0.7rem; margin-left:0.35rem;" title="Previous manager owner was deleted; rights transferred to Admin">
+                Transferred from {{ inst.previous_owner_username }}
+              </span>
+            {% endif %}
             <div style="font-size:0.8rem; font-family:monospace; color:var(--md-sys-color-on-surface-variant);">ID: {{ inst.id }}</div>
           </td>
           <td data-label="Package">

@@ -58,16 +58,21 @@
     document.getElementById('previewEnabledVal').textContent = '—';
     document.getElementById('previewMoreFieldsCountBadge').textContent = 'Loading fields...';
 
-    // Set Edit button link
-    const apiPrefix = window.location.pathname.startsWith('/manager') ? '/manager' : '/admin';
-    const isManager = window.location.pathname.startsWith('/manager');
+    // Set Edit button link (scoped to instance when inside an app workspace)
+    const path = window.location.pathname || '';
+    const isManager = path.startsWith('/manager');
+    const apiPrefix = isManager ? '/manager' : '/admin';
+    const instScopeMatch = path.match(/^\/(manager|admin)\/instances\/([^/]+)/);
     const editBtn = document.getElementById('previewEditBtn');
     if (editBtn) {
-      if (isManager) {
+      const currentUrl = path + window.location.search;
+      if (instScopeMatch) {
+        editBtn.style.display = '';
+        editBtn.href = `/${instScopeMatch[1]}/instances/${instScopeMatch[2]}/assets/${assetId}/edit?return_url=${encodeURIComponent(currentUrl)}`;
+      } else if (isManager) {
         editBtn.style.display = 'none';
       } else {
         editBtn.style.display = '';
-        const currentUrl = window.location.pathname + window.location.search;
         editBtn.href = `/admin/assets/${assetId}/edit?return_url=${encodeURIComponent(currentUrl)}`;
       }
     }
@@ -477,10 +482,28 @@
     });
   }
 
+  function resolveInteractiveEditorUrl(assetData, blockKey) {
+    const targetAssetId = currentPreviewAssetId || (assetData && assetData.id);
+    if (!targetAssetId) return '';
+    const path = window.location.pathname || '';
+    const returnUrl = path + (window.location.search || '');
+    const instScopeMatch = path.match(/^\/(manager|admin)\/instances\/([^/]+)/);
+    const blockParam = blockKey ? `block_key=${encodeURIComponent(blockKey)}` : '';
+    if (instScopeMatch) {
+      const qs = [blockParam, `return_url=${encodeURIComponent(returnUrl)}`].filter(Boolean).join('&');
+      return `/${instScopeMatch[1]}/instances/${instScopeMatch[2]}/assets/${targetAssetId}/frames?${qs}`;
+    }
+    if (path.startsWith('/manager')) {
+      return '';
+    }
+    const qs = [blockParam, `return_url=${encodeURIComponent(returnUrl)}`].filter(Boolean).join('&');
+    return `/admin/assets/${targetAssetId}/frames${qs ? `?${qs}` : ''}`;
+  }
+
   function renderFramesPreviewBlock(container, block, assetData) {
     const coords = block.coordinates || block.placeholders || [];
     const frameImgUrl = block.image_url || block.imageUrl || (assetData ? (assetData.thumbnail_url || assetData.thumbnailUrl) : '');
-    const editorUrl = assetData && assetData.id ? `/admin/assets/${assetData.id}/frames` : '#';
+    const editorUrl = resolveInteractiveEditorUrl(assetData, block.key);
 
     const wrap = document.createElement('div');
     wrap.className = 'morefields-frames-view';
@@ -494,8 +517,8 @@
         ${block.width && block.height ? `<span class="morefields-frames-dims">Template Size: ${block.width} × ${block.height} px</span>` : ''}
       </div>
       <div class="morefields-frames-actions">
-        ${!window.location.pathname.startsWith('/manager') && assetData && assetData.id ? `
-          <a href="${editorUrl}" class="btn btn-primary" style="font-size:0.78rem; padding:4px 10px; display:inline-flex; align-items:center; gap:4px; text-decoration:none;">
+        ${editorUrl ? `
+          <a href="${escapeHtml(editorUrl)}" class="btn btn-primary" style="font-size:0.78rem; padding:4px 10px; display:inline-flex; align-items:center; gap:4px; text-decoration:none;">
             <span>Interactive Editor 🖼️</span>
           </a>
         ` : ''}

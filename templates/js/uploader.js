@@ -279,7 +279,7 @@
           reject(new Error('Upload cancelled'));
         });
 
-        xhr.open('POST', '/api/v1/media/upload');
+        xhr.open('POST', options.uploadUrl || window.MEDIA_UPLOAD_URL || '/api/v1/media/upload');
         xhr.send(formData);
       });
     }

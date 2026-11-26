@@ -1,26 +1,41 @@
-{% extends "base.html" %}
+{% extends layout_template or "base.html" %}
 {% set hide_refresh = true %}
 
 {% block title %}Frame Placeholder Editor — {{ asset.name }}{% endblock %}
 
 {% block content %}
 <div style="margin-bottom:1.5rem;">
-  <a href="/admin/assets/{{ asset.id }}/edit{% if return_url %}?return_url={{ return_url | urlencode }}{% endif %}" style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
+  {% set computed_back_url = back_url if back_url is defined and back_url else ('/admin/assets/' ~ asset.id ~ '/edit' ~ (('?return_url=' ~ (return_url | urlencode)) if return_url else '')) %}
+  <a href="{{ computed_back_url }}" style="color:var(--md-sys-color-primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; margin-bottom:0.5rem; font-size:0.9rem;">
     ← Back to Edit Asset
   </a>
   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
     <div>
       <h1>Visual Frame Placeholder Editor</h1>
       <p style="color:var(--md-sys-color-on-surface-variant);">
-        Asset: <strong>{{ asset.name }}</strong> — Configure sub-bounding boxes for dynamic image/photo injection.
+        Asset: <strong>{{ asset.name }}</strong>
+        {% if instance %}
+          — Editing at App Level for <strong>{{ instance.name }}</strong>
+        {% else %}
+          — Configure sub-bounding boxes for dynamic image/photo injection.
+        {% endif %}
       </p>
+      {% if portal_mode == 'manager_override_edit' and instance %}
+      <div style="margin-top:0.5rem; padding:0.55rem 0.85rem; border-radius:8px; background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.35); font-size:0.82rem;">
+        🛡️ <strong>App-Level Edit Mode ({{ instance.name }}):</strong> Changes save to this app only (Central Data stays intact) and send a review proposal to Admin.
+      </div>
+      {% elif portal_mode == 'admin_override_edit' and instance %}
+      <div style="margin-top:0.5rem; padding:0.55rem 0.85rem; border-radius:8px; background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.35); font-size:0.82rem;">
+        🛡️ <strong>App-Level Edit Mode ({{ instance.name }}):</strong> Saving updates only this app's version (<code>instance_assets.overrides</code>).
+      </div>
+      {% endif %}
     </div>
     <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
       <input type="file" id="editorPhotoInput" accept="image/*" style="display:none;" onchange="uploadEditorFramePhoto(this.files[0])">
       <button type="button" class="btn btn-outlined" onclick="document.getElementById('editorPhotoInput').click()">
         📤 Upload / Change Photo
       </button>
-      <button type="button" class="btn btn-outlined" onclick="autoDetectFrames()">
+      <button type="button" class="btn btn-outlined" onclick="autoDetectFrames(this)">
         🤖 Auto-Detect (OpenCV)
       </button>
       <button type="button" class="btn btn-primary" onclick="saveFrames()">
@@ -62,7 +77,23 @@
 <script src="/admin-assets/js/frames.js"></script>
 <script>
 const assetData = {{ asset | tojson }};
-const framesField = (assetData.moreFields && assetData.moreFields.frames) || (assetData.more_fields && assetData.more_fields.frames) || {};
+const PORTAL_MODE = {{ (portal_mode or 'admin') | tojson }};
+const IS_OVERRIDE_MODE = (PORTAL_MODE === 'manager_override_edit' || PORTAL_MODE === 'admin_override_edit');
+const FRAMES_BLOCK_KEY = {{ (frames_block_key or 'frames') | tojson }};
+const MEDIA_UPLOAD_URL = {{ (media_upload_url or '/api/v1/media/upload') | tojson }};
+const DETECT_FRAMES_URL = {{ (detect_frames_url or '/api/v1/media/detect-frames') | tojson }};
+const SAVE_FRAMES_URL = {{ (save_frames_url or ('/api/v1/assets/' ~ asset.id)) | tojson }};
+const BACK_TO_EDIT_URL = {{ (computed_back_url) | tojson }};
+
+function detectFramesEndpoint(imageUrl) {
+  const sep = DETECT_FRAMES_URL.includes('?') ? '&' : '?';
+  return `${DETECT_FRAMES_URL}${sep}imageUrl=${encodeURIComponent(imageUrl)}`;
+}
+
+const allMoreFields = assetData.moreFields || assetData.more_fields || {};
+const framesField = (allMoreFields[FRAMES_BLOCK_KEY] && typeof allMoreFields[FRAMES_BLOCK_KEY] === 'object')
+  ? allMoreFields[FRAMES_BLOCK_KEY]
+  : (allMoreFields.frames || {});
 let currentFrameImageUrl = framesField.image_url || framesField.imageUrl || assetData.thumbnailUrl || assetData.thumbnail_url || '';
 let currentPlaceholders = framesField.coordinates || framesField.placeholders || [];
 
@@ -107,12 +138,14 @@ async function uploadEditorFramePhoto(file) {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('folder', 'assets');
-    if (assetData.categoryId || assetData.category_id) formData.append('categoryId', assetData.categoryId || assetData.category_id);
-    if (assetData.subCategoryId || assetData.sub_category_id) formData.append('subCategoryId', assetData.subCategoryId || assetData.sub_category_id);
-    if (assetData.name) formData.append('assetName', assetData.name);
-    if (assetData.id) formData.append('assetId', assetData.id);
+    if (!IS_OVERRIDE_MODE) {
+      if (assetData.categoryId || assetData.category_id) formData.append('categoryId', assetData.categoryId || assetData.category_id);
+      if (assetData.subCategoryId || assetData.sub_category_id) formData.append('subCategoryId', assetData.subCategoryId || assetData.sub_category_id);
+      if (assetData.name) formData.append('assetName', assetData.name);
+      if (assetData.id) formData.append('assetId', assetData.id);
+    }
 
-    const upRes = await fetch('/api/v1/media/upload', {
+    const upRes = await fetch(MEDIA_UPLOAD_URL, {
       method: 'POST',
       body: formData
     });
@@ -124,11 +157,11 @@ async function uploadEditorFramePhoto(file) {
 
     if (btn) btn.textContent = 'Detecting placeholders...';
     let detected = [];
-    let dW = upJson.data?.width || 1080;
-    let dH = upJson.data?.height || 1080;
+    let dW = upJson.data?.width || upJson.width || 1080;
+    let dH = upJson.data?.height || upJson.height || 1080;
 
     try {
-      const detectRes = await fetch(`/api/v1/media/detect-frames?imageUrl=${encodeURIComponent(newUrl)}`, {
+      const detectRes = await fetch(detectFramesEndpoint(newUrl), {
         method: 'POST'
       });
       if (detectRes.ok) {
@@ -156,24 +189,26 @@ async function uploadEditorFramePhoto(file) {
   }
 }
 
-async function autoDetectFrames() {
+async function autoDetectFrames(triggerBtn) {
   if (!currentFrameImageUrl) {
     alert('No frame photo available. Please click "Upload / Change Photo" first.');
     return;
   }
-  
-  const btn = event.target;
-  const origText = btn.textContent;
-  btn.textContent = 'Analyzing contours...';
-  btn.disabled = true;
-  
+
+  const btn = triggerBtn || document.querySelector('button[onclick*="autoDetectFrames"]');
+  const origText = btn ? btn.textContent : '';
+  if (btn) {
+    btn.textContent = 'Analyzing contours...';
+    btn.disabled = true;
+  }
+
   try {
-    const res = await fetch(`/api/v1/media/detect-frames?imageUrl=${encodeURIComponent(currentFrameImageUrl)}`, {
+    const res = await fetch(detectFramesEndpoint(currentFrameImageUrl), {
       method: 'POST'
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.message || 'Auto-detection failed');
-    
+
     const detected = json.coordinates || json.data?.slots || json.placeholders || [];
     if (detected.length === 0) {
       alert('No transparent or distinct frame regions were detected in this image. You can draw them manually.');
@@ -190,8 +225,10 @@ async function autoDetectFrames() {
   } catch (err) {
     alert('Error detecting frames: ' + err.message);
   } finally {
-    btn.textContent = origText;
-    btn.disabled = false;
+    if (btn) {
+      btn.textContent = origText;
+      btn.disabled = false;
+    }
   }
 }
 
@@ -220,26 +257,26 @@ async function saveFrames() {
     };
   });
 
-  const currentMoreFields = assetData.moreFields || assetData.more_fields || {};
-  currentMoreFields['frames'] = {
+  const currentMoreFields = { ...allMoreFields };
+  currentMoreFields[FRAMES_BLOCK_KEY] = {
     image_url: currentFrameImageUrl,
     coordinates: cleanCoordinates
   };
 
   try {
-    const res = await fetch(`/api/v1/assets/${assetData.id}`, {
-      method: 'PATCH',
+    const res = await fetch(SAVE_FRAMES_URL, {
+      method: IS_OVERRIDE_MODE ? 'POST' : 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        moreFields: currentMoreFields
+        moreFields: currentMoreFields,
+        frameBlockKey: FRAMES_BLOCK_KEY
       })
     });
-    const json = await res.json();
+    const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(json.message || 'Failed to update asset frames');
-    
-    alert('Frame placeholders saved successfully!');
-    const returnUrlParam = {% if return_url %}'?return_url=' + encodeURIComponent({{ return_url | tojson }}){% else %}''{% endif %};
-    window.location.href = `/admin/assets/${assetData.id}/edit${returnUrlParam}`;
+
+    alert(json.message || 'Frame placeholders saved successfully!');
+    window.location.href = BACK_TO_EDIT_URL;
   } catch (err) {
     alert('Failed to save frames: ' + err.message);
   }

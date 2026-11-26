@@ -2,6 +2,8 @@
 
 from datetime import datetime
 from pathlib import Path
+import re
+import shutil
 from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -9,10 +11,12 @@ from pymongo.errors import DuplicateKeyError
 
 from authorization.encryption import decrypt_password, encrypt_password, hash_password
 from authorization.totp import verify_and_consume_backup_code, verify_totp_code
+from config.paths import CENTRAL_DATA_DIR, build_central_static_url, get_asset_dir
 from controller.app_instance_controller import create_app_instance
-from controller.asset_controller import create_asset
+from controller.asset_controller import create_asset, get_asset, update_asset
 from controller.base_controller import serialize_mongo_doc, serialize_mongo_docs
 from controller.category_controller import create_category
+from controller.override_controller import update_item_settings_and_overrides
 from controller.subcategory_controller import create_subcategory
 from controller.super_category_controller import create_super_category
 from database.collections import (
@@ -22,20 +26,23 @@ from database.collections import (
     APP_INSTANCE_ACCESS_REQUESTS,
     APP_INSTANCES,
     ASSETS,
+    CATEGORIES,
     INSTANCE_ASSETS,
     INSTANCE_CATEGORIES,
     INSTANCE_SUBCATEGORIES,
     MANAGERS,
     MESSAGES,
+    SUBCATEGORIES,
 )
 from database.models.app_instance import AppInstanceCreate
-from database.models.asset import AssetCreate
+from database.models.asset import AssetCreate, AssetUpdate
 from database.models.category import CategoryCreate
 from database.models.subcategory import SubcategoryCreate
 from database.models.super_category import SuperCategoryCreate
 from utils.datetimes import utc_now
 from utils.errors import ConflictError, NotFoundError, UnauthorizedError, ValidationError
 from utils.ids import to_object_id
+from utils.slugify import slugify
 
 
 # =========================================================================
@@ -221,82 +228,88 @@ async def revoke_instance_access(
 
 
 async def delete_manager_account(
-    db: AsyncIOMotorDatabase, manager_id: str
+    db: AsyncIOMotorDatabase, manager_id: str, admin_id: str | None = None
 ) -> dict[str, Any]:
-    """Delete a manager account and cascade clean their owned app instances and access grants."""
-    from controller.app_instance_controller import delete_app_instance
-
+    """Delete a manager account non-destructively, transferring owned apps and API keys to Admin."""
     m_oid = to_object_id(manager_id)
     manager = await db[MANAGERS].find_one({"_id": m_oid})
     if not manager:
         raise NotFoundError("Manager account not found")
 
-    # Cascade delete owned app instances
-    owned_cursor = db[APP_INSTANCES].find({"$or": [{"owner_id": m_oid}, {"owner_id": str(m_oid)}]})
-    owned_instances = await owned_cursor.to_list(length=1000)
-    for inst in owned_instances:
+    now = utc_now()
+    prev_username = manager.get("username")
+    owner_match = {"$or": [{"owner_id": m_oid}, {"owner_id": str(m_oid)}]}
+
+    # Preserve all owned App Instances (and all instance_* content/overrides/analytics) and reassign rights to Admin
+    inst_set: dict[str, Any] = {
+        "owner_id": None,
+        "ownership_transferred_to": "admin",
+        "previous_owner_id": m_oid,
+        "previous_owner_username": prev_username,
+        "transferred_at": now,
+        "updated_at": now,
+    }
+    if admin_id:
         try:
-            await delete_app_instance(db, str(inst["_id"]))
+            inst_set["transferred_to_admin_id"] = to_object_id(admin_id)
         except Exception:
-            pass
+            inst_set["transferred_to_admin_id"] = admin_id
+    inst_res = await db[APP_INSTANCES].update_many(owner_match, {"$set": inst_set})
 
-    # Clean up access grants
+    # Preserve all API Keys created/owned by this manager and transfer management rights to Admin
+    key_set: dict[str, Any] = {
+        "owner_id": to_object_id(admin_id) if admin_id else None,
+        "owner_role": "admin",
+        "previous_owner_id": m_oid,
+        "previous_owner_username": prev_username,
+        "transferred_at": now,
+        "updated_at": now,
+    }
+    key_res = await db[API_KEYS].update_many(owner_match, {"$set": key_set})
+
+    # Remove manager-specific access grants and pending access requests
     await db[APP_INSTANCE_ACCESS].delete_many({"$or": [{"manager_id": m_oid}, {"manager_id": str(m_oid)}]})
-
-    # Clean up access requests
     await db[APP_INSTANCE_ACCESS_REQUESTS].delete_many(
         {"$or": [{"requesting_manager_id": m_oid}, {"requesting_manager_id": str(m_oid)}]}
     )
 
-    # Clean up API keys owned by manager
-    await db[API_KEYS].delete_many({"$or": [{"owner_id": m_oid}, {"owner_id": str(m_oid)}]})
+    # Remove ordinary chat messages, preserving any unreviewed structured proposals for Admin review if present
+    await db[MESSAGES].delete_many(
+        {
+            "$or": [{"manager_id": m_oid}, {"manager_id": str(m_oid)}],
+            "$nor": [{"payload_type": {"$ne": None}, "status": {"$in": ["unread", "read"]}}],
+        }
+    )
 
-    # Clean up chat messages
-    await db[MESSAGES].delete_many({"$or": [{"manager_id": m_oid}, {"manager_id": str(m_oid)}]})
-
-    # Delete manager document
+    # Delete manager account document
     await db[MANAGERS].delete_one({"_id": m_oid})
 
-    return {"success": True, "deleted_manager_id": str(m_oid)}
+    return {
+        "success": True,
+        "deleted_manager_id": str(m_oid),
+        "reassigned_instances_count": inst_res.modified_count,
+        "reassigned_keys_count": key_res.modified_count,
+        "message": (
+            f"Manager '{prev_username}' deleted. Reassigned {inst_res.modified_count} app instance(s) "
+            f"and {key_res.modified_count} API key(s) to Admin."
+        ),
+    }
 
 
 async def _verify_admin_2fa(
     db: AsyncIOMotorDatabase, admin_id: str, two_factor_code: str
 ) -> dict[str, Any]:
     """Helper to verify Admin's 2FA (TOTP code or backup code)."""
-    admin_oid = to_object_id(admin_id)
-    admin = await db[ADMIN_USERS].find_one({"_id": admin_oid})
-    if not admin:
-        raise UnauthorizedError("Admin account not found.")
+    from controller.authorization_controller import verify_actor_2fa
 
-    if not admin.get("is_active", True):
-        raise UnauthorizedError("Admin account is deactivated.")
-
-    if not admin.get("is_2fa_enabled") or not admin.get("totp_secret"):
-        raise ValidationError(
-            "Two-Factor Authentication (2FA) is not enabled on your Admin account. "
-            "Please enable 2FA in Security settings to inspect or manage credentials."
-        )
-
-    code = (two_factor_code or "").strip()
-    if not code:
-        raise ValidationError("Please enter your 6-digit Two-Factor Authentication (2FA) code.")
-
-    totp_secret = admin.get("totp_secret")
-    if totp_secret and verify_totp_code(totp_secret, code):
-        return admin
-
-    # Check emergency backup code
-    backup_codes = admin.get("backup_codes", [])
-    matched, remaining = verify_and_consume_backup_code(backup_codes, code)
-    if matched:
-        await db[ADMIN_USERS].update_one(
-            {"_id": admin_oid},
-            {"$set": {"backup_codes": remaining, "updated_at": utc_now()}},
-        )
-        return admin
-
-    raise UnauthorizedError("Invalid 2FA code or backup code. Verification failed.")
+    return await verify_actor_2fa(
+        db,
+        ADMIN_USERS,
+        admin_id,
+        two_factor_code,
+        actor_label="Admin",
+        setup_hint="Security settings",
+    )
 
 
 async def admin_verify_and_reveal_manager_password(
@@ -419,7 +432,23 @@ async def list_message_threads(db: AsyncIOMotorDatabase) -> list[dict[str, Any]]
     for g in grouped:
         manager_oid = to_object_id(g["_id"])
         manager = await db[MANAGERS].find_one({"_id": manager_oid})
+        last_msg_raw = g.get("last_message") or {}
         if not manager:
+            if not last_msg_raw:
+                continue
+            archived_name = last_msg_raw.get("sender_name") or "Deleted Manager"
+            threads.append(
+                {
+                    "manager_id": str(manager_oid),
+                    "manager_name": f"{archived_name} (Deleted)",
+                    "manager_email": None,
+                    "total_messages": g["total_messages"],
+                    "unread_count": g["unread_count"],
+                    "last_message": serialize_mongo_doc(last_msg_raw),
+                    "is_deleted": True,
+                }
+            )
+            seen_manager_ids.add(str(manager_oid))
             continue
         if manager.get("has_active_thread") is False and g.get("total_messages", 0) == 0:
             continue
@@ -464,8 +493,6 @@ async def get_thread_messages(
     """Retrieve full message history for a manager and mark manager messages as read."""
     m_oid = to_object_id(manager_id)
     manager = await db[MANAGERS].find_one({"_id": m_oid})
-    if not manager:
-        raise NotFoundError("Manager account not found")
 
     # Mark incoming messages as read
     await db[MESSAGES].update_many(
@@ -477,6 +504,18 @@ async def get_thread_messages(
         {"$or": [{"manager_id": m_oid}, {"manager_id": str(m_oid)}]}
     ).sort("created_at", 1)
     docs = await cursor.to_list(length=1000)
+
+    if not manager:
+        if not docs:
+            raise NotFoundError("Manager account not found")
+        archived_name = docs[0].get("sender_name") or "Deleted Manager"
+        manager = {
+            "_id": m_oid,
+            "username": f"{archived_name} (Deleted)",
+            "display_name": f"{archived_name} (Deleted)",
+            "email": None,
+            "is_deleted": True,
+        }
 
     return serialize_mongo_doc(manager), serialize_mongo_docs(docs)  # type: ignore
 
@@ -506,16 +545,16 @@ async def delete_chat_thread(
     """Permanently delete all messages and remove the chat thread from the admin inbox."""
     m_oid = to_object_id(manager_id)
     manager = await db[MANAGERS].find_one({"_id": m_oid})
-    if not manager:
-        raise NotFoundError("Manager account not found")
-
     res = await db[MESSAGES].delete_many(
         {"$or": [{"manager_id": m_oid}, {"manager_id": str(m_oid)}]}
     )
-    await db[MANAGERS].update_one(
-        {"_id": m_oid},
-        {"$set": {"has_active_thread": False, "updated_at": utc_now()}},
-    )
+    if manager:
+        await db[MANAGERS].update_one(
+            {"_id": m_oid},
+            {"$set": {"has_active_thread": False, "updated_at": utc_now()}},
+        )
+    elif res.deleted_count == 0:
+        raise NotFoundError("Manager account not found")
     return {"success": True, "deleted_count": res.deleted_count}
 
 
@@ -706,6 +745,118 @@ async def apply_message_proposal_to_central(
         )
         created_record = await create_asset(db, asset_create)
 
+    elif payload_type == "asset_update":
+        source_asset_id = data_payload.get("source_asset_id") or data_payload.get("asset_id")
+        if not source_asset_id:
+            raise ValidationError("Asset update proposal is missing source_asset_id.")
+        central_asset = await get_asset(db, asset_id=str(source_asset_id))
+        proposed = dict(data_payload.get("proposed") or {})
+        changed = list(data_payload.get("changed_fields") or proposed.keys())
+        if not proposed:
+            raise ValidationError("Asset update proposal has no proposed changes.")
+
+        # Promote any app-override uploaded files into the central asset folder cleanly
+        cat_doc = await db[CATEGORIES].find_one({"_id": to_object_id(central_asset["category_id"])})
+        sub_doc = await db[SUBCATEGORIES].find_one({"_id": to_object_id(central_asset["sub_category_id"])})
+        cat_folder = (
+            (cat_doc.get("folder_name") or slugify(cat_doc.get("name", "")))
+            if cat_doc
+            else "category"
+        )
+        sub_folder = (
+            (sub_doc.get("folder_name") or slugify(sub_doc.get("name", "")))
+            if sub_doc
+            else "subcategory"
+        )
+        target_name = (
+            str(proposed.get("name") or central_asset.get("name") or "").strip()
+            if "name" in changed
+            else central_asset.get("name")
+        )
+        target_asset_folder = (
+            central_asset.get("folder_name") or slugify(str(central_asset.get("name") or "")) or "asset"
+        )
+        if "name" in changed and target_name:
+            target_asset_folder = slugify(target_name) or target_asset_folder
+        # Wait to copy into existing central asset folder before update_asset potentially renames it
+        copy_asset_folder = (
+            central_asset.get("folder_name") or slugify(str(central_asset.get("name") or "")) or "asset"
+        )
+        dest_dir = get_asset_dir(cat_folder, sub_folder, copy_asset_folder)
+
+        def _promote_override_url(raw_url: Any) -> Any:
+            if not isinstance(raw_url, str) or "/static/central_data/instance_overrides/" not in raw_url:
+                return raw_url
+            rel = raw_url.split("/static/central_data/", 1)[1].split("?", 1)[0]
+            src_path = CENTRAL_DATA_DIR / rel
+            if not src_path.exists() or not src_path.is_file():
+                return raw_url
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            # Strip 16-hex hash prefix from override filename when no collision in central folder
+            clean_fname = re.sub(r"^[0-9a-f]{16}_", "", src_path.name) or src_path.name
+            dest_path = dest_dir / clean_fname
+            if dest_path.exists():
+                clean_fname = src_path.name
+                dest_path = dest_dir / clean_fname
+            if not dest_path.exists():
+                shutil.copy2(src_path, dest_path)
+            # Also copy companion thumb_<stem>.webp if generated in same override dir
+            companion_thumb = src_path.parent / f"thumb_{src_path.stem}.webp"
+            if companion_thumb.exists() and companion_thumb.is_file():
+                comp_dest = dest_dir / f"thumb_{Path(clean_fname).stem}.webp"
+                if not comp_dest.exists():
+                    shutil.copy2(companion_thumb, comp_dest)
+            return build_central_static_url("", cat_folder, sub_folder, clean_fname, asset_folder=copy_asset_folder)
+
+        def _promote_more_fields(obj: Any) -> Any:
+            if isinstance(obj, dict):
+                return {
+                    k: (_promote_override_url(v) if k in ("url", "imageUrl", "image_url") else _promote_more_fields(v))
+                    for k, v in obj.items()
+                }
+            if isinstance(obj, list):
+                return [_promote_more_fields(item) for item in obj]
+            if isinstance(obj, str):
+                return _promote_override_url(obj)
+            return obj
+
+        upd_kwargs: dict[str, Any] = {}
+        if "name" in changed and proposed.get("name") and str(proposed["name"]).strip():
+            upd_kwargs["name"] = str(proposed["name"]).strip()
+        if "description" in changed:
+            upd_kwargs["description"] = str(proposed.get("description") or "")
+        if "thumbnail_url" in changed:
+            upd_kwargs["thumbnail_url"] = _promote_override_url(proposed.get("thumbnail_url"))
+        if "more_fields" in changed and isinstance(proposed.get("more_fields"), dict):
+            upd_kwargs["more_fields"] = _promote_more_fields(proposed["more_fields"])
+
+        created_record = await update_asset(
+            db,
+            asset_id=str(source_asset_id),
+            data=AssetUpdate(**upd_kwargs),
+        )
+
+        # Clear redundant matching overrides on originating instance asset so future central updates propagate cleanly
+        inst_id = data_payload.get("app_instance_id")
+        inst_asset_id = data_payload.get("instance_asset_id") or data_payload.get("source_asset_id")
+        if inst_id and inst_asset_id and changed:
+            try:
+                clear_map = {
+                    k: None
+                    for k in changed
+                    if k in {"name", "description", "thumbnail_url", "more_fields"}
+                }
+                if clear_map:
+                    await update_item_settings_and_overrides(
+                        db,
+                        app_instance_id=str(inst_id),
+                        item_type="asset",
+                        item_id=str(inst_asset_id),
+                        overrides=clear_map,
+                    )
+            except Exception:
+                pass
+
     else:
         raise ValidationError(f"Unsupported payload type: '{payload_type}'")
 
@@ -733,6 +884,25 @@ async def apply_message_proposal_to_central(
         "message": f"Proposal successfully applied to central {payload_type} library.",
         "created_record": created_record,
     }
+
+
+async def dismiss_message_proposal(
+    db: AsyncIOMotorDatabase,
+    message_id: str,
+    status: str = "kept_app_only",
+) -> dict[str, Any]:
+    """Dismiss a manager proposal (e.g. keep asset changes at app level only without modifying Central Data)."""
+    msg_oid = to_object_id(message_id)
+    msg = await db[MESSAGES].find_one({"_id": msg_oid})
+    if not msg:
+        raise NotFoundError("Message not found")
+
+    now = utc_now()
+    await db[MESSAGES].update_one(
+        {"_id": msg_oid},
+        {"$set": {"status": status, "reviewed_at": now, "updated_at": now}},
+    )
+    return {"success": True, "status": status}
 
 
 # =========================================================================
