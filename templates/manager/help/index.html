@@ -1,0 +1,847 @@
+{% extends "manager/base.html" %}
+
+{% block title %}Help &amp; Manager Guide — Manager Portal{% endblock %}
+
+{% block head_extra %}
+<style>
+  .help-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .help-banner {
+    padding: 1.15rem 1.35rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--md-sys-color-outline-variant);
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+
+  .help-pillar-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.85rem;
+  }
+
+  .help-pillar-card {
+    background: var(--md-sys-color-surface-container-low);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+
+  .help-pillar-card:hover {
+    border-color: var(--md-sys-color-primary);
+    transform: translateY(-1px);
+  }
+
+  .help-layout {
+    display: grid;
+    grid-template-columns: 270px minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .help-toc {
+    position: sticky;
+    top: 1rem;
+    padding: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    border: 1px solid var(--md-sys-color-outline-variant);
+  }
+
+  .help-toc-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.75rem 0 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .help-toc-link {
+    display: block;
+    padding: 0.42rem 0.65rem;
+    border-radius: 7px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--md-sys-color-on-surface-variant);
+    text-decoration: none;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .help-toc-link:hover,
+  .help-toc-link.active {
+    background: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
+  }
+
+  .help-toc-sublist {
+    list-style: none;
+    padding-left: 0.9rem;
+    margin: 0.15rem 0 0.35rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.12rem;
+  }
+
+  .help-toc-sublink {
+    display: block;
+    padding: 0.24rem 0.55rem;
+    border-radius: 6px;
+    font-size: 0.77rem;
+    color: var(--md-sys-color-on-surface-variant);
+    text-decoration: none;
+  }
+
+  .help-toc-sublink:hover {
+    background: var(--md-sys-color-surface-container-high);
+    color: var(--md-sys-color-on-surface);
+  }
+
+  .help-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1.35rem;
+    min-width: 0;
+  }
+
+  .help-section {
+    padding: 1.4rem 1.55rem;
+    border: 1px solid var(--md-sys-color-outline-variant);
+    min-width: 0;
+    scroll-margin-top: 1.25rem;
+  }
+
+  .help-section-title {
+    margin: 0 0 0.85rem 0;
+    padding-bottom: 0.65rem;
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+    font-size: 1.22rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .help-subhead {
+    margin: 1.35rem 0 0.55rem 0;
+    font-size: 1.02rem;
+    font-weight: 700;
+    color: var(--md-sys-color-on-surface);
+    scroll-margin-top: 1.25rem;
+  }
+
+  .help-p {
+    margin: 0.45rem 0 0.75rem 0;
+    line-height: 1.62;
+    font-size: 0.91rem;
+    color: var(--md-sys-color-on-surface);
+  }
+
+  .help-list {
+    margin: 0.45rem 0 0.85rem 0;
+    padding-left: 1.35rem;
+    line-height: 1.62;
+    font-size: 0.9rem;
+    color: var(--md-sys-color-on-surface);
+  }
+
+  .help-list li {
+    margin-bottom: 0.35rem;
+  }
+
+  .help-callout {
+    background: var(--md-sys-color-surface-container-low);
+    border-left: 4px solid var(--md-sys-color-primary);
+    border-radius: 0 8px 8px 0;
+    padding: 0.78rem 1rem;
+    margin: 0.8rem 0;
+    font-size: 0.88rem;
+    line-height: 1.55;
+  }
+
+  .help-callout-warn {
+    border-left-color: #f59e0b;
+  }
+
+  .help-callout-ok {
+    border-left-color: #10b981;
+  }
+
+  .help-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.83em;
+    padding: 0.12rem 0.38rem;
+    border-radius: 5px;
+    background: var(--md-sys-color-surface-container-high);
+    border: 1px solid var(--md-sys-color-outline-variant);
+  }
+
+  .help-pre {
+    margin: 0.7rem 0 0.9rem 0;
+    padding: 0.85rem 1rem;
+    border-radius: 9px;
+    border: 1px solid var(--md-sys-color-outline-variant);
+    background: #0f172a;
+    color: #e2e8f0;
+    overflow-x: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.81rem;
+    line-height: 1.5;
+    white-space: pre;
+  }
+
+  .help-method-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 0.9rem;
+    margin: 0.85rem 0 1rem 0;
+  }
+
+  .help-method-card {
+    background: var(--md-sys-color-surface-container-low);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: 10px;
+    padding: 0.95rem 1.05rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .help-step-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.16rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    background: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
+    width: fit-content;
+  }
+
+  .help-seq-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin: 0.6rem 0 0.9rem 0;
+    padding: 0.65rem 0.75rem;
+    border-radius: 8px;
+    background: var(--md-sys-color-surface-container-low);
+    border: 1px solid var(--md-sys-color-outline-variant);
+  }
+
+  .help-tier-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.18rem 0.55rem;
+    border-radius: 6px;
+    font-size: 0.76rem;
+    font-weight: 700;
+  }
+
+  .chip-free {
+    background: var(--md-sys-color-surface-container-high);
+    color: var(--md-sys-color-on-surface);
+  }
+
+  .chip-prem {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  .chip-rew {
+    background: #ccfbf1;
+    color: #115e59;
+  }
+
+  .help-table-wrap {
+    margin: 0.75rem 0 1rem 0;
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: 8px;
+    overflow-x: auto;
+  }
+
+  .help-link {
+    color: var(--md-sys-color-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  @media (max-width: 980px) {
+    .help-layout {
+      grid-template-columns: 1fr;
+    }
+    .help-toc {
+      position: static;
+      max-height: none;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="help-header">
+  <div>
+    <h1 style="margin:0;">❓ Manager Help &amp; Learning Guide</h1>
+    <p style="color:var(--md-sys-color-on-surface-variant); margin:0.25rem 0 0 0;">
+      Complete handbook for reading data, writing &amp; editing assets, accessing protected files, and configuring Free, Premium, Rewarded, and Credited tiers.
+    </p>
+  </div>
+  <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+    <a href="/manager/instances" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:0.45rem;">
+      <span>📱</span>
+      <span>Open App Instances</span>
+    </a>
+    <a href="/manager/api-usage" class="btn btn-outlined" style="display:inline-flex; align-items:center; gap:0.45rem;">
+      <span>📘</span>
+      <span>API Usage Method</span>
+    </a>
+    <a href="/manager/keys" class="btn btn-outlined" style="display:inline-flex; align-items:center; gap:0.45rem;">
+      <span>🔑</span>
+      <span>API Keys</span>
+    </a>
+  </div>
+</div>
+
+<!-- Quick Workspace Status & 4 Core Pillar Shortcuts -->
+<div class="card help-banner">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
+    <div>
+      <strong style="font-size:0.98rem;">Welcome to the Manager Workflow Guide</strong>
+      <div style="font-size:0.84rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.15rem;">
+        Jump straight to an App Instance or pick any learning module below.
+      </div>
+    </div>
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+      {% if instances and instances|length > 0 %}
+        <select id="helpQuickInstanceSelect" class="select" style="min-width:200px; font-size:0.84rem;">
+          {% for inst in instances %}
+            <option value="{{ inst.id }}">{{ inst.name }}</option>
+          {% endfor %}
+        </select>
+        <button type="button" class="btn btn-outlined btn-sm" onclick="openSelectedHelpInstance()">Open App Content →</button>
+      {% endif %}
+      {% if not manager_has_2fa %}
+        <a href="/manager/settings/2fa/setup" class="btn btn-outlined btn-sm" style="border-color:#f59e0b; color:#f59e0b;">
+          🔐 Enable 2FA (Required for Key Reveal)
+        </a>
+      {% else %}
+        <span class="badge badge-success">🔐 2FA Enabled</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="help-pillar-grid">
+    <a href="#help-reading" class="help-pillar-card" onclick="jumpToHelpSection('help-reading', event)">
+      <div style="font-weight:700; font-size:0.95rem;">📖 1. Reading Server Data</div>
+      <div style="font-size:0.82rem; color:var(--md-sys-color-on-surface-variant);">
+        Browse Central Library, view accessible App Instances, read Analytics, and inspect App/Admin API keys.
+      </div>
+    </a>
+    <a href="#help-writing" class="help-pillar-card" onclick="jumpToHelpSection('help-writing', event)">
+      <div style="font-weight:700; font-size:0.95rem;">✍️ 2. Writing, Uploading &amp; Editing</div>
+      <div style="font-size:0.82rem; color:var(--md-sys-color-on-surface-variant);">
+        Create/import folders, direct-upload (auto-synced to Central), edit app overrides + Frame Editor, propose updates, and safe Detach.
+      </div>
+    </a>
+    <a href="#help-accessing-files" class="help-pillar-card" onclick="jumpToHelpSection('help-accessing-files', event)">
+      <div style="font-weight:700; font-size:0.95rem;">🗂️ 3. Accessing &amp; Delivering Files</div>
+      <div style="font-size:0.82rem; color:var(--md-sys-color-on-surface-variant);">
+        Protected storage rules, portal previews, <code class="help-code">X-API-Key</code> vs <code class="help-code">?api_key=</code> media links, and <code class="help-code">more_fields</code> blocks.
+      </div>
+    </a>
+    <a href="#help-monetization" class="help-pillar-card" onclick="jumpToHelpSection('help-monetization', event)">
+      <div style="font-weight:700; font-size:0.95rem;">⭐ 4. Setting Premium &amp; Rewarded (All Ways)</div>
+      <div style="font-size:0.82rem; color:var(--md-sys-color-on-surface-variant);">
+        Every manual, bulk selection, preview modal, and automated <code class="help-code">⚡ Distribute</code> frequency/percentage method &amp; the <code class="help-code">N-1</code> rule.
+      </div>
+    </a>
+  </div>
+</div>
+
+<!-- 2-Column Documentation Layout -->
+<div class="help-layout">
+  <aside class="card help-toc" aria-label="Help Sections">
+    <div style="font-weight:700; font-size:0.95rem; margin-bottom:0.5rem;">📑 Help Topics</div>
+    <input type="search" id="helpSearchInput" class="input" placeholder="Search topic (e.g. rewarded, upload, 2FA)..."
+           oninput="filterHelpSections(this.value)" style="width:100%; font-size:0.84rem;">
+    <div id="helpFilterStatus" style="font-size:0.76rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.35rem; display:none;"></div>
+
+    <ul class="help-toc-list" id="helpTocList">
+      <li>
+        <a href="#help-overview" class="help-toc-link" data-toc-id="help-overview" onclick="jumpToHelpSection('help-overview', event)">0. Central vs App Data Model</a>
+      </li>
+      <li>
+        <a href="#help-reading" class="help-toc-link" data-toc-id="help-reading" onclick="jumpToHelpSection('help-reading', event)">1. Reading Server Data</a>
+        <ul class="help-toc-sublist">
+          <li><a href="#help-read-central" class="help-toc-sublink" onclick="jumpToHelpSection('help-read-central', event)">Central Library (Read-Only)</a></li>
+          <li><a href="#help-read-instances" class="help-toc-sublink" onclick="jumpToHelpSection('help-read-instances', event)">App Instances &amp; Access Requests</a></li>
+          <li><a href="#help-read-keys-analytics" class="help-toc-sublink" onclick="jumpToHelpSection('help-read-keys-analytics', event)">Analytics &amp; Viewing API Keys</a></li>
+        </ul>
+      </li>
+      <li>
+        <a href="#help-writing" class="help-toc-link" data-toc-id="help-writing" onclick="jumpToHelpSection('help-writing', event)">2. Writing, Uploading &amp; Editing</a>
+        <ul class="help-toc-sublist">
+          <li><a href="#help-write-import" class="help-toc-sublink" onclick="jumpToHelpSection('help-write-import', event)">Importing &amp; Creating Folders</a></li>
+          <li><a href="#help-write-upload" class="help-toc-sublink" onclick="jumpToHelpSection('help-write-upload', event)">Direct Uploads (Auto-Sync Central)</a></li>
+          <li><a href="#help-write-overrides" class="help-toc-sublink" onclick="jumpToHelpSection('help-write-overrides', event)">App-Level Edits &amp; Admin Proposals</a></li>
+          <li><a href="#help-write-detach" class="help-toc-sublink" onclick="jumpToHelpSection('help-write-detach', event)">Detaching Safely vs Deleting</a></li>
+        </ul>
+      </li>
+      <li>
+        <a href="#help-accessing-files" class="help-toc-link" data-toc-id="help-accessing-files" onclick="jumpToHelpSection('help-accessing-files', event)">3. Accessing Files &amp; Media</a>
+        <ul class="help-toc-sublist">
+          <li><a href="#help-files-auth" class="help-toc-sublink" onclick="jumpToHelpSection('help-files-auth', event)">Browser Session vs Client API Key</a></li>
+          <li><a href="#help-files-blocks" class="help-toc-sublink" onclick="jumpToHelpSection('help-files-blocks', event)">Blocks, Frames &amp; Event Tracking</a></li>
+        </ul>
+      </li>
+      <li>
+        <a href="#help-monetization" class="help-toc-link" data-toc-id="help-monetization" onclick="jumpToHelpSection('help-monetization', event)">4. Setting Premium &amp; Rewarded (All Ways)</a>
+        <ul class="help-toc-sublist">
+          <li><a href="#help-tier-way1" class="help-toc-sublink" onclick="jumpToHelpSection('help-tier-way1', event)">Way 1: Folder Checkboxes</a></li>
+          <li><a href="#help-tier-way2" class="help-toc-sublink" onclick="jumpToHelpSection('help-tier-way2', event)">Way 2: Asset Table Toggles &amp; Credits</a></li>
+          <li><a href="#help-tier-way3" class="help-toc-sublink" onclick="jumpToHelpSection('help-tier-way3', event)">Way 3: Asset Preview Settings</a></li>
+          <li><a href="#help-tier-way4" class="help-toc-sublink" onclick="jumpToHelpSection('help-tier-way4', event)">Way 4: Bulk Selection &amp; Swipe</a></li>
+          <li><a href="#help-tier-way5" class="help-toc-sublink" onclick="jumpToHelpSection('help-tier-way5', event)">Way 5: Automated Distribution Engine</a></li>
+        </ul>
+      </li>
+      <li>
+        <a href="#help-troubleshooting" class="help-toc-link" data-toc-id="help-troubleshooting" onclick="jumpToHelpSection('help-troubleshooting', event)">5. Key Rules &amp; Troubleshooting</a>
+      </li>
+    </ul>
+  </aside>
+
+  <div class="help-main" id="helpSectionsContainer">
+
+    <!-- 0. Architecture / Scope Overview -->
+    <section id="help-overview" class="card help-section" data-section-id="help-overview"
+             data-search-text="central library app instance working set isolation overrides permissions detach upload admin approval">
+      <h2 class="help-section-title">0. How the Server Works: Central Library vs. Your App Instances</h2>
+      <p class="help-p">
+        The platform keeps one shared <strong>Central Data Catalog</strong> and isolated <strong>App Instance Working Sets</strong> (one per mobile/web app, such as <em>Collage Maker</em> or <em>Photo Editor</em>). Understanding what stays app-only versus what pushes to Central prevents mistakes:
+      </p>
+
+      <div class="help-table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Action in Manager Portal</th>
+              <th>Where Change Is Saved</th>
+              <th>Affects Central Data or Other Apps?</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Browse <code class="help-code">Categories</code>, <code class="help-code">Subcategories</code>, <code class="help-code">Assets</code></td>
+              <td>Read-only view of Central Catalog</td>
+              <td>No (read-only)</td>
+            </tr>
+            <tr>
+              <td>Toggle <code class="help-code">Enabled</code>, <code class="help-code">Premium</code>, <code class="help-code">Rewarded</code>, <code class="help-code">Credited</code>, <code class="help-code">Credits</code>, Sequence, Tags</td>
+              <td>Your App Instance only (<code class="help-code">instance_*</code>)</td>
+              <td><strong>No</strong> — strictly isolated per app</td>
+            </tr>
+            <tr>
+              <td><code class="help-code">✏️ Edit</code> / <code class="help-code">Rename</code> Folder or Asset / <code class="help-code">Interactive Frame Editor</code></td>
+              <td>Your App Instance <code class="help-code">overrides{}</code> (+ isolated media in <code class="help-code">instance_overrides/&lt;app_id&gt;/</code>)</td>
+              <td><strong>No</strong> — central data stays unchanged; asset edits notify Admin so Admin can optionally adopt them</td>
+            </tr>
+            <tr>
+              <td>Create Category/Subcategory or Upload new Asset inside an App Instance</td>
+              <td>Central Catalog + automatically linked into your App Instance</td>
+              <td><strong>Yes (additive only)</strong> — pushes into existing matching Central folders or creates them cleanly</td>
+            </tr>
+            <tr>
+              <td><code class="help-code">Detach Folder</code> / <code class="help-code">Detach</code> / <code class="help-code">Remove</code> inside an App Instance</td>
+              <td>Soft-deletes only the reference inside your App Instance</td>
+              <td><strong>No</strong> — Central folders &amp; uploaded assets remain safe and cannot be deleted by managers</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 1. Reading Server Data -->
+    <section id="help-reading" class="card help-section" data-section-id="help-reading"
+             data-search-text="read reading browse central data super categories subcategories assets instances request access analytics api keys 2fa reveal admin key rate limit">
+      <h2 class="help-section-title">📖 1. Reading Server Data</h2>
+
+      <h3 id="help-read-central" class="help-subhead">1.1 Browsing the Central Library (Read-Only)</h3>
+      <ul class="help-list">
+        <li>Use the sidebar links under <strong>Central Data (Read-Only)</strong>: <a href="/manager/super-categories" class="help-link">Super Categories</a>, <a href="/manager/categories" class="help-link">Categories</a>, <a href="/manager/subcategories" class="help-link">Subcategories</a>, and <a href="/manager/assets" class="help-link">Assets</a>.</li>
+        <li>Filter assets by Category, Subcategory, Media Type (<code class="help-code">Images</code>, <code class="help-code">Videos</code>, <code class="help-code">Audios</code>, <code class="help-code">JSON</code>, <code class="help-code">Frames</code>, <code class="help-code">HTML</code>, <code class="help-code">Files / Docs</code>), keyword search, and page size (<code class="help-code">20</code>–<code class="help-code">200</code>).</li>
+        <li>Click any asset to open the <strong>Preview Modal</strong> (<code class="help-code">View More Fields</code>) to inspect attached media blocks, frame bounding-box overlays, or sandboxed HTML previews.</li>
+      </ul>
+
+      <h3 id="help-read-instances" class="help-subhead">1.2 Viewing App Instances &amp; Requesting Access</h3>
+      <ul class="help-list">
+        <li>Open <a href="/manager/instances" class="help-link">App Instances</a> to see every app you own or were granted access to, including its unique <code class="help-code">instanceId</code> and <code class="help-code">package_name</code>.</li>
+        <li><strong>Need access to an existing app?</strong> Submit an access request on the App Instances page with optional operator notes for Super Admin approval.</li>
+        <li><strong>Need a brand-new App Instance?</strong> Submit a creation request (Name + Package Name); once approved by Admin, it appears automatically in your workspace.</li>
+      </ul>
+
+      <h3 id="help-read-keys-analytics" class="help-subhead">1.3 Reading Scoped Analytics &amp; API Keys (Including Shared Admin Keys)</h3>
+      <ul class="help-list">
+        <li><strong>Scoped Analytics (<a href="/manager/analytics" class="help-link">Analytics</a>):</strong> Monitor impressions, downloads, request bandwidth, endpoint hit metrics, and client errors filtered strictly to your accessible App Instances.</li>
+        <li><strong>API Keys (<a href="/manager/keys" class="help-link">API Keys</a>):</strong> You see <em>all</em> API keys bound to your accessible App Instances — both keys you generated and keys created by an Admin for that app (<span class="badge" style="font-size:0.72rem; background:var(--md-sys-color-primary-container); color:var(--md-sys-color-on-primary-container);">🛡️ Issued by Admin</span>). Unscoped global Admin keys remain hidden.</li>
+        <li><strong>Viewing the Full Secret Key via 2FA:</strong> Click <code class="help-code">🔑 View Key</code> on any listed key and enter your 6-digit TOTP Authenticator code (or backup code) to decrypt and copy the full <code class="help-code">ak_...</code> key. Enable 2FA first under <a href="/manager/settings" class="help-link">Settings</a> if not configured yet.</li>
+        <li><strong>Editing Limits:</strong> Click <code class="help-code">⚙️ Limits</code> on either your own key or an Admin-created key for your accessible app to adjust Layer 1 (<code class="help-code">User IP Limit req/min</code>) and Layer 2 (<code class="help-code">App Surge Ceiling req/min</code>). <em>(Only the key creator can Revoke or Delete a key.)</em></li>
+      </ul>
+    </section>
+
+    <!-- 2. Writing, Uploading & Editing -->
+    <section id="help-writing" class="card help-section" data-section-id="help-writing"
+             data-search-text="write writing create folder import central picker direct upload bulk single file multi file block cropper frame editor edit sparse override proposal admin inbox detach remove">
+      <h2 class="help-section-title">✍️ 2. Writing Data: Folders, Uploads, App Edits &amp; Safe Detach</h2>
+
+      <h3 id="help-write-import" class="help-subhead">2.1 Organizing Folders &amp; Importing Central Content</h3>
+      <ul class="help-list">
+        <li><strong>Create Folders:</strong> Inside an App Instance (<code class="help-code">Content → Folders Tab</code>), click <code class="help-code">+ New Folder / Sub-folder</code> or <code class="help-code">+ Add Sub-folder</code> to create a <strong>Category</strong>, <strong>Subcategory</strong>, or app-local <strong>Super Category</strong>. New Categories/Subcategories auto-sync with Central Library (reusing existing folders if already present or creating them cleanly).</li>
+        <li><strong>Smart Content Picker (<code class="help-code">📥 Import Central Data</code>):</strong>
+          Clicking <code class="help-code">📥 Import Central Data</code> on a Category card automatically opens the picker on the <strong>Subcategories</strong> tab targeting that Category. Clicking <code class="help-code">📥 Import</code> on a Sub-folder card opens the <strong>Assets</strong> tab targeting that Sub-folder. Imported assets link by reference with zero file duplication.</li>
+        <li><strong>Reordering, Super-Grouping &amp; Tags:</strong> Drag the <code class="help-code">⠿</code> handle on Category cards, Sub-folder cards, or Asset table rows to update client sequence (<code class="help-code">#1, #2...</code>). Assign Categories to a Super Category via the dropdown in each Category toolbar, manage reusable app tag bubbles, or click <code class="help-code">🏷️ Tags</code> individually/in bulk.</li>
+      </ul>
+
+      <h3 id="help-write-upload" class="help-subhead">2.2 Direct Uploading from an App Instance (Auto-Pushed to Central)</h3>
+      <p class="help-p">
+        Managers can upload creative assets directly inside any accessible App Instance using two dedicated workflows (accessible from the app header, Category card, Sub-folder card, or Assets tab):
+      </p>
+      <div class="help-method-cards">
+        <div class="help-method-card">
+          <span class="help-step-pill">⚡ Bulk Single-File Add</span>
+          <div style="font-weight:700; font-size:0.95rem;">Fast Multi-File Upload &amp; Grouping</div>
+          <ul class="help-list" style="margin:0; font-size:0.84rem;">
+            <li>Drop many images, videos, audios, SVGs, Lottie JSONs, HTML, XML/docs, or frames at once.</li>
+            <li>Rename custom <strong>Block Keys</strong> (e.g. <code class="help-code">background</code>, <code class="help-code">overlay</code>) or toggle <strong>Auto-Separate Block Keys</strong>.</li>
+            <li>Check <strong>Group Files With Same Asset Name</strong> to bundle multiple files into a single multi-block asset.</li>
+            <li>Duplicate &amp; visual similarity checks guard against accidental re-uploads (<code class="help-code">409</code> protection).</li>
+          </ul>
+        </div>
+        <div class="help-method-card">
+          <span class="help-step-pill">🖼️ + Multi-File Asset</span>
+          <div style="font-weight:700; font-size:0.95rem;">Structured Asset + Frame &amp; Crop Tools</div>
+          <ul class="help-list" style="margin:0; font-size:0.84rem;">
+            <li>Combine named blocks (<code class="help-code">image</code>, <code class="help-code">video</code>, <code class="help-code">audio</code>, <code class="help-code">json</code>, <code class="help-code">frames</code>, <code class="help-code">html</code>, <code class="help-code">file</code>) plus custom thumbnails and descriptions.</li>
+            <li>Use non-destructive built-in cropping that preserves alpha transparency (no black/white background fills on PNG/WebP/GIF).</li>
+            <li>Use <strong>OpenCV Frame Placeholder Detection</strong> on transparent PNG frames to auto-extract slot boxes.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="help-callout help-callout-ok">
+        <strong>🔄 Automatic Central Sync:</strong> Anything you upload directly inside an App Instance is pushed to the Central Library (into matching existing Categories/Subcategories or creating new ones automatically) and linked straight into your app. Once uploaded to Central, it cannot be deleted by managers.
+      </div>
+
+      <h3 id="help-write-overrides" class="help-subhead">2.3 App-Level Editing, Interactive Frame Editor &amp; Admin Proposals</h3>
+      <ul class="help-list">
+        <li><strong>Folder Editing (<code class="help-code">✏️ Edit</code> / <code class="help-code">Rename</code>):</strong> Change a Category or Sub-folder's <code class="help-code">name</code>, <code class="help-code">thumbnail_url</code>, or <code class="help-code">image_url</code> at the app level. Central Library names/images remain intact.</li>
+        <li><strong>Asset Editing (<code class="help-code">✏️ Edit</code>) &amp; Interactive Frame Editor:</strong> Customize an asset's display name, description, thumbnail, <code class="help-code">more_fields</code> blocks, or fine-tune transparent frame coordinates/rotation/elevation interactively on the canvas (<code class="help-code">/frames</code>). Newly uploaded replacement files during editing are stored isolated inside <code class="help-code">instance_overrides/&lt;app_id&gt;/</code>.</li>
+        <li><strong>Admin Review Workflow:</strong> Every app-level Asset edit or Frame Editor save automatically sends a structured <code class="help-code">asset_update</code> change summary to Admin (<a href="/manager/messages" class="help-link">Messages</a>) so Admin can review the diff and either update Central Data or leave it app-only.</li>
+        <li><strong>Quick Propose (<a href="/manager/messages?propose=1" class="help-link">💡 Propose Central Data</a>):</strong> Send central folder/asset requests or feedback directly to Super Admin operators.</li>
+      </ul>
+
+      <h3 id="help-write-detach" class="help-subhead">2.4 Detaching vs. Deleting (Central Data Is Protected)</h3>
+      <p class="help-p">
+        Clicking <code class="help-code">Detach Folder</code>, <code class="help-code">Detach</code>, or <code class="help-code">Remove</code> inside an App Instance <strong>only detaches</strong> that folder or asset from that specific app (detaching a Category also detaches its child sub-folders and assets in that app). Central assets and other App Instances are never deleted or modified.
+      </p>
+    </section>
+
+    <!-- 3. Accessing Files & Delivery -->
+    <section id="help-accessing-files" class="card help-section" data-section-id="help-accessing-files"
+             data-search-text="access files media static central_data instance_overrides api key x-api-key query param bearer token download view track more_fields blocks">
+      <h2 class="help-section-title">🗂️ 3. Accessing Files &amp; Media Delivery</h2>
+
+      <h3 id="help-files-auth" class="help-subhead">3.1 How File &amp; Endpoint Authentication Works</h3>
+      <p class="help-p">
+        All creative assets stored under <code class="help-code">/static/central_data/...</code> and <code class="help-code">/static/instance_overrides/...</code> are access-controlled. Direct anonymous HTTP requests without authentication return <code class="help-code">401 Unauthorized</code>.
+      </p>
+      <div class="help-table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Client Context</th>
+              <th>Authentication Method</th>
+              <th>Example</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Manager Portal in browser</td>
+              <td>Signed session cookie (<code class="help-code">manager_session</code>)</td>
+              <td>Automatic while logged in (previews, frame editor, sandboxed HTML)</td>
+            </tr>
+            <tr>
+              <td>Mobile / Backend REST Client</td>
+              <td>HTTP Header <code class="help-code">X-API-Key</code> (preferred)</td>
+              <td><code class="help-code">X-API-Key: ak_prod_...</code></td>
+            </tr>
+            <tr>
+              <td>Image/Video Tags &amp; Browser URL Bar</td>
+              <td>Query Param <code class="help-code">api_key</code> / <code class="help-code">apiKey</code> / <code class="help-code">key</code></td>
+              <td><code class="help-code">/static/central_data/.../frame.png?api_key=ak_prod_...</code></td>
+            </tr>
+            <tr>
+              <td>Standard Bearer HTTP Client</td>
+              <td><code class="help-code">Authorization</code> Header</td>
+              <td><code class="help-code">Authorization: Bearer ak_prod_...</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="help-files-blocks" class="help-subhead">3.2 Reading File URLs from API Responses &amp; Recording Usage Events</h3>
+      <ul class="help-list">
+        <li><strong>Catalog &amp; Asset Endpoints:</strong> Fetch your app hierarchy in one call with <code class="help-code">GET /api/v1/instance/{instanceId}/catalog</code> or paginate/filter via <code class="help-code">/super-categories</code>, <code class="help-code">/categories</code>, <code class="help-code">/subcategories</code>, and <code class="help-code">/assets</code> (supports <code class="help-code">only_enabled=true</code>, <code class="help-code">sort</code>, <code class="help-code">order</code>, <code class="help-code">tag</code>).</li>
+        <li><strong>File URLs inside Assets:</strong> Use <code class="help-code">thumbnail_url</code> for previews and <code class="help-code">more_fields.blocks</code> for actual media (<code class="help-code">image</code>, <code class="help-code">video</code>, <code class="help-code">audio</code>, <code class="help-code">json</code>, <code class="help-code">html</code>, <code class="help-code">file</code>, <code class="help-code">*_list</code> arrays with <code class="help-code">items[]</code>, and <code class="help-code">frames</code> with <code class="help-code">url</code> + <code class="help-code">coordinates[]</code>). Prepend your server origin to relative <code class="help-code">/static/...</code> paths and attach the API key.</li>
+        <li><strong>Analytics Tracking:</strong> Fire <code class="help-code">POST /api/v1/instance/{instanceId}/assets/{assetId}/track</code> with <code class="help-code">{"event": "view"}</code> when previewed and <code class="help-code">{"event": "download"}</code> when applied/exported. Visit <a href="/manager/api-usage" class="help-link">API Usage Method</a> for ready-to-copy <code class="help-code">cURL</code> commands and Kotlin examples.</li>
+      </ul>
+    </section>
+
+    <!-- 4. Setting Data Premium, Rewarded & Credited (ALL Ways) -->
+    <section id="help-monetization" class="card help-section" data-section-id="help-monetization"
+             data-search-text="premium rewarded free normal credited priced credits bulk selection swipe distribute tiers bulk distribute assets n-1 frequency alternate paid percentage fixed">
+      <h2 class="help-section-title">⭐ 4. Setting Data Free, Premium, Rewarded &amp; Credited (All 5 Ways)</h2>
+      <p class="help-p">
+        Every App Instance controls its own monetization flags independently of Central Data. Each item resolved by the client API carries <code class="help-code">is_enabled</code>, <code class="help-code">is_premium</code>, <code class="help-code">is_rewarded</code>, <code class="help-code">is_priced</code>, and <code class="help-code">rewarded_credits</code>. You can configure these tiers in <strong>five ways</strong> depending on whether you want individual precision or app-wide automation:
+      </p>
+
+      <div class="help-method-cards">
+        <div id="help-tier-way1" class="help-method-card">
+          <span class="help-step-pill">Way 1 · Folder Cards</span>
+          <div style="font-weight:700;">Single-Folder Checkboxes (Folders Tab)</div>
+          <p class="help-p" style="margin:0; font-size:0.84rem;">
+            Directly toggle the <code class="help-code">Premium</code> or <code class="help-code">Rewarded</code> checkboxes on folder cards. Changes save immediately and display <code class="help-code">PREMIUM</code> / <code class="help-code">REWARDED</code> pills:
+          </p>
+          <ul class="help-list" style="margin:0; font-size:0.83rem;">
+            <li><strong>Super Category:</strong> <code class="help-code">Premium</code> checkbox</li>
+            <li><strong>Category Folder:</strong> <code class="help-code">Premium</code> checkbox (and distribution tools for its child Sub-folders)</li>
+            <li><strong>Sub-folder Card:</strong> Both <code class="help-code">Premium</code> and <code class="help-code">Rewarded</code> checkboxes</li>
+          </ul>
+        </div>
+
+        <div id="help-tier-way2" class="help-method-card">
+          <span class="help-step-pill">Way 2 · Asset List Table</span>
+          <div style="font-weight:700;">Inline Row Toggles, Credited &amp; Credits</div>
+          <p class="help-p" style="margin:0; font-size:0.84rem;">
+            Open <strong>Content → Assets Tab → List View</strong> to edit each asset row inline:
+          </p>
+          <ul class="help-list" style="margin:0; font-size:0.83rem;">
+            <li><strong>Enabled:</strong> Show/hide the asset in the client app API.</li>
+            <li><strong>Premium (<code class="help-code">is_premium</code>):</strong> Mark for paid/pro subscription.</li>
+            <li><strong>Rewarded (<code class="help-code">is_rewarded</code>):</strong> Unlock via rewarded ad.</li>
+            <li><strong>Priced / Credited (<code class="help-code">is_priced</code>):</strong> Enables the numeric <strong>Credits</strong> column (defaults to <code class="help-code">5</code> credits; editable per asset).</li>
+          </ul>
+        </div>
+
+        <div id="help-tier-way3" class="help-method-card">
+          <span class="help-step-pill">Way 3 · Preview Modal</span>
+          <div style="font-weight:700;">Asset Preview → INSTANCE SETTINGS</div>
+          <p class="help-p" style="margin:0; font-size:0.84rem;">
+            In either <strong>List View</strong> or <strong>Blocks View</strong>, click any asset card or thumbnail to open the Preview Modal, then toggle <code class="help-code">Enabled</code>, <code class="help-code">Premium</code>, <code class="help-code">Rewarded</code>, <code class="help-code">Credited</code>, or enter <code class="help-code">Credits</code> inside the <strong>INSTANCE SETTINGS</strong> table.
+          </p>
+        </div>
+
+        <div id="help-tier-way4" class="help-method-card">
+          <span class="help-step-pill">Way 4 · Multi-Select &amp; Swipe</span>
+          <div style="font-weight:700;">Bulk Asset Selection Toolbar</div>
+          <p class="help-p" style="margin:0; font-size:0.84rem;">
+            Select multiple assets in <strong>List View</strong> (checkboxes / <code class="help-code">Select All</code>) or in <strong>Blocks View</strong> (click or <strong>click-and-drag swipe</strong> across card topbars). From the floating bulk toolbar, click:
+          </p>
+          <div style="font-size:0.82rem; color:var(--md-sys-color-on-surface-variant);">
+            <code class="help-code">Enable</code> · <code class="help-code">Disable</code> · <code class="help-code">Premium</code> · <code class="help-code">Normal</code> · <code class="help-code">Set Rewarded</code> · <code class="help-code">Remove Rewarded</code>
+          </div>
+        </div>
+      </div>
+
+      <h3 id="help-tier-way5" class="help-subhead">Way 5 · Automated Tier &amp; Frequency Distribution Engine (<code class="help-code">⚡</code>)</h3>
+      <p class="help-p">
+        For fast, repeatable monetization patterns across dozens or hundreds of items, use the <code class="help-code">⚡</code> Tier Distribution modal from any of these <strong>5 entry points</strong>:
+      </p>
+      <div class="help-table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Button Location</th>
+              <th>What It Updates</th>
+              <th>Count Mode Options</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1. Folders Tab Header</strong><br><code class="help-code">⚡ Distribute All Sub-folders' Assets</code></td>
+              <td>Assets inside <strong>every non-empty Sub-folder</strong> in the entire App Instance</td>
+              <td><code class="help-code">Fixed Count</code> or <code class="help-code">Percentage (%)</code> per sub-folder</td>
+            </tr>
+            <tr>
+              <td><strong>2. Category Card Header</strong><br><code class="help-code">⚡ Distribute Tiers</code></td>
+              <td>The <strong>Sub-folders</strong> belonging to that Category</td>
+              <td>Exact counts against total sub-folders in Category</td>
+            </tr>
+            <tr>
+              <td><strong>3. Category Sub-folders Section</strong><br><code class="help-code">⚡ Bulk Distribute Assets</code></td>
+              <td>Assets inside <strong>every non-empty Sub-folder</strong> of that Category</td>
+              <td><code class="help-code">Fixed Count</code> or <code class="help-code">Percentage (%)</code> per sub-folder</td>
+            </tr>
+            <tr>
+              <td><strong>4. Folder Multi-Select Sticky Bar</strong><br><code class="help-code">Select Sub-folders</code> → <code class="help-code">⚡ Bulk Distribute Assets</code></td>
+              <td>Assets across <strong>only the checked Sub-folders</strong></td>
+              <td><code class="help-code">Fixed Count</code> or <code class="help-code">Percentage (%)</code> per sub-folder</td>
+            </tr>
+            <tr>
+              <td><strong>5. Sub-folder Card / Filtered Assets Tab</strong><br><code class="help-code">⚡ Distribute</code> or <code class="help-code">⚡ Distribute Tiers</code></td>
+              <td>Assets inside <strong>one Sub-folder</strong>, or assets matching the active <strong>Category/Subcategory filter</strong> on the Assets tab</td>
+              <td>Exact counts against total items in scope</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4 class="help-subhead" style="font-size:0.94rem;">Understanding Tier Distribution Rules &amp; Frequency Patterns</h4>
+      <ul class="help-list">
+        <li><strong><code class="help-code">N - 1</code> Free Preservation Guarantee:</strong> Out of <code class="help-code">N</code> items in any scope, combined <code class="help-code">Premium + Rewarded</code> cannot exceed <code class="help-code">N - 1</code>, ensuring at least <strong>1 item always remains Free / Normal</strong> (for 1-item folders, max paid items is <code class="help-code">0</code>; empty folders are skipped in bulk runs).</li>
+        <li><strong>Fixed Count vs. Percentage (%) in Bulk Mode:</strong>
+          In <em>Fixed Count</em> mode, smaller sub-folders clamp proportionally down to <code class="help-code">N - 1</code> automatically. In <em>Percentage (%)</em> mode, each sub-folder receives proportional rounded counts based on its size (combined <code class="help-code">Premium % + Rewarded %</code> must stay strictly below <code class="help-code">100%</code>).</li>
+        <li><strong>Sequential Batch Frequencies:</strong> Items are assigned in display <code class="help-code">sequence</code> order using your batch sizes (<code class="help-code">Free/Normal Batch</code>, <code class="help-code">Premium Batch</code>, <code class="help-code">Rewarded Batch</code>). Setting asset-level <code class="help-code">Rewarded</code> via distribution also initializes <code class="help-code">rewarded_credits = 5</code> if not already set.</li>
+        <li><strong>Combined vs. Alternating Paid (<code class="help-code">🔁 Alternate</code>):</strong>
+          Check the Live Sequence Preview inside the modal before clicking <code class="help-code">⚡ Apply Distribution</code>. Every container remembers its last settings cleanly!</li>
+      </ul>
+
+      <div class="help-callout">
+        <div style="font-weight:700; margin-bottom:0.3rem;">Example Sequences (10 Items · 2 Premium · 2 Rewarded):</div>
+        <div style="font-size:0.83rem; color:var(--md-sys-color-on-surface-variant);"><strong>Combined Mode</strong> (<code class="help-code">Normal=3, Premium=1, Rewarded=1</code>, Alternate OFF): Free → Premium → Rewarded per cycle</div>
+        <div class="help-seq-strip">
+          <span class="help-tier-chip chip-free">#1 Free</span>
+          <span class="help-tier-chip chip-free">#2 Free</span>
+          <span class="help-tier-chip chip-free">#3 Free</span>
+          <span class="help-tier-chip chip-prem">#4 Premium</span>
+          <span class="help-tier-chip chip-rew">#5 Rewarded</span>
+          <span class="help-tier-chip chip-free">#6 Free</span>
+          <span class="help-tier-chip chip-free">#7 Free</span>
+          <span class="help-tier-chip chip-free">#8 Free</span>
+          <span class="help-tier-chip chip-prem">#9 Premium</span>
+          <span class="help-tier-chip chip-rew">#10 Rewarded</span>
+        </div>
+        <div style="font-size:0.83rem; color:var(--md-sys-color-on-surface-variant);"><strong>Alternating Paid Mode</strong> (<code class="help-code">Normal=2, Premium=1, Rewarded=1</code>, Alternate ON): Free → Premium → Free → Rewarded</div>
+        <div class="help-seq-strip" style="margin-bottom:0;">
+          <span class="help-tier-chip chip-free">#1 Free</span>
+          <span class="help-tier-chip chip-free">#2 Free</span>
+          <span class="help-tier-chip chip-prem">#3 Premium</span>
+          <span class="help-tier-chip chip-free">#4 Free</span>
+          <span class="help-tier-chip chip-free">#5 Free</span>
+          <span class="help-tier-chip chip-rew">#6 Rewarded</span>
+          <span class="help-tier-chip chip-free">#7 Free</span>
+          <span class="help-tier-chip chip-free">#8 Free</span>
+          <span class="help-tier-chip chip-prem">#9 Premium</span>
+          <span class="help-tier-chip chip-free">#10 Free</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Key Rules & Troubleshooting -->
+    <section id="help-troubleshooting" class="card help-section" data-section-id="help-troubleshooting"
+             data-search-text="faq troubleshooting 401 403 unauthorized forbidden 2fa backup code delete revoke admin key central data immutable">
+      <h2 class="help-section-title">🛟 5. Key Rules &amp; Quick Troubleshooting</h2>
+      <ul class="help-list">
+        <li><strong>"View Key tells me to enable 2FA":</strong> Enable Two-Factor Authentication in <a href="/manager/settings" class="help-link">Settings</a> (<code class="help-code">/manager/settings/2fa/setup</code>). Both TOTP 6-digit codes and your generated backup codes unlock secret key reveal.</li>
+        <li><strong>"I see an Admin-created key without a Delete or Revoke button":</strong> Managers with access to an app can view Admin-created keys for that app, edit their IP/Surge rate limits, and reveal the key via 2FA—only the creator can revoke or delete a key.</li>
+        <li><strong>"Mobile app gets 401/403 on JSON or Image URLs":</strong> Confirm the <code class="help-code">X-API-Key</code> header (or <code class="help-code">?api_key=ak_...</code> query param on image/video URLs) matches an active key bound to that exact <code class="help-code">instanceId</code> with <code class="help-code">categories:read</code> and <code class="help-code">assets:read</code> scopes.</li>
+        <li><strong>"Distribute says No assets found":</strong> Empty sub-folders have <code class="help-code">0</code> assets; import or upload at least <code class="help-code">2</code> items first so the <code class="help-code">N - 1</code> rule can mark items Premium/Rewarded while leaving at least 1 Free item.</li>
+        <li><strong>"I want to revert an app-level override back to Central":</strong> Open the folder/asset edit dialog and use <em>Reset Overrides</em> to restore live Central titles, thumbnails, and media blocks for that App Instance.</li>
+      </ul>
+    </section>
+
+    <div id="helpNoMatchCard" class="card" style="display:none; padding:2rem; text-align:center;">
+      <div style="font-size:1.6rem; margin-bottom:0.4rem;">🔍</div>
+      <div style="font-weight:700; margin-bottom:0.25rem;">No matching Help topics found</div>
+      <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.86rem; margin-bottom:0.85rem;">
+        Clear your filter or select a topic from the Help navigation panel.
+      </p>
+      <button type="button" class="btn btn-outlined btn-sm" onclick="clearHelpSearch()">Clear Search</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function openSelectedHelpInstance() {
+    const sel = document.getElementById('helpQuickInstanceSelect');
+    if (sel && sel.value) {
+      window.location.href = '/manager/instances/' + encodeURIComponent(sel.value) + '/content';
+    }
+  }
+
+  function clearHelpSearch() {
+    const input = document.getElementById('helpSearchInput');
+    if (input) {
+      input.value = '';
+      filterHelpSections('');
+    }
+  }
+
+  function filterHelpSections(query) {
+    const q = (query || '').trim().toLowerCase();
+    const sections = document.querySelectorAll('#helpSectionsContainer section[data-section-id]');
+    let shown = 0;
+
+    sections.forEach(function(sec) {
+      const textHay = ((sec.dataset.searchText || '') + ' ' + (sec.textContent || '')).toLowerCase();
+      const matched = !q || textHay.indexOf(q) !== -1;
+      sec.style.display = matched ? '' : 'none';
+      if (matched) shown++;
+
+      const tocLink = document.querySelector('#helpTocList a[data-toc-id="' + sec.dataset.sectionId + '"]');
+      if (tocLink) {
+        tocLink.style.opacity = matched ? '1' : '0.45';
+      }
+    });
+
+    const noMatch = document.getElementById('helpNoMatchCard');
+    if (noMatch) {
+      noMatch.style.display = shown === 0 ? 'block' : 'none';
+    }
+
+    const status = document.getElementById('helpFilterStatus');
+    if (status) {
+      if (q) {
+        status.style.display = 'block';
+        status.textContent = 'Showing ' + shown + ' of ' + sections.length + ' topics';
+      } else {
+        status.style.display = 'none';
+      }
+    }
+  }
+
+  function jumpToHelpSection(anchorId, evt) {
+    const target = document.getElementById(anchorId);
+    if (!target) return;
+    if (evt) evt.preventDefault();
+
+    const parentSec = target.closest('section[data-section-id]') || target;
+    if (parentSec && parentSec.style.display === 'none') {
+      clearHelpSearch();
+    }
+
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.querySelectorAll('#helpTocList .help-toc-link').forEach(function(a) {
+      a.classList.toggle('active', a.dataset.tocId === (parentSec ? parentSec.dataset.sectionId : anchorId));
+    });
+    if (history.replaceState) {
+      history.replaceState(null, '', '#' + anchorId);
+    }
+  }
+</script>
+{% endblock %}

@@ -8,6 +8,7 @@ from router.manager.auth_routes import api_router as manager_api_router
 from router.manager.auth_routes import router as manager_auth_router
 from router.manager.central_data_routes import router as manager_central_data_router
 from router.manager.dashboard_routes import router as manager_dashboard_router
+from router.manager.help_routes import router as manager_help_router
 from router.manager.instance_routes import router as manager_instance_router
 from router.manager.key_routes import router as manager_key_router
 from router.manager.message_routes import router as manager_message_router
@@ -28,6 +29,7 @@ manager.include_router(manager_message_router)
 manager.include_router(manager_profile_router)
 manager.include_router(manager_settings_router)
 manager.include_router(manager_analytics_router)
+manager.include_router(manager_help_router)
 
 
 @manager.get("", include_in_schema=False)
