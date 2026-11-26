@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from router.manager.analytics_routes import router as manager_analytics_router
+from router.manager.api_usage_routes import router as manager_api_usage_router
 from router.manager.auth_routes import api_router as manager_api_router
 from router.manager.auth_routes import router as manager_auth_router
 from router.manager.central_data_routes import router as manager_central_data_router
@@ -22,6 +23,7 @@ manager.include_router(manager_central_data_router)
 manager.include_router(manager_instance_router)
 manager.include_router(manager_upload_router)
 manager.include_router(manager_key_router)
+manager.include_router(manager_api_usage_router)
 manager.include_router(manager_message_router)
 manager.include_router(manager_profile_router)
 manager.include_router(manager_settings_router)

@@ -108,6 +108,12 @@
             </a>
           </li>
           <li>
+            <a href="/manager/api-usage" class="nav-link {% if active_tab == 'api_usage' %}active{% endif %}" title="API Usage Method">
+              <span class="nav-icon">📘</span>
+              <span class="nav-text">API Usage Method</span>
+            </a>
+          </li>
+          <li>
             <a href="/manager/messages" class="nav-link {% if active_tab == 'messages' %}active{% endif %}" title="Messages & Proposals">
               <span class="nav-icon">
                 💬
@@ -190,6 +196,7 @@
         <a href="/manager/messages?propose=1" title="Propose Central Data" class="nav-link {% if active_tab == 'proposals' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">💡</a>
         <a href="/manager/instances" title="App Instances" class="nav-link {% if active_tab == 'instances' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📱</a>
         <a href="/manager/keys" title="API Keys" class="nav-link {% if active_tab == 'keys' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">🔑</a>
+        <a href="/manager/api-usage" title="API Usage Method" class="nav-link {% if active_tab == 'api_usage' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📘</a>
         <a href="/manager/messages" title="Messages" class="nav-link {% if active_tab == 'messages' %}active{% endif %}" style="padding:0.75rem; justify-content:center; position:relative;">
           💬
           <span class="rail-badge-messages" id="railBadgeMessages" style="{% if not request.state.manager_unread_messages_count or request.state.manager_unread_messages_count <= 0 %}display:none;{% endif %} position:absolute; top:4px; right:4px; width:8px; height:8px; border-radius:50%; background:var(--md-sys-color-error, #ba1a1a);"></span>

@@ -1,0 +1,711 @@
+{% extends "manager/base.html" %}
+
+{% block title %}API Usage Method — Manager Portal{% endblock %}
+
+{% block head_extra %}
+<style>
+  .api-usage-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .api-setup-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  .api-setup-box {
+    background: var(--md-sys-color-surface-container-low);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    min-width: 0;
+  }
+
+  .api-setup-label {
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+
+  .api-setup-value-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+
+  .api-mono-pill {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.82rem;
+    padding: 0.38rem 0.6rem;
+    border-radius: 7px;
+    background: var(--md-sys-color-surface-container);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    color: var(--md-sys-color-on-surface);
+  }
+
+  .api-quick-endpoints {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 0.9rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .api-ep-card {
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    min-width: 0;
+    border: 1px solid var(--md-sys-color-outline-variant);
+  }
+
+  .api-ep-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .api-method-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.16rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  .api-method-get {
+    background: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
+  }
+
+  .api-method-post {
+    background: var(--md-sys-color-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
+  }
+
+  .api-ep-path {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--md-sys-color-on-surface);
+    word-break: break-all;
+    background: var(--md-sys-color-surface-container-low);
+    padding: 0.42rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid var(--md-sys-color-outline-variant);
+  }
+
+  .api-ep-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: auto;
+    padding-top: 0.35rem;
+    flex-wrap: wrap;
+  }
+
+  .api-doc-layout {
+    display: grid;
+    grid-template-columns: 270px minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .api-doc-toc {
+    position: sticky;
+    top: 1rem;
+    padding: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    border: 1px solid var(--md-sys-color-outline-variant);
+  }
+
+  .api-toc-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.75rem 0 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .api-toc-link {
+    display: block;
+    padding: 0.38rem 0.6rem;
+    border-radius: 7px;
+    font-size: 0.83rem;
+    font-weight: 600;
+    color: var(--md-sys-color-on-surface-variant);
+    text-decoration: none;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .api-toc-link:hover,
+  .api-toc-link.active {
+    background: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
+  }
+
+  .api-toc-sublist {
+    list-style: none;
+    padding-left: 0.85rem;
+    margin: 0.15rem 0 0.35rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.12rem;
+  }
+
+  .api-toc-sublink {
+    display: block;
+    padding: 0.25rem 0.55rem;
+    border-radius: 6px;
+    font-size: 0.77rem;
+    color: var(--md-sys-color-on-surface-variant);
+    text-decoration: none;
+  }
+
+  .api-toc-sublink:hover {
+    background: var(--md-sys-color-surface-container-high);
+    color: var(--md-sys-color-on-surface);
+  }
+
+  .api-doc-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    min-width: 0;
+  }
+
+  .api-doc-section {
+    padding: 1.4rem 1.5rem;
+    border: 1px solid var(--md-sys-color-outline-variant);
+    min-width: 0;
+  }
+
+  .api-doc-section-title {
+    margin: 0 0 0.9rem 0;
+    padding-bottom: 0.65rem;
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--md-sys-color-on-surface);
+    scroll-margin-top: 1.25rem;
+  }
+
+  .api-doc-h2, .api-doc-h3, .api-doc-h4 {
+    color: var(--md-sys-color-on-surface);
+    scroll-margin-top: 1.25rem;
+  }
+
+  .api-doc-h3 {
+    margin: 1.5rem 0 0.65rem 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    padding-top: 0.35rem;
+  }
+
+  .api-doc-h4 {
+    margin: 1.15rem 0 0.45rem 0;
+    font-size: 0.94rem;
+    font-weight: 700;
+  }
+
+  .api-doc-p {
+    margin: 0.6rem 0;
+    line-height: 1.62;
+    color: var(--md-sys-color-on-surface);
+    font-size: 0.92rem;
+  }
+
+  .api-doc-list {
+    margin: 0.55rem 0 0.85rem 0;
+    padding-left: 1.4rem;
+    line-height: 1.62;
+    font-size: 0.91rem;
+    color: var(--md-sys-color-on-surface);
+  }
+
+  .api-doc-list li {
+    margin-bottom: 0.3rem;
+  }
+
+  .api-doc-hr {
+    border: none;
+    border-top: 1px solid var(--md-sys-color-outline-variant);
+    margin: 1.2rem 0;
+  }
+
+  .api-doc-callout {
+    background: var(--md-sys-color-surface-container-low);
+    border-left: 4px solid var(--md-sys-color-primary);
+    border-radius: 0 8px 8px 0;
+    padding: 0.75rem 1rem;
+    margin: 0.85rem 0;
+    font-size: 0.89rem;
+    line-height: 1.58;
+    color: var(--md-sys-color-on-surface);
+  }
+
+  .api-inline-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.83em;
+    padding: 0.12rem 0.38rem;
+    border-radius: 5px;
+    background: var(--md-sys-color-surface-container-high);
+    color: var(--md-sys-color-on-surface);
+    border: 1px solid var(--md-sys-color-outline-variant);
+  }
+
+  .api-doc-link {
+    color: var(--md-sys-color-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .api-code-block {
+    margin: 0.8rem 0 1rem 0;
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: 10px;
+    overflow: hidden;
+    background: #0f172a;
+    color: #e2e8f0;
+  }
+
+  .api-code-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.42rem 0.75rem;
+    background: #1e293b;
+    border-bottom: 1px solid #334155;
+    gap: 0.5rem;
+  }
+
+  .api-code-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .api-code-lang {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: #94a3b8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  .api-copy-code-btn {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #f8fafc !important;
+    border-color: rgba(148, 163, 184, 0.35) !important;
+    font-size: 0.74rem !important;
+    padding: 0.18rem 0.55rem !important;
+    min-height: 26px !important;
+  }
+
+  .api-code-pre {
+    margin: 0;
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.82rem;
+    line-height: 1.52;
+    color: #e2e8f0;
+    white-space: pre;
+    tab-size: 2;
+  }
+
+  .api-doc-table-wrap {
+    margin: 0.8rem 0 1rem 0;
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: 8px;
+    overflow-x: auto;
+  }
+
+  .api-doc-table {
+    margin: 0;
+    font-size: 0.85rem;
+  }
+
+  @media (max-width: 980px) {
+    .api-doc-layout {
+      grid-template-columns: 1fr;
+    }
+    .api-doc-toc {
+      position: static;
+      max-height: none;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="api-usage-header">
+  <div>
+    <h1 style="margin:0;">📘 API Usage Method</h1>
+    <p style="color:var(--md-sys-color-on-surface-variant); margin:0.25rem 0 0 0;">
+      Complete client SDK &amp; REST API integration reference sourced from <code>API_Usage.md</code>.
+    </p>
+  </div>
+  <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+    <a href="/manager/keys" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:0.45rem;">
+      <span>🔑</span>
+      <span>Manage / View API Keys</span>
+    </a>
+    <a href="/manager/instances" class="btn btn-outlined" style="display:inline-flex; align-items:center; gap:0.45rem;">
+      <span>📱</span>
+      <span>My App Instances</span>
+    </a>
+  </div>
+</div>
+
+<!-- Interactive App Instance & Base URL Configurator -->
+<div class="card" style="padding:1.2rem 1.35rem; margin-bottom:1.5rem; border:1px solid var(--md-sys-color-outline-variant);">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
+    <div>
+      <h2 style="margin:0; font-size:1.05rem;">🔌 Quick Connection Setup</h2>
+      <p style="margin:0.2rem 0 0 0; font-size:0.84rem; color:var(--md-sys-color-on-surface-variant);">
+        Select an accessible App Instance to preview ready-to-copy endpoints and cURL snippets.
+      </p>
+    </div>
+    <label style="display:inline-flex; align-items:center; gap:0.45rem; font-size:0.84rem; cursor:pointer;">
+      <input type="checkbox" id="apiUsageAutofillToggle" {% if instances and instances|length > 0 %}checked{% endif %}
+             onchange="applyApiPlaceholderSubstitution()"
+             style="width:16px; height:16px; accent-color:var(--md-sys-color-primary);">
+      <span>Fill selected Instance ID &amp; Server URL in examples</span>
+    </label>
+  </div>
+
+  <div class="api-setup-grid">
+    <div class="api-setup-box">
+      <div class="api-setup-label">Base API URL</div>
+      <div class="api-setup-value-row">
+        <code id="apiSetupBaseUrl" class="api-mono-pill">{{ api_base_url }}</code>
+        <button type="button" class="btn btn-outlined btn-sm" onclick="copyTextWithBtn(this, document.getElementById('apiSetupBaseUrl').textContent)">Copy</button>
+      </div>
+    </div>
+
+    <div class="api-setup-box">
+      <div class="api-setup-label">Your App Instance</div>
+      {% if instances and instances|length > 0 %}
+        <select id="apiUsageInstanceSelect" class="select" onchange="onApiInstanceSelectionChange()" style="width:100%;">
+          {% for inst in instances %}
+            <option value="{{ inst.id }}" data-name="{{ inst.name|escape }}" data-pkg="{{ (inst.package_name or '')|escape }}">
+              {{ inst.name }} ({{ inst.id }})
+            </option>
+          {% endfor %}
+        </select>
+        <div class="api-setup-value-row">
+          <code id="apiSetupInstanceId" class="api-mono-pill">{{ instances[0].id }}</code>
+          <button type="button" class="btn btn-outlined btn-sm" onclick="copyTextWithBtn(this, document.getElementById('apiSetupInstanceId').textContent)">Copy ID</button>
+        </div>
+      {% else %}
+        <div style="font-size:0.84rem; color:var(--md-sys-color-on-surface-variant);">
+          No accessible App Instances yet. <a href="/manager/instances" class="api-doc-link">Request or create an app instance</a>.
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="api-setup-box">
+      <div class="api-setup-label">API Keys ({{ keys|length }} Active)</div>
+      {% if keys and keys|length > 0 %}
+        <div style="font-size:0.84rem; color:var(--md-sys-color-on-surface);">
+          Active prefixes:
+          {% for k in keys[:3] %}
+            <code class="api-inline-code">{{ k.key_prefix }}...</code>{% if not loop.last %} {% endif %}
+          {% endfor %}
+          {% if keys|length > 3 %}<span style="color:var(--md-sys-color-on-surface-variant);">+{{ keys|length - 3 }} more</span>{% endif %}
+        </div>
+      {% else %}
+        <div style="font-size:0.84rem; color:var(--md-sys-color-on-surface-variant);">
+          No active API keys yet.
+        </div>
+      {% endif %}
+      <div style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
+        Reveal your full secret anytime with 2FA on <a href="/manager/keys" class="api-doc-link">API Keys</a> (<code class="api-inline-code">🔑 View Key</code>).
+      </div>
+    </div>
+  </div>
+
+  <div class="api-doc-callout" style="margin:1rem 0 0 0;">
+    <strong>📌 Current Server Additions:</strong>
+    Along with <code class="api-inline-code">X-API-Key</code> headers, protected <code class="api-inline-code">/static/central_data/...</code> media URLs and API calls also accept <code class="api-inline-code">?api_key=ak_...</code> (for image/video tags) and <code class="api-inline-code">Authorization: Bearer &lt;key&gt;</code>; <code class="api-inline-code">/assets</code> supports <code class="api-inline-code">?tag=...</code> filtering and returns <code class="api-inline-code">is_rewarded</code>, <code class="api-inline-code">is_priced</code>, and <code class="api-inline-code">rewarded_credits</code> flags.
+  </div>
+</div>
+
+<!-- 7 Core Endpoints Quick Summary Cards -->
+<div style="margin-bottom:0.75rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+  <h2 style="margin:0; font-size:1.1rem;">⚡ Endpoint Quick Reference</h2>
+  <span style="font-size:0.82rem; color:var(--md-sys-color-on-surface-variant);">Click any endpoint to copy a cURL command or jump to its schema &amp; response example.</span>
+</div>
+<div class="api-quick-endpoints">
+  {% for ep in quick_endpoints %}
+    <div class="card api-ep-card">
+      <div class="api-ep-top">
+        <span class="api-method-pill {% if ep.method == 'POST' %}api-method-post{% else %}api-method-get{% endif %}">{{ ep.method }}</span>
+        <span class="badge" style="background:var(--md-sys-color-surface-container-high); font-size:0.73rem;">Scope: {{ ep.scope }}</span>
+      </div>
+      <div class="api-ep-path" data-raw-path="{{ ep.path }}">{{ ep.path }}</div>
+      <div style="font-size:0.83rem; color:var(--md-sys-color-on-surface-variant); line-height:1.45;">
+        {{ ep.summary }}
+      </div>
+      <div class="api-ep-actions">
+        <a href="#{{ ep.anchor }}" class="btn btn-outlined btn-xs" onclick="jumpToApiDocAnchor('{{ ep.anchor }}', event)">View Docs ↓</a>
+        <button type="button" class="btn btn-outlined btn-xs"
+                onclick="copyEndpointCurl(this, '{{ ep.method }}', '{{ ep.path }}')">📋 Copy cURL</button>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+<!-- Main 2-Column Guide: Sticky TOC + Search on Left, Full API_Usage.md Sections on Right -->
+<div class="api-doc-layout">
+  <aside class="card api-doc-toc" aria-label="API Documentation Sections">
+    <div style="font-weight:700; font-size:0.95rem; margin-bottom:0.5rem;">📑 Guide Sections</div>
+    <input type="search" id="apiDocSearchInput" class="input" placeholder="Filter endpoints, schemas, FAQ..."
+           oninput="filterApiDocSections(this.value)" style="width:100%; font-size:0.84rem;">
+    <div id="apiDocFilterStatus" style="font-size:0.76rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.35rem; display:none;"></div>
+
+    <ul class="api-toc-list" id="apiDocTocList">
+      {% for sec in api_doc.sections %}
+        <li>
+          <a href="#{{ sec.id }}" class="api-toc-link" data-toc-id="{{ sec.id }}"
+             onclick="jumpToApiDocAnchor('{{ sec.id }}', event)">{{ sec.title }}</a>
+          {% if sec.subsections and sec.subsections|length > 0 %}
+            <ul class="api-toc-sublist">
+              {% for sub in sec.subsections %}
+                <li>
+                  <a href="#{{ sub.id }}" class="api-toc-sublink"
+                     onclick="jumpToApiDocAnchor('{{ sub.id }}', event)">{{ sub.title }}</a>
+                </li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  </aside>
+
+  <div class="api-doc-main" id="apiDocSectionsContainer">
+    {% if api_doc.intro_html %}
+      <div class="card api-doc-section" style="padding:1.1rem 1.4rem;">
+        <div style="font-size:1.1rem; font-weight:700; margin-bottom:0.45rem;">{{ api_doc.title }}</div>
+        {{ api_doc.intro_html | safe }}
+      </div>
+    {% endif %}
+
+    {% for sec in api_doc.sections %}
+      <section id="{{ sec.id }}" class="card api-doc-section" data-section-id="{{ sec.id }}" data-search-text="{{ sec.search_text|escape }}">
+        <h2 class="api-doc-section-title">{{ sec.title }}</h2>
+        {{ sec.html | safe }}
+      </section>
+    {% endfor %}
+
+    <div id="apiDocNoMatchCard" class="card" style="display:none; padding:2rem; text-align:center;">
+      <div style="font-size:1.6rem; margin-bottom:0.4rem;">🔍</div>
+      <div style="font-weight:700; margin-bottom:0.25rem;">No matching API guide sections found</div>
+      <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.86rem; margin-bottom:0.85rem;">
+        Try clearing your search filter or browsing the sections on the left.
+      </p>
+      <button type="button" class="btn btn-outlined btn-sm" onclick="clearApiDocSearch()">Clear Search</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API_USAGE_SERVER_ORIGIN = {{ server_origin | tojson }};
+  const API_USAGE_BASE_URL = {{ api_base_url | tojson }};
+
+  function getSelectedInstanceId() {
+    const sel = document.getElementById('apiUsageInstanceSelect');
+    return sel && sel.value ? sel.value.trim() : '';
+  }
+
+  function applyPlaceholderToString(rawText) {
+    const toggle = document.getElementById('apiUsageAutofillToggle');
+    const selectedId = getSelectedInstanceId();
+    if (!toggle || !toggle.checked) return rawText;
+
+    let out = rawText;
+    if (selectedId) {
+      out = out.replace(/\{instanceId\}/g, selectedId);
+      out = out.replace(/\/instance\/\{id\}\//g, '/instance/' + selectedId + '/');
+    }
+    if (API_USAGE_SERVER_ORIGIN) {
+      out = out.replace(/https:\/\/your-domain\.com/g, API_USAGE_SERVER_ORIGIN);
+      out = out.replace(/https:\/\/assets\.yourcompany\.com/g, API_USAGE_SERVER_ORIGIN);
+      out = out.replace(/Host:\s*assets\.yourcompany\.com/g, 'Host: ' + API_USAGE_SERVER_ORIGIN.replace(/^https?:\/\//, ''));
+    }
+    return out;
+  }
+
+  function applyApiPlaceholderSubstitution() {
+    document.querySelectorAll('.api-code-pre code').forEach(function(codeEl) {
+      if (codeEl.dataset.rawCode === undefined) {
+        codeEl.dataset.rawCode = codeEl.textContent;
+      }
+      codeEl.textContent = applyPlaceholderToString(codeEl.dataset.rawCode);
+    });
+
+    document.querySelectorAll('.api-ep-path').forEach(function(pathEl) {
+      const raw = pathEl.dataset.rawPath || pathEl.textContent;
+      pathEl.textContent = applyPlaceholderToString(raw);
+    });
+  }
+
+  function onApiInstanceSelectionChange() {
+    const selectedId = getSelectedInstanceId();
+    const idEl = document.getElementById('apiSetupInstanceId');
+    if (idEl && selectedId) {
+      idEl.textContent = selectedId;
+    }
+    applyApiPlaceholderSubstitution();
+  }
+
+  function fallbackCopyText(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch (_) {
+      ok = false;
+    }
+    ta.remove();
+    return ok;
+  }
+
+  function copyTextWithBtn(btn, text) {
+    const val = (text || '').trim();
+    if (!val) return;
+    const original = btn.dataset.origLabel || btn.textContent;
+    btn.dataset.origLabel = original;
+
+    const done = function(msg) {
+      btn.textContent = msg || '✓ Copied';
+      setTimeout(function() {
+        btn.textContent = original;
+      }, 1500);
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(val).then(function() { done('✓ Copied'); }).catch(function() {
+        done(fallbackCopyText(val) ? '✓ Copied' : 'Copy Failed');
+      });
+    } else {
+      done(fallbackCopyText(val) ? '✓ Copied' : 'Copy Failed');
+    }
+  }
+
+  function copyApiCodeBlock(btn) {
+    const wrap = btn.closest('.api-code-block');
+    const codeEl = wrap ? wrap.querySelector('pre code') : null;
+    if (codeEl) {
+      copyTextWithBtn(btn, codeEl.textContent);
+    }
+  }
+
+  function copyEndpointCurl(btn, method, rawPath) {
+    const resolvedPath = applyPlaceholderToString(rawPath);
+    const fullUrl = API_USAGE_SERVER_ORIGIN + resolvedPath;
+    let cmd = 'curl -X ' + method + ' "' + fullUrl + '" \\\n  -H "X-API-Key: <YOUR_API_KEY>"';
+    if (method === 'POST') {
+      cmd += ' \\\n  -H "Content-Type: application/json" \\\n  -d \'{"event":"view"}\'';
+    }
+    copyTextWithBtn(btn, cmd);
+  }
+
+  function clearApiDocSearch() {
+    const input = document.getElementById('apiDocSearchInput');
+    if (input) {
+      input.value = '';
+      filterApiDocSections('');
+    }
+  }
+
+  function filterApiDocSections(query) {
+    const q = (query || '').trim().toLowerCase();
+    const sections = document.querySelectorAll('#apiDocSectionsContainer section[data-section-id]');
+    let shown = 0;
+
+    sections.forEach(function(sec) {
+      const hay = sec.dataset.searchText || '';
+      const matched = !q || hay.indexOf(q) !== -1;
+      sec.style.display = matched ? '' : 'none';
+      if (matched) shown++;
+
+      const tocLink = document.querySelector('#apiDocTocList a[data-toc-id="' + sec.dataset.sectionId + '"]');
+      if (tocLink) {
+        tocLink.style.opacity = matched ? '1' : '0.45';
+      }
+    });
+
+    const noMatch = document.getElementById('apiDocNoMatchCard');
+    if (noMatch) {
+      noMatch.style.display = shown === 0 ? 'block' : 'none';
+    }
+
+    const status = document.getElementById('apiDocFilterStatus');
+    if (status) {
+      if (q) {
+        status.style.display = 'block';
+        status.textContent = 'Showing ' + shown + ' of ' + sections.length + ' sections';
+      } else {
+        status.style.display = 'none';
+      }
+    }
+  }
+
+  function jumpToApiDocAnchor(anchorId, evt) {
+    const target = document.getElementById(anchorId);
+    if (!target) return;
+    if (evt) evt.preventDefault();
+
+    const parentSec = target.closest('section[data-section-id]') || target;
+    if (parentSec && parentSec.style.display === 'none') {
+      clearApiDocSearch();
+    }
+
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.querySelectorAll('#apiDocTocList .api-toc-link').forEach(function(a) {
+      a.classList.toggle('active', a.dataset.tocId === (parentSec ? parentSec.dataset.sectionId : anchorId));
+    });
+    if (history.replaceState) {
+      history.replaceState(null, '', '#' + anchorId);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    applyApiPlaceholderSubstitution();
+  });
+</script>
+{% endblock %}
