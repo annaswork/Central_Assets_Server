@@ -97,13 +97,33 @@ def get_fernet_cipher():
     return Fernet(key)
 
 
+def _encrypt_text(value: str) -> str:
+    """Symmetrically encrypt sensitive plaintext with the application Fernet cipher."""
+    cipher = get_fernet_cipher()
+    return cipher.encrypt(value.encode("utf-8")).decode("utf-8")
+
+
+def _decrypt_text(token: str) -> str:
+    """Decrypt a Fernet-encrypted token back to plaintext."""
+    cipher = get_fernet_cipher()
+    return cipher.decrypt(token.encode("utf-8")).decode("utf-8")
+
+
 def encrypt_password(password: str) -> str:
     """Symmetrically encrypt manager password for authorized admin 2FA recovery."""
-    cipher = get_fernet_cipher()
-    return cipher.encrypt(password.encode("utf-8")).decode("utf-8")
+    return _encrypt_text(password)
 
 
 def decrypt_password(token: str) -> str:
     """Decrypt encrypted password with master cipher."""
-    cipher = get_fernet_cipher()
-    return cipher.decrypt(token.encode("utf-8")).decode("utf-8")
+    return _decrypt_text(token)
+
+
+def encrypt_api_key(full_key: str) -> str:
+    """Symmetrically encrypt an API key so authorized 2FA owners/admins can reveal it later."""
+    return _encrypt_text(full_key)
+
+
+def decrypt_api_key(token: str) -> str:
+    """Decrypt a previously encrypted API key."""
+    return _decrypt_text(token)

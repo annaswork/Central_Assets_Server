@@ -1,7 +1,7 @@
 """Manager portal API Key management routes."""
 
 from fastapi import APIRouter, Depends, Form, Request, Response
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
@@ -14,13 +14,14 @@ from controller.manager_controller import (
     get_manager_accessible_instance_ids,
     get_manager_by_id,
     list_manager_keys,
+    reveal_api_key_for_manager,
     revoke_manager_key,
     update_manager_key_rate_limit,
 )
 from database.models.api_key import ApiKeyCreate
-from router.deps import get_db
+from router.deps import extract_2fa_code, get_db
 from utils.datetimes import format_datetime_display
-from utils.errors import ForbiddenError, ValidationError
+from utils.errors import AppError, ForbiddenError, ValidationError
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 templates.env.filters["format_datetime"] = format_datetime_display
@@ -52,12 +53,15 @@ async def manager_keys_list(
     for k in keys:
         k["app_name"] = inst_map.get(k.get("app_instance_id"), "None / Unassigned")
 
+    manager_has_2fa = bool(manager and manager.get("is_2fa_enabled") and manager.get("totp_secret"))
+
     return templates.TemplateResponse(
         request=request,
         name="manager/keys/list.html",
         context={
             "session": session,
             "manager": manager,
+            "manager_has_2fa": manager_has_2fa,
             "keys": keys,
             "instances": instances,
             "active_tab": "keys",
@@ -125,13 +129,36 @@ async def manager_revoke_key_endpoint(
     return RedirectResponse(url="/manager/keys", status_code=303)
 
 
+@router.post("/{key_id}/reveal")
+async def manager_reveal_key(
+    key_id: str,
+    request: Request,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Verify Manager 2FA code and reveal full API key owned by this manager."""
+    session = get_current_manager_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "detail": "Session expired. Please log in again."})
+
+    code = await extract_2fa_code(request)
+    try:
+        res = await reveal_api_key_for_manager(
+            db, manager_id=session["user_id"], key_id=key_id, two_factor_code=code
+        )
+        return JSONResponse(status_code=200, content=res)
+    except AppError as err:
+        return JSONResponse(status_code=err.status_code, content={"success": False, "detail": err.message})
+    except Exception as err:
+        return JSONResponse(status_code=500, content={"success": False, "detail": f"Unexpected error: {str(err)}"})
+
+
 @router.post("/{key_id}/delete")
 async def manager_delete_key_endpoint(
     key_id: str,
     request: Request,
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
-    """Permanently delete an API key owned by this manager."""
+    """Permanently delete an API key created by this manager."""
     session = get_current_manager_session(request)
     if not session:
         return RedirectResponse(url="/manager/login", status_code=303)
@@ -152,7 +179,7 @@ async def manager_update_rate_limit(
     app_surge_ceiling_per_min: int = Form(default=10000),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
-    """Update dual-layer rate limits for an API key owned by this manager."""
+    """Update dual-layer rate limits for any API key bound to this manager's accessible app instance."""
     session = get_current_manager_session(request)
     if not session:
         return RedirectResponse(url="/manager/login", status_code=303)
@@ -162,8 +189,8 @@ async def manager_update_rate_limit(
             db,
             manager_id=session["user_id"],
             key_id=key_id,
-            rate_limit=rate_limit,
-            app_surge_ceiling=app_surge_ceiling_per_min,
+            rate_limit=max(1, min(100000, rate_limit)),
+            app_surge_ceiling=max(1, min(1000000, app_surge_ceiling_per_min)),
         )
     except ForbiddenError:
         pass

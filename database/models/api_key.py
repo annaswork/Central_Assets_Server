@@ -35,7 +35,9 @@ class ApiKeyOut(MongoModel):
     expires_at: datetime | None = None
     created_at: datetime
     revoked_at: datetime | None = None
-    # Returned only at creation
+    can_reveal: bool = False
+    previous_owner_username: str | None = None
+    # Returned only at creation or after explicit 2FA verification
     full_key: str | None = None
 
 
@@ -43,6 +45,7 @@ class ApiKeyInDB(MongoInDBModel, TimestampMixin):
     name: str
     key_prefix: str
     secret_hash: str
+    encrypted_key: str | None = None
     app_instance_id: PyObjectId | None = None
     owner_id: PyObjectId | str | None = None
     owner_role: str | None = "admin"

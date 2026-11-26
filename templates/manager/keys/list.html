@@ -7,7 +7,7 @@
   <div>
     <h1 style="margin:0;">API Access Keys</h1>
     <p style="color:var(--md-sys-color-on-surface-variant); margin:0.25rem 0 0 0;">
-      Generate and manage API keys for your applications.
+      Generate and manage API keys and rate limits for your accessible applications.
     </p>
   </div>
   <div>
@@ -42,6 +42,19 @@
               </td>
               <td>
                 <div style="font-weight:600;">{{ k.name }}</div>
+                {% if k.is_admin_issued %}
+                  <div style="margin-top:0.25rem;">
+                    <span class="badge" style="font-size:0.7rem; background:var(--md-sys-color-primary-container); color:var(--md-sys-color-on-primary-container);" title="Created by Admin for this accessible app">
+                      🛡️ Issued by Admin
+                    </span>
+                  </div>
+                {% elif not k.is_own_key %}
+                  <div style="margin-top:0.25rem;">
+                    <span class="badge" style="font-size:0.7rem; background:var(--md-sys-color-surface-container-high);" title="Shared app instance key">
+                      🤝 Shared App Key
+                    </span>
+                  </div>
+                {% endif %}
               </td>
               <td>
                 <span class="badge" style="background:var(--md-sys-color-surface-container-high);">
@@ -72,26 +85,43 @@
               </td>
               <td style="text-align:right;">
                 <div style="display:inline-flex; gap:0.35rem; align-items:center;">
+                  <button type="button" class="btn btn-outlined btn-sm"
+                          style="color:var(--md-sys-color-primary); border-color:var(--md-sys-color-outline-variant);"
+                          data-key-id="{{ k.id }}"
+                          data-key-name="{{ k.name|escape }}"
+                          data-key-prefix="{{ (k.key_prefix or '')|escape }}"
+                          onclick="openRevealApiKeyModal(this.dataset.keyId, this.dataset.keyName, this.dataset.keyPrefix)"
+                          title="View full API key after 2FA verification">
+                    🔑 View Key
+                  </button>
                   <!-- Dual Rate Limit Modal Trigger -->
-                  <button type="button" class="btn btn-outlined btn-sm" onclick="openRateLimitModal('{{ k.id }}', '{{ k.name }}', {{ k.rate_limit_per_min or 60 }}, {{ k.app_surge_ceiling_per_min or 10000 }})" title="Configure Dual Rate Limits (User IP & Surge Ceiling)">
+                  <button type="button" class="btn btn-outlined btn-sm"
+                          data-key-id="{{ k.id }}"
+                          data-key-name="{{ k.name|escape }}"
+                          data-rate-limit="{{ k.rate_limit_per_min or 60 }}"
+                          data-surge-ceiling="{{ k.app_surge_ceiling_per_min or 10000 }}"
+                          onclick="openRateLimitModalFromBtn(this)"
+                          title="Configure Dual Rate Limits (User IP & Surge Ceiling)">
                     ⚙️ Limits
                   </button>
 
-                  <!-- Revoke -->
-                  {% if not k.is_revoked %}
-                    <form method="POST" action="/manager/keys/{{ k.id }}/revoke" style="display:inline; margin:0;" onsubmit="return confirm('Revoke key \'{{ k.name }}\'? It will immediately cease functioning.');">
-                      <button type="submit" class="btn btn-outlined btn-sm" style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);" title="Revoke Key">
-                        Revoke
+                  {% if k.is_own_key %}
+                    <!-- Revoke -->
+                    {% if not k.is_revoked %}
+                      <form method="POST" action="/manager/keys/{{ k.id }}/revoke" style="display:inline; margin:0;" onsubmit="return confirm('Revoke key? It will immediately cease functioning.');">
+                        <button type="submit" class="btn btn-outlined btn-sm" style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);" title="Revoke Key">
+                          Revoke
+                        </button>
+                      </form>
+                    {% endif %}
+
+                    <!-- Delete -->
+                    <form method="POST" action="/manager/keys/{{ k.id }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete key?');">
+                      <button type="submit" class="btn btn-outlined btn-sm" style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);" title="Delete Key">
+                        🗑️
                       </button>
                     </form>
                   {% endif %}
-
-                  <!-- Delete -->
-                  <form method="POST" action="/manager/keys/{{ k.id }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete key \'{{ k.name }}\'?');">
-                    <button type="submit" class="btn btn-outlined btn-sm" style="color:var(--md-sys-color-error); border-color:var(--md-sys-color-error);" title="Delete Key">
-                      🗑️
-                    </button>
-                  </form>
                 </div>
               </td>
             </tr>
@@ -214,8 +244,20 @@
     document.getElementById('newSurgeCeiling').value = currentSurge || 10000;
     document.getElementById('rateLimitModal').style.display = 'flex';
   }
+  function openRateLimitModalFromBtn(btn) {
+    openRateLimitModal(
+      btn.dataset.keyId,
+      btn.dataset.keyName,
+      parseInt(btn.dataset.rateLimit, 10) || 60,
+      parseInt(btn.dataset.surgeCeiling, 10) || 10000
+    );
+  }
   function closeRateLimitModal() {
     document.getElementById('rateLimitModal').style.display = 'none';
   }
 </script>
+
+{% with reveal_base_url="/manager/keys", setup_2fa_url="/manager/settings/2fa/setup", actor_has_2fa=manager_has_2fa %}
+  {% include "partials/reveal_api_key_modal.html" %}
+{% endwith %}
 {% endblock %}

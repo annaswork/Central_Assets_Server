@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from authorization.encryption import generate_key_pair, verify_secret
+from authorization.encryption import encrypt_api_key, generate_key_pair, verify_secret
 from database.collections import API_KEYS
 from database.models.api_key import ApiKeyInDB, ApiKeyOut
 from utils.datetimes import utc_now
@@ -26,12 +26,14 @@ async def issue_api_key(
 ) -> ApiKeyOut:
     """Issue a new API key, revealing the full key secret exactly once."""
     full_key, key_prefix, secret_hash = generate_key_pair()
+    encrypted_key = encrypt_api_key(full_key)
     now = utc_now()
 
     doc = {
         "name": name,
         "key_prefix": key_prefix,
         "secret_hash": secret_hash,
+        "encrypted_key": encrypted_key,
         "app_instance_id": to_object_id(app_instance_id) if app_instance_id else None,
         "scopes": scopes or [],
         "rate_limit_per_min": rate_limit_per_min,

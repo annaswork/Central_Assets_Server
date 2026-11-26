@@ -1,0 +1,263 @@
+{# Shared 2FA-protected API Key Reveal Modal.
+   Expected context variables:
+     reveal_base_url : '/admin/keys' | '/manager/keys'
+     setup_2fa_url   : '/admin/settings/2fa/setup' | '/manager/settings/2fa/setup'
+     actor_has_2fa   : boolean
+#}
+<div id="revealApiKeyModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1100; align-items:center; justify-content:center; padding:1.5rem; backdrop-filter:blur(4px);" onclick="if (event.target === this) closeRevealApiKeyModal();">
+  <div class="card" style="width:100%; max-width:520px; box-shadow:0 12px 32px rgba(0,0,0,0.5); padding:0; overflow:hidden; border:1px solid var(--md-sys-color-outline-variant);">
+    <div style="padding:1.25rem 1.5rem; border-bottom:1px solid var(--md-sys-color-outline-variant); display:flex; justify-content:space-between; align-items:center; background:var(--md-sys-color-surface-container);">
+      <div style="display:flex; align-items:center; gap:0.6rem;">
+        <span style="font-size:1.3rem;">🔐</span>
+        <div>
+          <h3 style="margin:0; font-size:1.1rem; font-weight:700;">View Full API Key</h3>
+          <div style="font-size:0.8rem; color:var(--md-sys-color-outline);">Protected by Two-Factor Authentication (2FA)</div>
+        </div>
+      </div>
+      <button type="button" onclick="closeRevealApiKeyModal()" style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:var(--md-sys-color-on-surface-variant); padding:0.25rem 0.5rem; border-radius:4px;">✕</button>
+    </div>
+
+    <div style="padding:1.5rem;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; margin-bottom:1rem; padding:0.65rem 0.85rem; background:var(--md-sys-color-surface-container-high); border-radius:8px;">
+        <div>
+          <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">Target Key</div>
+          <div id="rakKeyName" style="font-weight:700; color:var(--md-sys-color-primary); font-size:0.95rem;"></div>
+        </div>
+        <code id="rakKeyPrefix" style="font-size:0.82rem; color:var(--md-sys-color-on-surface-variant);"></code>
+      </div>
+
+      <div id="rakAlert" style="display:none; padding:0.75rem 1rem; border-radius:8px; font-size:0.85rem; margin-bottom:1rem; line-height:1.4;"></div>
+
+      {% if not actor_has_2fa %}
+        <div style="padding:1rem; background:rgba(239, 68, 68, 0.12); border:1px solid rgba(239, 68, 68, 0.35); border-radius:8px;">
+          <div style="display:flex; align-items:flex-start; gap:0.6rem;">
+            <span style="font-size:1.25rem;">⚠️</span>
+            <div>
+              <div style="font-weight:700; color:#ef4444; font-size:0.92rem;">Two-Factor Authentication Required</div>
+              <div style="font-size:0.83rem; color:var(--md-sys-color-on-surface-variant); margin-top:0.25rem;">
+                2FA is not currently enabled on your account. Enable Two-Factor Authentication first to unlock API key inspection.
+              </div>
+              <div style="margin-top:0.8rem;">
+                <a href="{{ setup_2fa_url }}" class="btn btn-primary btn-sm" style="text-decoration:none; display:inline-block;">Configure 2FA Now</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <div id="rakVerifyStep">
+          <p style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); margin:0 0 1rem 0;">
+            Enter the 6-digit code from your <strong>Authenticator App</strong> (or a single-use backup code) to decrypt and view this API key.
+          </p>
+          <form id="rakForm" onsubmit="handleRevealApiKey(event);">
+            <div class="form-group" style="margin-bottom:1.25rem;">
+              <label class="form-label" for="rakCodeInput" style="font-weight:600; display:flex; justify-content:space-between;">
+                <span>2FA Verification Code *</span>
+                <span style="font-size:0.75rem; color:var(--md-sys-color-outline);">TOTP or Backup Code</span>
+              </label>
+              <input
+                type="text"
+                id="rakCodeInput"
+                class="input"
+                placeholder="123456"
+                maxlength="24"
+                autocomplete="one-time-code"
+                required
+                style="font-size:1.2rem; letter-spacing:0.2rem; text-align:center; font-family:monospace; font-weight:700; padding:0.6rem;"
+              />
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+              <button type="button" class="btn btn-outlined" onclick="closeRevealApiKeyModal()">Cancel</button>
+              <button type="submit" id="rakSubmitBtn" class="btn btn-primary">🔓 Verify &amp; View Key</button>
+            </div>
+          </form>
+        </div>
+
+        <div id="rakResultStep" style="display:none;">
+          <div style="padding:1rem; background:rgba(34, 197, 94, 0.1); border:1px solid rgba(34, 197, 94, 0.3); border-radius:8px; margin-bottom:1rem;">
+            <div style="font-size:0.8rem; font-weight:600; color:#22c55e; margin-bottom:0.5rem;">
+              ✓ Decrypted API Key:
+            </div>
+            <div style="display:flex; gap:0.45rem; align-items:center;">
+              <input
+                type="password"
+                id="rakRevealedKey"
+                readonly
+                style="flex:1; background:var(--md-sys-color-surface); border:1px solid var(--md-sys-color-outline); padding:0.55rem 0.75rem; border-radius:6px; font-family:monospace; font-size:0.9rem; font-weight:700; color:var(--md-sys-color-on-surface);"
+              />
+              <button type="button" class="btn btn-outlined btn-sm" id="rakToggleVisBtn" onclick="toggleRevealedApiKeyVisibility()" title="Show / Hide Key">
+                👁️ Show
+              </button>
+              <button type="button" class="btn btn-outlined btn-sm" id="rakCopyBtn" onclick="copyRevealedApiKey()" title="Copy to clipboard">
+                📋 Copy
+              </button>
+            </div>
+          </div>
+          <div style="display:flex; justify-content:flex-end;">
+            <button type="button" class="btn btn-outlined btn-sm" onclick="closeRevealApiKeyModal()">Done</button>
+          </div>
+        </div>
+
+        <div id="rakLegacyStep" style="display:none;">
+          <div style="padding:0.95rem; background:rgba(234, 179, 8, 0.12); border:1px solid rgba(234, 179, 8, 0.35); border-radius:8px; font-size:0.84rem; margin-bottom:1rem; line-height:1.45;">
+            ⚠️ <strong>Legacy API Key:</strong> <span id="rakLegacyMsg">This key was issued before encrypted key recovery was enabled, so its plaintext cannot be recovered. Generate a new key to enable 2FA viewing.</span>
+          </div>
+          <div style="display:flex; justify-content:flex-end;">
+            <button type="button" class="btn btn-outlined btn-sm" onclick="closeRevealApiKeyModal()">Close</button>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+  let activeRevealKeyId = null;
+
+  function openRevealApiKeyModal(keyId, keyName, keyPrefix) {
+    activeRevealKeyId = keyId;
+    document.getElementById('rakKeyName').textContent = keyName || 'API Key';
+    document.getElementById('rakKeyPrefix').textContent = keyPrefix ? `${keyPrefix}...` : '';
+    showRevealKeyAlert('', 'none');
+
+    const verifyStep = document.getElementById('rakVerifyStep');
+    const resultStep = document.getElementById('rakResultStep');
+    const legacyStep = document.getElementById('rakLegacyStep');
+    const codeInput = document.getElementById('rakCodeInput');
+    const revealedInput = document.getElementById('rakRevealedKey');
+    const toggleBtn = document.getElementById('rakToggleVisBtn');
+
+    if (verifyStep) verifyStep.style.display = 'block';
+    if (resultStep) resultStep.style.display = 'none';
+    if (legacyStep) legacyStep.style.display = 'none';
+    if (revealedInput) {
+      revealedInput.value = '';
+      revealedInput.type = 'password';
+    }
+    if (toggleBtn) toggleBtn.textContent = '👁️ Show';
+    if (codeInput) {
+      codeInput.value = '';
+      setTimeout(() => codeInput.focus(), 80);
+    }
+
+    document.getElementById('revealApiKeyModal').style.display = 'flex';
+  }
+
+  function closeRevealApiKeyModal() {
+    document.getElementById('revealApiKeyModal').style.display = 'none';
+    const revealedInput = document.getElementById('rakRevealedKey');
+    if (revealedInput) revealedInput.value = '';
+    activeRevealKeyId = null;
+  }
+
+  function showRevealKeyAlert(msg, type) {
+    const el = document.getElementById('rakAlert');
+    if (!el) return;
+    if (type === 'none' || !msg) {
+      el.style.display = 'none';
+      el.textContent = '';
+      return;
+    }
+    el.style.display = 'block';
+    el.textContent = msg;
+    if (type === 'error') {
+      el.style.background = 'rgba(239, 68, 68, 0.15)';
+      el.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+      el.style.color = '#ef4444';
+    } else {
+      el.style.background = 'rgba(34, 197, 94, 0.15)';
+      el.style.border = '1px solid rgba(34, 197, 94, 0.4)';
+      el.style.color = '#22c55e';
+    }
+  }
+
+  async function handleRevealApiKey(event) {
+    event.preventDefault();
+    if (!activeRevealKeyId) return;
+
+    const code = (document.getElementById('rakCodeInput').value || '').trim();
+    if (!code) {
+      showRevealKeyAlert('Please enter your 2FA code.', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('rakSubmitBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Verifying...';
+    showRevealKeyAlert('', 'none');
+
+    try {
+      const response = await fetch(`{{ reveal_base_url }}/${encodeURIComponent(activeRevealKeyId)}/reveal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data.success) {
+        if (data.has_encrypted_key === false) {
+          document.getElementById('rakVerifyStep').style.display = 'none';
+          document.getElementById('rakLegacyStep').style.display = 'block';
+          if (data.message) document.getElementById('rakLegacyMsg').textContent = data.message;
+          return;
+        }
+        showRevealKeyAlert(data.detail || data.message || '2FA verification failed.', 'error');
+        return;
+      }
+
+      document.getElementById('rakRevealedKey').value = data.full_key;
+      document.getElementById('rakRevealedKey').type = 'text';
+      const toggleBtn = document.getElementById('rakToggleVisBtn');
+      if (toggleBtn) toggleBtn.textContent = '🙈 Hide';
+      document.getElementById('rakVerifyStep').style.display = 'none';
+      document.getElementById('rakResultStep').style.display = 'block';
+      showRevealKeyAlert('2FA verified.', 'success');
+    } catch (err) {
+      showRevealKeyAlert('Connection failed: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🔓 Verify & View Key';
+    }
+  }
+
+  function toggleRevealedApiKeyVisibility() {
+    const input = document.getElementById('rakRevealedKey');
+    const btn = document.getElementById('rakToggleVisBtn');
+    if (!input || !btn) return;
+    if (input.type === 'password') {
+      input.type = 'text';
+      btn.textContent = '🙈 Hide';
+    } else {
+      input.type = 'password';
+      btn.textContent = '👁️ Show';
+    }
+  }
+
+  function copyRevealedApiKey() {
+    const input = document.getElementById('rakRevealedKey');
+    if (!input || !input.value) return;
+    const prevType = input.type;
+    const onDone = () => {
+      const btn = document.getElementById('rakCopyBtn');
+      if (!btn) return;
+      const orig = btn.textContent;
+      btn.textContent = '✓ Copied';
+      btn.style.color = '#22c55e';
+      setTimeout(() => { btn.textContent = orig; btn.style.color = ''; }, 1800);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(input.value).then(onDone).catch(() => {
+        input.type = 'text';
+        input.select();
+        document.execCommand('copy');
+        input.type = prevType;
+        onDone();
+      });
+    } else {
+      input.type = 'text';
+      input.select();
+      document.execCommand('copy');
+      input.type = prevType;
+      onDone();
+    }
+  }
+</script>

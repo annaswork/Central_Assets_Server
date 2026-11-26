@@ -12,6 +12,7 @@ from authorization.encryption import (
     verify_password,
 )
 from authorization.manager_session import authenticate_manager_user
+from controller.authorization_controller import reveal_encrypted_api_key_doc, verify_actor_2fa
 from authorization.totp import (
     generate_backup_codes,
     generate_provisioning_uri,
@@ -429,21 +430,101 @@ async def get_manager_dashboard_counts(
 # 6. Scoped API Key Management
 # =========================================================================
 
+async def _get_accessible_instance_match_values(
+    db: AsyncIOMotorDatabase, manager_id: str
+) -> list[Any]:
+    """Return both ObjectId and string representations for all accessible app instances."""
+    accessible_ids = await get_manager_accessible_instance_ids(db, manager_id)
+    match_vals: list[Any] = []
+    for inst_id in accessible_ids:
+        match_vals.append(inst_id)
+        try:
+            match_vals.append(to_object_id(inst_id))
+        except Exception:
+            pass
+    return match_vals
+
+
+async def _get_authorized_manager_key_doc(
+    db: AsyncIOMotorDatabase,
+    manager_id: str,
+    key_id: str,
+    *,
+    require_owner: bool = False,
+    action_label: str = "access",
+) -> dict[str, Any]:
+    """Fetch an API key if the manager has access to its bound app instance (and ownership when required)."""
+    m_oid = to_object_id(manager_id)
+    k_oid = to_object_id(key_id)
+    key_doc = await db[API_KEYS].find_one({"_id": k_oid})
+    if not key_doc:
+        raise ForbiddenError(f"API key not found or you do not have permission to {action_label} it.")
+
+    inst_id = key_doc.get("app_instance_id")
+    if not inst_id:
+        raise ForbiddenError(f"API key not found or you do not have permission to {action_label} it.")
+
+    accessible_ids = await get_manager_accessible_instance_ids(db, manager_id)
+    if str(inst_id) not in accessible_ids:
+        raise ForbiddenError(f"API key not found or you do not have permission to {action_label} it.")
+
+    if require_owner and key_doc.get("owner_id") not in (m_oid, str(m_oid)):
+        raise ForbiddenError(f"API key not found or you do not have permission to {action_label} it.")
+
+    return key_doc
+
+
 async def list_manager_keys(
     db: AsyncIOMotorDatabase, manager_id: str
 ) -> list[dict[str, Any]]:
-    """List API keys owned by this manager without exposing secrets."""
+    """List API keys bound to this manager's accessible app instances without leaking secrets."""
     m_oid = to_object_id(manager_id)
+    match_vals = await _get_accessible_instance_match_values(db, manager_id)
+    if not match_vals:
+        return []
+
     cursor = db[API_KEYS].find(
-        {"$or": [{"owner_id": m_oid}, {"owner_id": str(m_oid)}]},
+        {"app_instance_id": {"$in": match_vals}},
         {"secret_hash": 0},
     ).sort("created_at", -1)
 
     docs = await cursor.to_list(length=1000)
+    reveal_flags = [bool(doc.pop("encrypted_key", None)) for doc in docs]
     serialized = serialize_mongo_docs(docs)
-    for d in serialized:
+    for d, can_reveal in zip(serialized, reveal_flags):
+        d["can_reveal"] = can_reveal
+        d["is_own_key"] = d.get("owner_id") == str(m_oid)
+        d["is_admin_issued"] = (d.get("owner_role") != "manager") or not d.get("owner_id")
         d["is_revoked"] = bool(d.get("is_revoked") or d.get("revoked_at") or not d.get("is_active", True))
     return serialized
+
+
+async def reveal_api_key_for_manager(
+    db: AsyncIOMotorDatabase,
+    manager_id: str,
+    key_id: str,
+    two_factor_code: str,
+) -> dict[str, Any]:
+    """Verify Manager access to the key's app instance & Manager 2FA, then decrypt and return the API key."""
+    key_doc = await _get_authorized_manager_key_doc(
+        db, manager_id, key_id, require_owner=False, action_label="view"
+    )
+
+    await verify_actor_2fa(
+        db,
+        MANAGERS,
+        manager_id,
+        two_factor_code,
+        actor_label="Manager",
+        setup_hint="Settings -> Two-Factor Authentication",
+    )
+
+    return await reveal_encrypted_api_key_doc(
+        db,
+        key_doc,
+        actor_id=manager_id,
+        actor_role="manager",
+    )
 
 
 async def create_manager_key(
@@ -482,34 +563,24 @@ async def create_manager_key(
 async def revoke_manager_key(
     db: AsyncIOMotorDatabase, manager_id: str, key_id: str
 ) -> bool:
-    """Revoke an API key owned by this manager."""
+    """Revoke an API key created by this manager on an accessible app instance."""
     from authorization.api_key import revoke_api_key
 
-    k_oid = to_object_id(key_id)
-    m_oid = to_object_id(manager_id)
-    key_doc = await db[API_KEYS].find_one(
-        {"_id": k_oid, "$or": [{"owner_id": m_oid}, {"owner_id": str(m_oid)}]}
+    await _get_authorized_manager_key_doc(
+        db, manager_id, key_id, require_owner=True, action_label="modify"
     )
-    if not key_doc:
-        raise ForbiddenError("API key not found or you do not have permission to modify it.")
-
     return await revoke_api_key(db, key_id)
 
 
 async def delete_manager_key(
     db: AsyncIOMotorDatabase, manager_id: str, key_id: str
 ) -> bool:
-    """Permanently delete an API key owned by this manager."""
+    """Permanently delete an API key created by this manager on an accessible app instance."""
     from authorization.api_key import delete_api_key
 
-    k_oid = to_object_id(key_id)
-    m_oid = to_object_id(manager_id)
-    key_doc = await db[API_KEYS].find_one(
-        {"_id": k_oid, "$or": [{"owner_id": m_oid}, {"owner_id": str(m_oid)}]}
+    await _get_authorized_manager_key_doc(
+        db, manager_id, key_id, require_owner=True, action_label="delete"
     )
-    if not key_doc:
-        raise ForbiddenError("API key not found or you do not have permission to delete it.")
-
     return await delete_api_key(db, key_id)
 
 
@@ -520,24 +591,20 @@ async def update_manager_key_rate_limit(
     rate_limit: int,
     app_surge_ceiling: int | None = None,
 ) -> bool:
-    """Update dual-layer rate limits on an API key owned by this manager."""
-    k_oid = to_object_id(key_id)
-    m_oid = to_object_id(manager_id)
-    key_doc = await db[API_KEYS].find_one(
-        {"_id": k_oid, "$or": [{"owner_id": m_oid}, {"owner_id": str(m_oid)}]}
+    """Update dual-layer rate limits on any API key bound to a manager's accessible app instance."""
+    key_doc = await _get_authorized_manager_key_doc(
+        db, manager_id, key_id, require_owner=False, action_label="modify"
     )
-    if not key_doc:
-        raise ForbiddenError("API key not found or you do not have permission to modify it.")
 
     update_data: dict[str, Any] = {
-        "rate_limit_per_min": max(1, rate_limit),
+        "rate_limit_per_min": max(1, min(100000, rate_limit)),
         "updated_at": utc_now(),
     }
     if app_surge_ceiling is not None:
-        update_data["app_surge_ceiling_per_min"] = max(1, app_surge_ceiling)
+        update_data["app_surge_ceiling_per_min"] = max(1, min(1000000, app_surge_ceiling))
 
     await db[API_KEYS].update_one(
-        {"_id": k_oid},
+        {"_id": key_doc["_id"]},
         {"$set": update_data},
     )
     return True

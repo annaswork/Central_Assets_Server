@@ -98,3 +98,16 @@ def require_role(role: str):
 
     return _role_checker
 
+
+async def extract_2fa_code(request: Request) -> str:
+    """Extract a 2FA TOTP/backup code from either a JSON body or form submission."""
+    try:
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            data = await request.json()
+            return str(data.get("code", "") or "").strip()
+        form = await request.form()
+        return str(form.get("code", "") or "").strip()
+    except Exception:
+        return ""
+

@@ -1,7 +1,7 @@
 """Admin panel routes for API key issuance and system settings."""
 
 from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
@@ -14,12 +14,15 @@ from controller.authorization_controller import (
     activate_key,
     create_key,
     delete_key,
+    get_admin_user_by_id,
     list_keys,
+    reveal_api_key_for_admin,
     revoke_key,
     update_key_rate_limit,
 )
 from database.models.api_key import ApiKeyCreate
-from router.deps import get_db
+from router.deps import extract_2fa_code, get_db
+from utils.errors import AppError
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 router = APIRouter(tags=["Admin Settings & Keys"])
@@ -33,6 +36,18 @@ async def admin_list_keys(request: Request, db: AsyncIOMotorDatabase = Depends(g
 
     keys = await list_keys(db)
     instances = await list_app_instances(db, page=1, page_size=100)
+    instance_items = instances.get("items", [])
+    inst_name_map = {str(inst["id"]): inst.get("name", "") for inst in instance_items}
+    for k in keys:
+        iid = k.get("app_instance_id") or k.get("appInstanceId")
+        if iid and str(iid) in inst_name_map:
+            k["app_name"] = inst_name_map[str(iid)]
+
+    try:
+        admin_user = await get_admin_user_by_id(db, session["user_id"])
+    except Exception:
+        admin_user = None
+    admin_has_2fa = bool(admin_user and admin_user.get("is_2fa_enabled") and admin_user.get("totp_secret"))
 
     return templates.TemplateResponse(
         request=request,
@@ -40,8 +55,9 @@ async def admin_list_keys(request: Request, db: AsyncIOMotorDatabase = Depends(g
         context={
             "session": session,
             "keys": keys,
-            "instances": instances.get("items", []),
+            "instances": instance_items,
             "scopes": ALL_SCOPES,
+            "admin_has_2fa": admin_has_2fa,
             "active_tab": "keys",
         },
     )
@@ -131,6 +147,27 @@ async def admin_update_key_rate_limit(
     clamped_surge = max(1, min(1000000, app_surge_ceiling_per_min))
     await update_key_rate_limit(db, key_id=id, rate_limit=clamped, app_surge_ceiling=clamped_surge)
     return RedirectResponse(url="/admin/keys", status_code=303)
+
+
+@router.post("/keys/{id}/reveal")
+async def admin_reveal_key(
+    request: Request, id: str, db: AsyncIOMotorDatabase = Depends(get_db)
+) -> Response:
+    """Verify Admin 2FA code and reveal decrypted full API key."""
+    session = get_current_admin_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "detail": "Session expired. Please log in again."})
+
+    code = await extract_2fa_code(request)
+    try:
+        res = await reveal_api_key_for_admin(
+            db, admin_id=session["user_id"], key_id=id, two_factor_code=code
+        )
+        return JSONResponse(status_code=200, content=res)
+    except AppError as err:
+        return JSONResponse(status_code=err.status_code, content={"success": False, "detail": err.message})
+    except Exception as err:
+        return JSONResponse(status_code=500, content={"success": False, "detail": f"Unexpected error: {str(err)}"})
 
 
 @router.get("/settings")

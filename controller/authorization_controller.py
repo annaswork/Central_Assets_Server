@@ -13,22 +13,24 @@ from authorization.api_key import (
     rotate_api_key,
 )
 from controller.base_controller import serialize_mongo_docs
-from database.collections import API_KEYS
+from database.collections import ADMIN_USERS, API_KEYS
 from database.models.api_key import ApiKeyCreate, ApiKeyOut
 
 
 async def list_keys(
     db: AsyncIOMotorDatabase, app_instance_id: str | None = None
 ) -> list[dict[str, Any]]:
-    """List API keys without exposing secrets."""
+    """List API keys without exposing secret hashes or encrypted key tokens."""
     query: dict[str, Any] = {}
     if app_instance_id:
         query["app_instance_id"] = app_instance_id
 
     cursor = db[API_KEYS].find(query, {"secret_hash": 0}).sort("created_at", -1)
     docs = await cursor.to_list(length=1000)
+    reveal_flags = [bool(doc.pop("encrypted_key", None)) for doc in docs]
     serialized = serialize_mongo_docs(docs)
-    for d in serialized:
+    for d, can_reveal in zip(serialized, reveal_flags):
+        d["can_reveal"] = can_reveal
         d["is_revoked"] = bool(d.get("is_revoked") or d.get("revoked_at") or not d.get("is_active", True))
     return serialized
 
@@ -41,6 +43,7 @@ async def create_key(db: AsyncIOMotorDatabase, data: ApiKeyCreate) -> ApiKeyOut:
         app_instance_id=data.app_instance_id,
         scopes=data.scopes,
         rate_limit_per_min=data.rate_limit_per_min,
+        app_surge_ceiling_per_min=data.app_surge_ceiling_per_min,
         expires_at=data.expires_at,
     )
 
@@ -236,3 +239,143 @@ async def verify_login_2fa(
         return user
 
     raise UnauthorizedError("Invalid authentication code or backup code.")
+
+
+async def verify_actor_2fa(
+    db: AsyncIOMotorDatabase,
+    collection_name: str,
+    actor_id: str,
+    two_factor_code: str,
+    *,
+    actor_label: str = "Account",
+    setup_hint: str = "Security settings",
+) -> dict[str, Any]:
+    """Verify TOTP or emergency backup code for any Admin or Manager account."""
+    from authorization.totp import verify_and_consume_backup_code, verify_totp_code
+    from utils.datetimes import utc_now
+    from utils.errors import UnauthorizedError, ValidationError
+    from utils.ids import to_object_id
+
+    actor_oid = to_object_id(actor_id)
+    actor = await db[collection_name].find_one({"_id": actor_oid})
+    if not actor:
+        raise UnauthorizedError(f"{actor_label} account not found.")
+
+    if not actor.get("is_active", True):
+        raise UnauthorizedError(f"{actor_label} account is deactivated.")
+
+    if not actor.get("is_2fa_enabled") or not actor.get("totp_secret"):
+        raise ValidationError(
+            f"Two-Factor Authentication (2FA) is not enabled on your {actor_label} account. "
+            f"Please enable 2FA in {setup_hint} before viewing sensitive credentials."
+        )
+
+    code = (two_factor_code or "").strip()
+    if not code:
+        raise ValidationError("Please enter your 6-digit Two-Factor Authentication (2FA) code.")
+
+    totp_secret = actor.get("totp_secret")
+    if totp_secret and verify_totp_code(totp_secret, code):
+        return actor
+
+    backup_codes = actor.get("backup_codes", [])
+    matched, remaining = verify_and_consume_backup_code(backup_codes, code)
+    if matched:
+        await db[collection_name].update_one(
+            {"_id": actor_oid},
+            {"$set": {"backup_codes": remaining, "updated_at": utc_now()}},
+        )
+        return actor
+
+    raise UnauthorizedError("Invalid 2FA code or backup code. Verification failed.")
+
+
+async def reveal_encrypted_api_key_doc(
+    db: AsyncIOMotorDatabase,
+    key_doc: dict[str, Any],
+    *,
+    actor_id: str,
+    actor_role: str,
+) -> dict[str, Any]:
+    """Decrypt and return the plaintext secret for an API key after 2FA authorization."""
+    from authorization.encryption import decrypt_api_key
+    from utils.datetimes import utc_now
+    from utils.ids import to_object_id
+
+    key_id = str(key_doc["_id"])
+    encrypted_key = key_doc.get("encrypted_key")
+    if not encrypted_key:
+        return {
+            "success": False,
+            "has_encrypted_key": False,
+            "key_id": key_id,
+            "name": key_doc.get("name"),
+            "key_prefix": key_doc.get("key_prefix"),
+            "message": (
+                "Legacy API key — issued before encrypted key recovery was enabled. "
+                "Please generate a new key to enable 2FA key viewing."
+            ),
+        }
+
+    try:
+        full_key = decrypt_api_key(encrypted_key)
+    except Exception:
+        return {
+            "success": False,
+            "has_encrypted_key": True,
+            "key_id": key_id,
+            "name": key_doc.get("name"),
+            "key_prefix": key_doc.get("key_prefix"),
+            "detail": "Failed to decrypt API key: encryption secret mismatch or corrupted token.",
+        }
+
+    await db[API_KEYS].update_one(
+        {"_id": key_doc["_id"]},
+        {
+            "$set": {
+                "last_revealed_at": utc_now(),
+                "last_revealed_by_id": to_object_id(actor_id) if actor_role != "raw" else actor_id,
+                "last_revealed_by_role": actor_role,
+            }
+        },
+    )
+
+    return {
+        "success": True,
+        "has_encrypted_key": True,
+        "key_id": key_id,
+        "name": key_doc.get("name"),
+        "key_prefix": key_doc.get("key_prefix"),
+        "full_key": full_key,
+    }
+
+
+async def reveal_api_key_for_admin(
+    db: AsyncIOMotorDatabase,
+    admin_id: str,
+    key_id: str,
+    two_factor_code: str,
+) -> dict[str, Any]:
+    """Verify Admin 2FA and decrypt any stored API key (including manager-transferred keys)."""
+    from utils.errors import NotFoundError
+    from utils.ids import to_object_id
+
+    key_doc = await db[API_KEYS].find_one({"_id": to_object_id(key_id)})
+    if not key_doc:
+        raise NotFoundError("API key not found.")
+
+    await verify_actor_2fa(
+        db,
+        ADMIN_USERS,
+        admin_id,
+        two_factor_code,
+        actor_label="Admin",
+        setup_hint="Settings -> Two-Factor Authentication",
+    )
+
+    return await reveal_encrypted_api_key_doc(
+        db,
+        key_doc,
+        actor_id=admin_id,
+        actor_role="admin",
+    )
