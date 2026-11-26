@@ -28,6 +28,12 @@ function switchTab(tab) {
         subSelect.value = '';
       }
     }
+    const distFilteredBtn = document.getElementById('btnDistributeFilteredAssets');
+    if (distFilteredBtn) {
+      const curCat = document.getElementById('managerCategoryFilter')?.value || '';
+      const curSub = document.getElementById('managerSubCategoryFilter')?.value || '';
+      distFilteredBtn.style.display = (curCat || curSub) ? 'inline-flex' : 'none';
+    }
   }
 }
 
@@ -251,7 +257,7 @@ function handleManagerSuperFilterChange() {
   applyManagerAssetFilters();
 }
 
-async function applyManagerAssetFilters() {
+async function applyManagerAssetFilters(opts) {
   const catSelect = document.getElementById('managerCategoryFilter');
   const subSelect = document.getElementById('managerSubCategoryFilter');
   const typeSelect = document.getElementById('managerTypeFilter');
@@ -279,12 +285,18 @@ async function applyManagerAssetFilters() {
   if (selectedQ) params.set('q', selectedQ);
 
   const fetchUrl = `${window.location.pathname}?${params.toString()}`;
-  window.history.replaceState({}, '', fetchUrl);
+  if (!(opts && opts.backgroundRefresh)) {
+    window.history.replaceState({}, '', fetchUrl);
+  }
 
   const filterClearBtn = document.getElementById('managerAssetFilterClearBtn');
   const hasFilterActive = Boolean(selectedSuper || selectedCat || selectedSub || selectedType || (selectedSort && selectedSort !== 'sequence'));
   if (filterClearBtn) {
     filterClearBtn.style.display = hasFilterActive ? 'inline-flex' : 'none';
+  }
+  const distFilteredBtn = document.getElementById('btnDistributeFilteredAssets');
+  if (distFilteredBtn) {
+    distFilteredBtn.style.display = (selectedCat || selectedSub) ? 'inline-flex' : 'none';
   }
 
   const searchClearBtn = document.getElementById('managerAssetSearchClearBtn');
@@ -312,6 +324,8 @@ async function applyManagerAssetFilters() {
     const curTabBtn = document.getElementById('tabBtnAssets');
     if (newTabBtn && curTabBtn) {
       curTabBtn.innerHTML = newTabBtn.innerHTML;
+      const m = newTabBtn.textContent.match(/\((\d+)\)/);
+      if (m) window.lastAssetTotal = parseInt(m[1], 10);
     }
 
     if (typeof initAssetDragDrop === 'function') {
@@ -536,6 +550,10 @@ function promptCustomName(assetId, currentName, folderType = null) {
   currentRenamingFolderType = folderType;
   const modal = document.getElementById('renameAssetModal');
   const input = document.getElementById('renameAssetInput');
+  const proposeRow = document.getElementById('renameProposeRow');
+  const proposeCb = document.getElementById('renameProposeToCentral');
+  if (proposeRow) proposeRow.style.display = folderType ? 'none' : 'flex';
+  if (proposeCb) proposeCb.checked = false;
   if (modal && input) {
     modal.querySelector('h3').textContent = folderType ? 'Rename Folder' : 'Rename Asset';
     input.value = currentName || '';
@@ -582,7 +600,14 @@ async function saveRenameModal() {
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
     } else {
-      await updateAssetOverride(currentRenamingAssetId, 'name', newName);
+      const proposeCb = document.getElementById('renameProposeToCentral');
+      const proposeToCentral = Boolean(proposeCb && proposeCb.checked);
+      const res = await fetch(`/manager/instances/${instanceId}/assets/${currentRenamingAssetId}/override`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName, propose_to_central: proposeToCentral })
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
     }
     closeRenameModal();
     window.location.reload();

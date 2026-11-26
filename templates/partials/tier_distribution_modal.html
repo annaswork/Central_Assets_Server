@@ -173,11 +173,14 @@
 </div>
 <script>
 window.TIER_PORTAL_BASE = {{ (portal_base | default('/admin')) | tojson }};
+window.lastAssetTotal = {{ (asset_pagination.total if asset_pagination is defined and asset_pagination else 0) | tojson }};
 window.INSTANCE_BULK_SUB_META = [
   {% for s in all_subcategories | default([]) %}
   {
     id: {{ s.id | tojson }},
     categoryId: {{ (s.canonicalCategoryId or s.categoryId or '') | tojson }},
+    canonicalCategoryId: {{ (s.canonicalCategoryId or '') | tojson }},
+    categorySourceId: {{ (s.categoryId or '') | tojson }},
     name: {{ (s.name or '') | tojson }},
     assetsCount: {{ s.assets_count | default(0) | tojson }},
     tierSettings: {{ (s.tier_distribution_settings or s.tierDistributionSettings or {}) | tojson }}
@@ -185,4 +188,4 @@ window.INSTANCE_BULK_SUB_META = [
   {% endfor %}
 ];
 </script>
-<script src="/admin-assets/js/tier_distribution.js"></script>
+<script src="/admin-assets/js/tier_distribution.js?v=2"></script>

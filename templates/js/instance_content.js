@@ -28,6 +28,12 @@ function switchInstanceTab(tab) {
         subSelect.value = '';
       }
     }
+    const distFilteredBtn = document.getElementById('btnDistributeFilteredAssets');
+    if (distFilteredBtn) {
+      const curCat = document.getElementById('categoryFilter')?.value || '';
+      const curSub = document.getElementById('subCategoryFilter')?.value || '';
+      distFilteredBtn.style.display = (curCat || curSub) ? 'inline-flex' : 'none';
+    }
   }
 }
 
@@ -418,7 +424,7 @@ function handleSuperFilterChange() {
   applyAssetFilters();
 }
 
-async function applyAssetFilters() {
+async function applyAssetFilters(opts) {
   const catSelect = document.getElementById('categoryFilter');
   const subSelect = document.getElementById('subCategoryFilter');
   const typeSelect = document.getElementById('typeFilter');
@@ -445,12 +451,18 @@ async function applyAssetFilters() {
   if (selectedQ) params.set('q', selectedQ);
 
   const fetchUrl = `${window.location.pathname}?${params.toString()}`;
-  window.history.replaceState({}, '', fetchUrl);
+  if (!(opts && opts.backgroundRefresh)) {
+    window.history.replaceState({}, '', fetchUrl);
+  }
 
   const filterClearBtn = document.getElementById('assetFilterClearBtn');
   const hasFilterActive = Boolean(selectedSuper || selectedCat || selectedSub || selectedType || (selectedSort && selectedSort !== 'sequence'));
   if (filterClearBtn) {
     filterClearBtn.style.display = hasFilterActive ? 'inline-flex' : 'none';
+  }
+  const distFilteredBtn = document.getElementById('btnDistributeFilteredAssets');
+  if (distFilteredBtn) {
+    distFilteredBtn.style.display = (selectedCat || selectedSub) ? 'inline-flex' : 'none';
   }
 
   const searchClearBtn = document.getElementById('assetSearchClearBtn');
@@ -478,6 +490,8 @@ async function applyAssetFilters() {
     const curTabBtn = document.getElementById('tabBtnAssets');
     if (newTabBtn && curTabBtn) {
       curTabBtn.innerHTML = newTabBtn.innerHTML;
+      const m = newTabBtn.textContent.match(/\((\d+)\)/);
+      if (m) window.lastAssetTotal = parseInt(m[1], 10);
     }
 
     if (typeof initAssetTableDragDrop === 'function') {
@@ -662,7 +676,8 @@ function initFolderDragDrop() {
   let draggedCard = null;
 
   container.querySelectorAll('.folder-card').forEach(card => {
-    card.setAttribute('draggable', 'true');
+    card.dataset.draggableCard = '1';
+    card.draggable = false;
 
     card.addEventListener('dragstart', function (e) {
       draggedCard = this;
@@ -726,7 +741,8 @@ function initSubcategoryDragDrop() {
     let draggedSub = null;
 
     grid.querySelectorAll('.admin-sub-card').forEach(card => {
-      card.setAttribute('draggable', 'true');
+      card.dataset.draggableCard = '1';
+      card.draggable = false;
 
       card.addEventListener('dragstart', function (e) {
         draggedSub = this;

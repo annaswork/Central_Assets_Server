@@ -67,3 +67,68 @@ async function withLoading(message, fn) {
     dlg.close();
   }
 }
+
+// Prevent HTML5 draggable parent cards (category/subcategory folders) from hijacking pointer clicks on inner buttons/controls.
+(function initDraggableCardControlGuard() {
+  const CARD_SELECTOR = '.manager-cat-card, .manager-sub-card, .admin-cat-card, .admin-sub-card, .folder-card, .instance-cat-card, .instance-sub-card, [data-draggable-card]';
+  const CONTROL_SELECTOR = 'button, a, input, select, label, textarea, summary, [role="button"], .instance-cat-primary-actions, .instance-cat-toolbar, .instance-sub-actions, .instance-sub-footer';
+  const suppressedCards = [];
+  const enabledCards = [];
+
+  function releaseEnabledCards() {
+    while (enabledCards.length > 0) {
+      enabledCards.pop().draggable = false;
+    }
+  }
+
+  function restoreSuppressedCards() {
+    while (suppressedCards.length > 0) {
+      suppressedCards.pop().draggable = true;
+    }
+    releaseEnabledCards();
+  }
+
+  function handlePointerDown(e) {
+    releaseEnabledCards();
+    const el = e.target && e.target.nodeType === 1 ? e.target : (e.target ? e.target.parentElement : null);
+    if (!el || !el.closest) return;
+
+    const nearestCard = el.closest(CARD_SELECTOR);
+    const ctrl = el.closest(CONTROL_SELECTOR);
+    const innerOnclick = el.closest('[onclick]');
+    const hitsControl = Boolean(ctrl || (innerOnclick && innerOnclick !== nearestCard));
+
+    if (hitsControl) {
+      let cur = el;
+      while (cur) {
+        if (cur.draggable === true) {
+          cur.draggable = false;
+          if (!cur.matches || !cur.matches(CARD_SELECTOR)) {
+            suppressedCards.push(cur);
+          }
+        }
+        cur = cur.parentElement;
+      }
+      return;
+    }
+
+    if (nearestCard) {
+      nearestCard.draggable = true;
+      enabledCards.push(nearestCard);
+    }
+  }
+
+  document.addEventListener('pointerdown', handlePointerDown, true);
+  document.addEventListener('mousedown', handlePointerDown, true);
+  document.addEventListener('pointerup', restoreSuppressedCards, true);
+  document.addEventListener('mouseup', restoreSuppressedCards, true);
+  document.addEventListener('pointercancel', restoreSuppressedCards, true);
+  document.addEventListener('dragend', restoreSuppressedCards, true);
+  window.addEventListener('blur', restoreSuppressedCards);
+  document.addEventListener('dragstart', (e) => {
+    const el = e.target && e.target.nodeType === 1 ? e.target : (e.target ? e.target.parentElement : null);
+    if (el && el.closest && el.closest('button, a, input, select, label, textarea')) {
+      e.preventDefault();
+    }
+  }, true);
+})();

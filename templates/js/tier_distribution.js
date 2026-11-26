@@ -10,9 +10,16 @@ function _tierPortalBase() {
 }
 
 function _refreshAssetTableAfterTierChange() {
-  if (typeof applyAssetFilters === 'function') return applyAssetFilters();
-  if (typeof applyManagerAssetFilters === 'function') return applyManagerAssetFilters();
+  const folderSection = document.getElementById('sectionFolders');
+  const isViewingFolders = folderSection && getComputedStyle(folderSection).display !== 'none';
+  const opts = isViewingFolders ? { backgroundRefresh: true } : undefined;
+  if (typeof applyAssetFilters === 'function') return applyAssetFilters(opts);
+  if (typeof applyManagerAssetFilters === 'function') return applyManagerAssetFilters(opts);
   return Promise.resolve();
+}
+
+function _extractTierApiError(data, fallback) {
+  return (data && data.error && data.error.message) || (data && (data.message || data.detail)) || fallback;
 }
 
 function _parseJsonSafe(raw) {
@@ -199,7 +206,7 @@ function _inferDomFallbackSettings(scopeType, scopeId, targetType, total, maxAll
       }
     }
   } else if (targetType === 'asset') {
-    const rows = document.querySelectorAll('#reorderableTable tbody tr[data-asset-id]');
+    const rows = document.querySelectorAll('#reorderableTable tbody tr[data-asset-id], #managerAssetTbody tr[data-asset-id]');
     if (rows.length > 0) {
       const tierList = [];
       rows.forEach(r => {
@@ -386,13 +393,21 @@ function openBulkAllSubcategoriesTierModal(btn) {
   });
 }
 
+function _subMatchesCategory(subMeta, catId, catSourceId) {
+  if (!subMeta) return false;
+  const targets = [catId, catSourceId].filter(Boolean);
+  return targets.some(
+    t => subMeta.categoryId === t || subMeta.canonicalCategoryId === t || subMeta.categorySourceId === t
+  );
+}
+
 function openBulkCategorySubcategoriesTierModal(btn) {
   if (!btn) return;
   const catId = btn.dataset.catId || '';
   const catSourceId = btn.dataset.catSourceId || '';
   const catName = btn.dataset.catName || 'Category';
   const allSubs = window.INSTANCE_BULK_SUB_META || [];
-  const subs = allSubs.filter(s => s.categoryId === catId || (catSourceId && s.categoryId === catSourceId));
+  const subs = allSubs.filter(s => _subMatchesCategory(s, catId, catSourceId));
   _openBulkSubcategoryAssetsModal({
     mode: 'category',
     titleLabel: `All Sub-folders in ${catName}`,
@@ -416,8 +431,11 @@ function openBulkSelectedSubcategoriesTierModal() {
       const match = allSubs.find(s => s.id === item.id);
       if (match) selectedSubMap.set(match.id, match);
     } else if (item.type === 'category') {
+      const catCard = document.querySelector(`[data-cat-id="${item.id}"]`);
+      const catBulkBtn = catCard ? catCard.querySelector('.btn-bulk-cat-sub-assets') : null;
+      const catSourceId = catBulkBtn ? (catBulkBtn.dataset.catSourceId || '') : '';
       allSubs.forEach(s => {
-        if (s.categoryId === item.id || s.categorySourceId === item.id) {
+        if (_subMatchesCategory(s, item.id, catSourceId)) {
           selectedSubMap.set(s.id, s);
         }
       });
@@ -585,6 +603,22 @@ function updateTierPreviewRibbon() {
   }
 }
 
+function _resolveFilteredScopeCount(scopeType, scopeId, opt) {
+  if (scopeType === 'subcategory') {
+    const meta = (window.INSTANCE_BULK_SUB_META || []).find(s => s.id === scopeId);
+    if (meta && Number.isFinite(parseInt(meta.assetsCount))) {
+      return parseInt(meta.assetsCount);
+    }
+  }
+  if (opt && opt.dataset && opt.dataset.assetsCount !== undefined && opt.dataset.assetsCount !== '') {
+    return parseInt(opt.dataset.assetsCount) || 0;
+  }
+  if (Number.isFinite(parseInt(window.lastAssetTotal))) {
+    return parseInt(window.lastAssetTotal);
+  }
+  return document.querySelectorAll('#reorderableTable tbody tr[data-asset-id], #managerAssetTbody tr[data-asset-id]').length;
+}
+
 function openTierDistributionForCurrentFilter() {
   const subSelect = document.getElementById('subCategoryFilter') || document.getElementById('managerSubCategoryFilter');
   const catSelect = document.getElementById('categoryFilter') || document.getElementById('managerCategoryFilter');
@@ -592,13 +626,13 @@ function openTierDistributionForCurrentFilter() {
   if (subSelect && subSelect.value) {
     const opt = subSelect.options[subSelect.selectedIndex];
     const name = opt ? opt.text : 'Sub-folder';
-    const totalCount = parseInt(window.lastAssetTotal || document.querySelectorAll('#reorderableTable tbody tr').length || 10);
+    const totalCount = _resolveFilteredScopeCount('subcategory', subSelect.value, opt);
     const prior = tierDistributionMemory[subSelect.value] || _parseJsonSafe(opt?.dataset?.tierSettings);
     openTierDistributionModal('subcategory', subSelect.value, name, totalCount, 'asset', prior);
   } else if (catSelect && catSelect.value) {
     const opt = catSelect.options[catSelect.selectedIndex];
     const name = opt ? opt.text : 'Category';
-    const totalCount = parseInt(window.lastAssetTotal || document.querySelectorAll('#reorderableTable tbody tr').length || 10);
+    const totalCount = _resolveFilteredScopeCount('category', catSelect.value, opt);
     const prior = tierDistributionMemory[catSelect.value] || _parseJsonSafe(opt?.dataset?.tierSettings);
     openTierDistributionModal('category', catSelect.value, name, totalCount, 'asset', prior);
   } else {
@@ -661,7 +695,7 @@ async function applyTierDistribution() {
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || data.detail || 'Failed to bulk distribute assets');
+      if (!res.ok) throw new Error(_extractTierApiError(data, 'Failed to bulk distribute assets'));
 
       const d = data.data || {};
       const bulkSettings = d.settings || {};
@@ -734,7 +768,7 @@ async function applyTierDistribution() {
     });
 
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || data.detail || 'Failed to distribute tiers');
+    if (!res.ok) throw new Error(_extractTierApiError(data, 'Failed to distribute tiers'));
 
     closeTierDistributionModal();
     const okMsg = `✓ Successfully distributed ${premiumCount} premium and ${rewardedCount} rewarded items!`;

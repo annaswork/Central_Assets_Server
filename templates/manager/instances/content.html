@@ -24,6 +24,16 @@
     </div>
 
     <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+      <a href="/manager/instances/{{ instance.id }}/assets/new-single?return_url={{ (request.url.path ~ ('?' ~ request.url.query if request.url.query else '')) | urlencode }}"
+        class="btn btn-outlined" style="display:inline-flex; align-items:center; gap:0.4rem;">
+        <span>⚡</span>
+        <span>Bulk Single-File Add</span>
+      </a>
+      <a href="/manager/instances/{{ instance.id }}/assets/new-multi?return_url={{ (request.url.path ~ ('?' ~ request.url.query if request.url.query else '')) | urlencode }}"
+        class="btn btn-outlined" style="display:inline-flex; align-items:center; gap:0.4rem;">
+        <span>🖼️</span>
+        <span>+ Multi-File Asset</span>
+      </a>
       <button type="button" class="btn btn-outlined" onclick="openCreateFolderModal()">
         📁 + Create Folder
       </button>
@@ -141,22 +151,19 @@
       </summary>
       <div style="display:flex; flex-direction:column; gap:1.25rem; margin-top:0.85rem;">
         {% endif %}
-        <div class="card manager-cat-card" data-cat-id="{{ cat.id }}" draggable="true"
-          style="padding:1.25rem; border:1px solid var(--md-sys-color-outline-variant); cursor:default;">
+        <div class="card manager-cat-card instance-cat-card" data-cat-id="{{ cat.id }}">
           <!-- Category Folder Header -->
-          <div
-            style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; padding-bottom:0.75rem; border-bottom:1px solid var(--md-sys-color-outline-variant);">
-            <div style="display:flex; align-items:center; gap:0.75rem;">
+          <div class="instance-cat-top">
+            <div class="instance-cat-identity">
               <input type="checkbox" class="folder-select-checkbox category-select-checkbox"
                 data-folder-type="category" data-folder-id="{{ cat.id }}" data-folder-name="{{ cat.name|escape }}"
                 onchange="onFolderCheckboxChange(this)" onclick="event.stopPropagation()"
                 title="Select category {{ cat.name }}"
-                style="cursor:pointer; width:17px; height:17px; accent-color:var(--md-sys-color-primary, #6366f1); flex-shrink:0;">
+                style="cursor:pointer; width:17px; height:17px; margin-top:4px; accent-color:var(--md-sys-color-primary, #6366f1); flex-shrink:0;">
               <span class="cat-drag-handle"
-                style="cursor:grab; font-size:1.25rem; color:var(--md-sys-color-on-surface-variant); padding:2px; user-select:none;"
+                style="cursor:grab; font-size:1.2rem; color:var(--md-sys-color-on-surface-variant); padding:2px; user-select:none;"
                 title="Drag to reorder folder">⠿</span>
-              <div
-                style="width:44px; height:44px; border-radius:8px; overflow:hidden; background:var(--md-sys-color-surface-container); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+              <div class="instance-cat-thumb">
                 {% if cat.thumbnail_url %}
                 <img loading="lazy" src="{{ cat.thumbnail_url }}" alt="{{ cat.name }}"
                   style="width:100%; height:100%; object-fit:cover;">
@@ -164,35 +171,37 @@
                 <span style="font-size:1.4rem;">📁</span>
                 {% endif %}
               </div>
-              <div>
-                <h3 style="margin:0 0 0.25rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                  {{ cat.name }}
+              <div style="min-width:0;">
+                <h3 class="instance-cat-title-row">
+                  <span>{{ cat.name }}</span>
                   <span class="badge badge-secondary cat-seq-badge" style="font-size:0.75rem;">#{{ loop.index }}</span>
-                  <span class="badge badge-secondary" style="font-size:0.75rem;">Category Folder</span>
+                  <span class="badge badge-secondary" style="font-size:0.74rem;">Category Folder</span>
                   <span class="asset-card-premium-pill" data-premium-tag="{{ cat.id }}"{% if not cat.is_premium %} style="display:none;" hidden{% endif %}>Premium</span>
                   <span class="asset-card-premium-pill asset-card-rewarded-pill" data-rewarded-tag="{{ cat.id }}"{% if not (cat.is_rewarded or cat.isRewarded) %} style="display:none;" hidden{% endif %}>Rewarded</span>
                 </h3>
-                <div style="display:flex; gap:0.5rem; font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">
+                <div class="instance-cat-meta">
                   <span>📂 {{ cat.subcategories_count | default(0) }} Sub-folders</span>
                   <span>•</span>
                   <span>🖼️ {{ cat.assets_count | default(0) }} Assets</span>
                   <span>•</span>
-                  <span title="Category ID used by the app">ID: <code
-                      style="user-select:all;">{{ cat.id }}</code></span>
+                  <span title="Category ID used by the app">ID: <code style="user-select:all;">{{ cat.id }}</code></span>
                 </div>
               </div>
             </div>
 
-            <div
-              style="display:flex; gap:0.5rem; align-items:center; justify-content:flex-end; flex-wrap:wrap; margin-left:auto;">
+            <div class="instance-cat-primary-actions">
               {% include "partials/category_super_select.html" %}
               <a href="/manager/instances/{{ instance.id }}/picker?target_category_id={{ cat.sourceId or cat.id }}&tab=subcategories"
-                class="btn btn-outlined" style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;"
+                class="btn btn-outlined btn-sm"
                 title="Import Central Items into this Folder">
                 📥 Import Central Data
               </a>
-              <button type="button" class="btn btn-outlined btn-distribute-tiers"
-                style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;"
+              <a href="/manager/instances/{{ instance.id }}/assets/new-multi?categoryId={{ cat.sourceId or cat.id }}&return_url={{ (request.url.path ~ ('?' ~ request.url.query if request.url.query else '')) | urlencode }}"
+                class="btn btn-outlined btn-sm"
+                title="Upload New Asset directly into this Category (auto-syncs to Central Data)">
+                + Upload Asset
+              </a>
+              <button type="button" class="btn btn-outlined btn-sm btn-distribute-tiers"
                 data-scope-type="category"
                 data-scope-id="{{ cat.id }}"
                 data-scope-name="{{ cat.name|escape }}"
@@ -203,42 +212,42 @@
                 title="Distribute Normal, Premium, and Rewarded Tiers across Subcategories in this Category">
                 ⚡ Distribute Tiers
               </button>
-              <button type="button" class="btn btn-outlined"
-                style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;"
+              <button type="button" class="btn btn-outlined btn-sm"
                 onclick="openCreateFolderModal('subcategory', '{{ cat.sourceId or cat.id }}')">
                 + Add Sub-folder
-              </button>
-              {% with folder_type = "category", folder = cat %}{% include "partials/instance_folder_controls.html" %}{% endwith %}
-              <button type="button" class="btn btn-destructive"
-                style="min-height:34px; padding:0.25rem 0.65rem; font-size:0.82rem;"
-                onclick="detachCategoryFolder('{{ cat.id }}', '{{ cat.name }}')">
-                Detach Folder
               </button>
             </div>
           </div>
 
+          <div class="instance-cat-toolbar">
+            <div class="instance-cat-settings">
+              {% with folder_type = "category", folder = cat %}{% include "partials/instance_folder_controls.html" %}{% endwith %}
+            </div>
+            <button type="button" class="btn btn-destructive-outlined btn-xs"
+              onclick="detachCategoryFolder('{{ cat.id }}', '{{ cat.name }}')">
+              Detach Folder
+            </button>
+          </div>
+
           <!-- Nested Sub-folders in this Category -->
-          <div
-            style="margin-top:0.85rem; padding-left:1.5rem; border-left:2px solid var(--md-sys-color-surface-container-high);">
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.6rem; flex-wrap:wrap; gap:0.4rem;">
-              <div
-                style="font-size:0.8rem; font-weight:600; color:var(--md-sys-color-on-surface-variant); text-transform:uppercase; letter-spacing:0.5px;">
-                Sub-folders in {{ cat.name }}
+          <div class="instance-subs-wrap">
+            <div class="instance-subs-header">
+              <div class="instance-subs-title">
+                <span>Sub-folders in {{ cat.name }}</span>
+                <span class="badge badge-secondary" style="font-size:0.7rem;">{{ cat.subcategories_count | default(0) }}</span>
               </div>
-              <div style="display:flex; gap:0.35rem; align-items:center; flex-wrap:wrap;">
-                <button type="button" class="btn btn-outlined btn-sm btn-bulk-cat-sub-assets"
+              <div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;">
+                <button type="button" class="btn btn-outlined btn-xs btn-bulk-cat-sub-assets"
                   data-cat-id="{{ cat.id }}"
                   data-cat-source-id="{{ cat.sourceId or '' }}"
                   data-cat-name="{{ cat.name|escape }}"
                   data-bulk-asset-settings='{{ (cat.bulk_asset_tier_distribution_settings or cat.bulkAssetTierDistributionSettings or {}) | tojson }}'
                   onclick="event.stopPropagation(); openBulkCategorySubcategoriesTierModal(this)"
-                  style="font-size:0.72rem; padding:0.15rem 0.5rem; min-height:24px;"
                   title="Distribute asset tiers across all sub-folders in {{ cat.name }} together">
                   ⚡ Bulk Distribute Assets
                 </button>
-                <button type="button" class="btn btn-outlined btn-sm"
+                <button type="button" class="btn btn-outlined btn-xs"
                   onclick="event.stopPropagation(); toggleCategorySubfoldersSelection('{{ cat.id }}')"
-                  style="font-size:0.72rem; padding:0.15rem 0.5rem; min-height:24px;"
                   title="Select all sub-folders in this category">
                   Select Sub-folders
                 </button>
@@ -253,25 +262,22 @@
             {% endfor %}
 
             {% if matching_subs|length > 0 %}
-            <div class="subcategories-grid{% if matching_subs|length > 4 %} subs-collapsed{% endif %}"
-              data-parent-cat-id="{{ cat.id }}"
-              style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:0.75rem;">
+            <div class="subcategories-grid instance-sub-grid{% if matching_subs|length > 4 %} subs-collapsed{% endif %}"
+              data-parent-cat-id="{{ cat.id }}">
               {% for sub in matching_subs %}
-              <div class="card manager-sub-card" data-sub-id="{{ sub.id }}" draggable="true" title="View assets in {{ sub.name }}"
-                onclick="if (!event.target.closest('a, button, input, .sub-drag-handle')) window.location.href = '/manager/instances/{{ instance.id }}/content?tab=assets&categoryId={{ cat.id }}&subCategoryId={{ sub.id }}';"
-                style="padding:0.75rem 1rem; background:var(--md-sys-color-surface-container-low); border:1px solid var(--md-sys-color-outline-variant); display:flex; flex-direction:row; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:0.5rem; cursor:grab;">
-                <div style="display:flex; align-items:center; gap:0.65rem; flex:1 1 auto; min-width:0;">
+              <div class="card manager-sub-card instance-sub-card" data-sub-id="{{ sub.id }}" title="View assets in {{ sub.name }}"
+                onclick="if (!event.target.closest('a, button, input, .sub-drag-handle')) window.location.href = '/manager/instances/{{ instance.id }}/content?tab=assets&categoryId={{ cat.id }}&subCategoryId={{ sub.id }}';">
+                <div class="instance-sub-header">
                   <input type="checkbox" class="folder-select-checkbox subcategory-select-checkbox"
                     data-folder-type="subcategory" data-folder-id="{{ sub.id }}" data-folder-name="{{ sub.name|escape }}"
                     data-parent-category-id="{{ cat.id }}"
                     onchange="onFolderCheckboxChange(this)" onclick="event.stopPropagation()"
                     title="Select subcategory {{ sub.name }}"
-                    style="cursor:pointer; width:15px; height:15px; accent-color:var(--md-sys-color-primary, #6366f1); flex-shrink:0;">
+                    style="cursor:pointer; width:15px; height:15px; margin-top:4px; accent-color:var(--md-sys-color-primary, #6366f1); flex-shrink:0;">
                   <span class="sub-drag-handle"
-                    style="cursor:grab; font-size:1.15rem; color:var(--md-sys-color-on-surface-variant); padding:0 2px; user-select:none;"
+                    style="cursor:grab; font-size:1.1rem; color:var(--md-sys-color-on-surface-variant); padding:1px 2px; user-select:none;"
                     title="Drag to reorder sub-folder">⠿</span>
-                  <div
-                    style="width:36px; height:36px; border-radius:6px; overflow:hidden; background:var(--md-sys-color-surface); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                  <div class="instance-sub-thumb">
                     {% if sub.thumbnail_url %}
                     <img loading="lazy" src="{{ sub.thumbnail_url }}" alt="{{ sub.name }}"
                       style="width:100%; height:100%; object-fit:cover;">
@@ -279,23 +285,21 @@
                     <span style="font-size:1.15rem;">📂</span>
                     {% endif %}
                   </div>
-                  <div style="min-width:0;">
-                    <div style="display:flex; align-items:center; gap:0.35rem;">
-                      <strong style="font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
-                        title="{{ sub.name }}">{{ sub.name }}</strong>
-                      <span class="badge badge-secondary sub-seq-badge" style="font-size:0.7rem;">#{{ loop.index
-                        }}</span>
+                  <div class="instance-sub-info">
+                    <div class="instance-sub-name-row">
+                      <strong class="instance-sub-name" title="{{ sub.name }}">{{ sub.name }}</strong>
+                      <span class="badge badge-secondary sub-seq-badge" style="font-size:0.7rem; flex-shrink:0;">#{{ loop.index }}</span>
+                    </div>
+                    <div class="instance-sub-meta">
+                      <span>🖼️ {{ sub.assets_count | default(0) }} Assets</span>
                       <span class="asset-card-premium-pill" data-premium-tag="{{ sub.id }}"{% if not sub.is_premium %} style="display:none;" hidden{% endif %}>Premium</span>
                       <span class="asset-card-premium-pill asset-card-rewarded-pill" data-rewarded-tag="{{ sub.id }}"{% if not (sub.is_rewarded or sub.isRewarded) %} style="display:none;" hidden{% endif %}>Rewarded</span>
-                    </div>
-                    <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">
-                      🖼️ {{ sub.assets_count | default(0) }} Assets
                     </div>
                   </div>
                 </div>
 
-                <div style="display:flex; gap:0.35rem; align-items:center; flex-wrap:wrap; justify-content:flex-end; width:100%;">
-                  <button type="button" class="btn btn-outlined btn-distribute-tiers" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;"
+                <div class="instance-sub-actions">
+                  <button type="button" class="btn btn-outlined btn-xs btn-distribute-tiers"
                     data-scope-type="subcategory"
                     data-scope-id="{{ sub.id }}"
                     data-scope-name="{{ sub.name|escape }}"
@@ -304,16 +308,30 @@
                     data-tier-settings='{{ (sub.tier_distribution_settings or sub.tierDistributionSettings or {}) | tojson }}'
                     onclick="openTierDistributionModalFromElem(this)"
                     title="Distribute Normal, Premium, and Rewarded Tiers across Assets in this Sub-folder">
-                    ⚡ Distribute Assets
+                    ⚡ Distribute
                   </button>
                   <a href="/manager/instances/{{ instance.id }}/picker?target_category_id={{ cat.sourceId or cat.id }}&target_sub_category_id={{ sub.sourceId or sub.id }}&tab=assets"
-                    class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;"
+                    class="btn btn-outlined btn-xs"
                     title="Import into Sub-folder">
                     📥 Import
                   </a>
-                  {% with folder_type = "subcategory", folder = sub %}{% include "partials/instance_folder_controls.html" %}{% endwith %}
-                  <button type="button" class="btn btn-destructive"
-                    style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;"
+                  <a href="/manager/instances/{{ instance.id }}/assets/new-single?categoryId={{ cat.sourceId or cat.id }}&subCategoryId={{ sub.sourceId or sub.id }}&return_url={{ (request.url.path ~ ('?' ~ request.url.query if request.url.query else '')) | urlencode }}"
+                    class="btn btn-outlined btn-xs"
+                    title="Bulk Single-File Add into this Sub-folder">
+                    ⚡ Bulk Add
+                  </a>
+                  <a href="/manager/instances/{{ instance.id }}/assets/new-multi?categoryId={{ cat.sourceId or cat.id }}&subCategoryId={{ sub.sourceId or sub.id }}&return_url={{ (request.url.path ~ ('?' ~ request.url.query if request.url.query else '')) | urlencode }}"
+                    class="btn btn-outlined btn-xs"
+                    title="Create New Multi-File Asset in this Sub-folder">
+                    + Asset
+                  </a>
+                </div>
+
+                <div class="instance-sub-footer">
+                  <div class="instance-sub-controls">
+                    {% with folder_type = "subcategory", folder = sub %}{% include "partials/instance_folder_controls.html" %}{% endwith %}
+                  </div>
+                  <button type="button" class="btn btn-destructive-outlined btn-xs"
                     onclick="detachSubcategoryFolder('{{ sub.id }}', '{{ sub.name }}')">
                     Detach
                   </button>
@@ -404,6 +422,7 @@
           <option value="">All Categories</option>
           {% for cat in all_categories %}
           <option value="{{ cat.id }}" data-source-id="{{ cat.sourceId or cat.id }}" data-super-id="{{ cat.superCategoryId or '' }}"
+            data-assets-count="{{ cat.assets_count | default(0) }}"
             data-tier-settings='{{ (cat.tier_distribution_settings or cat.tierDistributionSettings or {}) | tojson }}'
             {% if selected_cat==(cat.id|string) or selected_cat==(cat.sourceId|string) %}selected{% endif %}>{{ cat.name }}</option>
           {% endfor %}
@@ -414,6 +433,7 @@
           <option value="">All Subcategories</option>
           {% for sub in all_subcategories %}
           <option value="{{ sub.id }}" data-category-id="{{ sub.canonicalCategoryId or sub.categoryId }}"
+            data-assets-count="{{ sub.assets_count | default(0) }}"
             data-tier-settings='{{ (sub.tier_distribution_settings or sub.tierDistributionSettings or {}) | tojson }}'
             {% if selected_subcat==(sub.id|string) or selected_subcat==(sub.sourceId|string) %}selected{% endif %}>{{ sub.name }}</option>
           {% endfor %}
@@ -721,6 +741,12 @@
             </td>
             <td class="col-actions">
               <div style="display:inline-flex; gap:0.35rem; justify-content:flex-end; align-items:center;">
+                <a href="/manager/instances/{{ instance.id }}/assets/{{ asset.id }}/edit?return_url={{ (request.url.path ~ ('?' ~ request.url.query if request.url.query else '')) | urlencode }}"
+                  class="btn btn-outlined btn-sm"
+                  style="font-size:0.75rem; padding:0.15rem 0.45rem; min-height:28px; text-decoration:none;"
+                  title="Edit asset content at app level and notify Admin">
+                  ✏️ Edit
+                </a>
                 <button type="button" class="btn btn-outlined btn-sm"
                   style="font-size:0.75rem; padding:0.15rem 0.45rem; min-height:28px;"
                   onclick="promptCustomName('{{ asset.id }}', '{{ asset.name|escape }}')">
@@ -762,9 +788,17 @@
       <div style="font-size:0.9rem; margin-top:0.25rem; margin-bottom:1rem;">
         Select central categories or subcategories to import their assets.
       </div>
-      <button type="button" class="btn btn-primary btn-sm" onclick="openImportModal()">
-        📥 Import Central Assets
-      </button>
+      <div style="display:flex; gap:0.5rem; justify-content:center; flex-wrap:wrap;">
+        <a href="/manager/instances/{{ instance.id }}/assets/new-single?return_url={{ (request.url.path ~ ('?' ~ request.url.query if request.url.query else '')) | urlencode }}" class="btn btn-outlined btn-sm">
+          ⚡ Bulk Single-File Add
+        </a>
+        <a href="/manager/instances/{{ instance.id }}/assets/new-multi?return_url={{ (request.url.path ~ ('?' ~ request.url.query if request.url.query else '')) | urlencode }}" class="btn btn-outlined btn-sm">
+          🖼️ + Multi-File Asset
+        </a>
+        <button type="button" class="btn btn-primary btn-sm" onclick="openImportModal()">
+          📥 Import Central Assets
+        </button>
+      </div>
     </div>
     {% endif %}
     {% with card_selectable = true %}{% include "partials/instance_asset_cards.html" %}{% endwith %}
@@ -951,8 +985,8 @@
 
 <script>const instanceId = {{ instance.id | tojson }};</script>
 <script src="/admin-assets/js/bulk_actions.js"></script>
-<script src="/admin-assets/js/instance_asset_selection.js"></script>
-<script src="/admin-assets/js/manager_instance_content.js"></script>
+<script src="/admin-assets/js/instance_asset_selection.js?v=3"></script>
+<script src="/admin-assets/js/manager_instance_content.js?v=3"></script>
 
 <!-- Rename Asset Modal -->
 <div id="renameAssetModal" class="asset-preview-modal-backdrop" style="display:none;"
@@ -968,12 +1002,16 @@
     <p style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); margin-top:0; margin-bottom:1rem;">
       Set a custom display name for this asset in this app instance.
     </p>
-    <div class="form-group" style="margin-bottom:1.25rem;">
+    <div class="form-group" style="margin-bottom:0.9rem;">
       <label for="renameAssetInput"
         style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.4rem;">Display Name</label>
       <input type="text" id="renameAssetInput" class="input" style="width:100%;"
         onkeydown="if(event.key==='Enter'){saveRenameModal();}">
     </div>
+    <label id="renameProposeRow" style="display:flex; align-items:center; gap:0.45rem; font-size:0.82rem; color:var(--md-sys-color-on-surface-variant); margin-bottom:1.1rem; cursor:pointer;">
+      <input type="checkbox" id="renameProposeToCentral" style="width:16px; height:16px; accent-color:var(--md-sys-color-primary);">
+      <span>Also send rename proposal to Admin inbox for Central Library</span>
+    </label>
     <div style="display:flex; justify-content:flex-end; gap:0.5rem;">
       <button type="button" class="btn btn-outlined" onclick="closeRenameModal()">Cancel</button>
       <button type="button" id="renameAssetSaveBtn" class="btn btn-primary" onclick="saveRenameModal()">Save
@@ -983,6 +1021,7 @@
 </div>
 
 {% include "partials/asset_preview_modal.html" %}
+{% with portal_base="/manager" %}{% include "partials/edit_folder_modal.html" %}{% endwith %}
 {% include "partials/tier_distribution_modal.html" %}
 
 {% endblock %}

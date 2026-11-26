@@ -1,23 +1,29 @@
 {# Rename + Premium (+ Tags for categories/subcategories) controls for one app-instance folder. Needs folder_type ('super_category' | 'category' |
    'subcategory') and folder (.id, .name, .is_premium). Handlers live in instance_super_categories.html. #}
-<label class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem; gap:0.3rem; cursor:pointer;"
+<label class="btn btn-outlined btn-xs" style="cursor:pointer;"
   title="Premium in this app" onclick="event.stopPropagation()">
   <input type="checkbox" {% if folder.is_premium %}checked{% endif %}
     data-folder-premium-cb="{{ folder.id }}"
     onchange="setInstanceFolderPremium('{{ folder_type }}', '{{ folder.id }}', this)"> Premium
 </label>
 {% if folder_type != "super_category" %}
-<label class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem; gap:0.3rem; cursor:pointer;"
+<label class="btn btn-outlined btn-xs" style="cursor:pointer;"
   title="Rewarded in this app" onclick="event.stopPropagation()">
   <input type="checkbox" {% if folder.is_rewarded or folder.isRewarded %}checked{% endif %}
     data-folder-rewarded-cb="{{ folder.id }}"
     onchange="setInstanceFolderRewarded('{{ folder_type }}', '{{ folder.id }}', this)"> Rewarded
 </label>
 {% endif %}
-<button type="button" class="btn btn-outlined" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;"
+<button type="button" class="btn btn-outlined btn-xs"
   data-name="{{ folder.name }}" onclick="event.stopPropagation(); promptCustomName('{{ folder.id }}', this.dataset.name, '{{ folder_type }}')">Rename</button>
 {% if folder_type != "super_category" %}
-<button type="button" class="btn btn-outlined folder-tag-btn" style="min-height:30px; padding:0.2rem 0.5rem; font-size:0.75rem;"
+<button type="button" class="btn btn-outlined btn-xs"
+  data-name="{{ (folder.name or '')|escape }}"
+  data-thumb="{{ (folder.thumbnail_url or '')|escape }}"
+  data-image="{{ (folder.image_url or '')|escape }}"
+  onclick="event.stopPropagation(); openEditFolderModal('{{ folder_type }}', '{{ folder.id }}', this)"
+  title="Edit name, thumbnail & banner image at app level only">✏️ Edit</button>
+<button type="button" class="btn btn-outlined btn-xs folder-tag-btn"
   id="folderTagBtn_{{ folder_type }}_{{ folder.id }}"
   data-folder-tag-btn="{{ folder_type }}_{{ folder.id }}"
   data-folder-type="{{ folder_type }}" data-folder-id="{{ folder.id }}"
