@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, File, Form, Query, Request, Response, Up
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.errors import DuplicateKeyError
 
 from authorization.manager_session import get_current_manager_session
 from config.paths import TEMPLATES_DIR
@@ -34,6 +35,7 @@ from controller.manager_upload_controller import (
     list_upload_subcategories_for_instance,
     normalize_asset_aliases,
     resolve_central_folders_for_upload,
+    resolve_instance_upload_preselection,
     save_app_level_asset_edit_and_notify,
 )
 from controller.media_controller import handle_upload
@@ -107,8 +109,9 @@ async def manager_new_single_asset_page(
         selected_cat = c_cat_id or raw_cat
         selected_sub = c_sub_id or raw_sub
     else:
-        selected_cat = raw_cat
-        selected_sub = raw_sub
+        selected_cat, selected_sub = await resolve_instance_upload_preselection(
+            db, instance_id, raw_cat or None, raw_sub or None
+        )
 
     categories = await list_upload_categories_for_instance(db, instance_id, include_central=allow_central)
     subcategories = (
@@ -167,8 +170,9 @@ async def manager_new_multi_asset_page(
         selected_cat = c_cat_id or raw_cat
         selected_sub = c_sub_id or raw_sub
     else:
-        selected_cat = raw_cat
-        selected_sub = raw_sub
+        selected_cat, selected_sub = await resolve_instance_upload_preselection(
+            db, instance_id, raw_cat or None, raw_sub or None
+        )
 
     categories = await list_upload_categories_for_instance(db, instance_id, include_central=allow_central)
     subcategories = (
@@ -867,6 +871,12 @@ async def manager_create_asset_json(
             status_code=err.status_code,
             content={"success": False, "error": {"message": err.message}, "message": err.message},
         )
+    except DuplicateKeyError:
+        msg = "Duplicate key conflict while saving asset in this app folder."
+        return JSONResponse(
+            status_code=409,
+            content={"success": False, "error": {"message": msg}, "message": msg},
+        )
 
 
 @router.post("/{instance_id}/assets/save")
@@ -936,7 +946,9 @@ async def manager_save_multi_asset(
             url=append_query_params(safe_return, {"msg": saved_msg}),
             status_code=303,
         )
-    except (ConflictError, ValidationError, NotFoundError, ForbiddenError) as err:
+    except (ConflictError, ValidationError, NotFoundError, ForbiddenError, DuplicateKeyError) as err:
+        err_status = getattr(err, "status_code", 409)
+        err_msg = getattr(err, "message", None) or "Asset conflicts with an existing item in this app folder."
         instance = await get_app_instance(db, instance_id)
         categories = await list_upload_categories_for_instance(
             db, instance_id, include_central=allow_central
@@ -976,10 +988,10 @@ async def manager_save_multi_asset(
                 },
                 "categories": categories,
                 "subcategories": subcategories,
-                "error": f"{err.message} Please choose a different name or retry.",
+                "error": f"{err_msg} Please choose a different name or retry.",
                 "active_tab": "instances",
                 "return_url": safe_return,
                 **urls,
             },
-            status_code=err.status_code,
+            status_code=err_status,
         )

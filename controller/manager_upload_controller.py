@@ -9,6 +9,7 @@ import re
 from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.errors import DuplicateKeyError
 
 from controller.asset_controller import (
     bulk_create_assets,
@@ -1183,6 +1184,53 @@ async def check_instance_media_similarity(
     return results
 
 
+async def resolve_instance_upload_preselection(
+    db: AsyncIOMotorDatabase,
+    app_instance_id: str,
+    category_id: str | None,
+    sub_category_id: str | None,
+) -> tuple[str, str]:
+    """Map query `categoryId`/`subCategoryId` (instance `_id` or linked `source_id`) to scoped instance IDs."""
+    if not category_id:
+        return "", ""
+
+    inst_oid = to_object_id(app_instance_id)
+    try:
+        c_oid = to_object_id(category_id)
+    except Exception:
+        return "", ""
+
+    inst_cat = await db[INSTANCE_CATEGORIES].find_one(
+        {"app_instance_id": inst_oid, "$or": [{"_id": c_oid}, {"source_id": c_oid}], "deleted_at": None},
+        {"_id": 1, "source_id": 1},
+    )
+    if not inst_cat:
+        return "", ""
+
+    selected_cat = str(inst_cat["_id"])
+    selected_sub = ""
+    if sub_category_id:
+        try:
+            s_oid = to_object_id(sub_category_id)
+            cat_candidates = [inst_cat["_id"]]
+            if inst_cat.get("source_id") is not None:
+                cat_candidates.append(inst_cat["source_id"])
+            inst_sub = await db[INSTANCE_SUBCATEGORIES].find_one(
+                {
+                    "app_instance_id": inst_oid,
+                    "category_id": {"$in": cat_candidates},
+                    "$or": [{"_id": s_oid}, {"source_id": s_oid}],
+                    "deleted_at": None,
+                },
+                {"_id": 1},
+            )
+            if inst_sub:
+                selected_sub = str(inst_sub["_id"])
+        except Exception:
+            pass
+    return selected_cat, selected_sub
+
+
 async def _resolve_or_create_instance_only_folders(
     db: AsyncIOMotorDatabase,
     app_instance_id: str,
@@ -1229,10 +1277,11 @@ async def _resolve_or_create_instance_only_folders(
         raise ValidationError("Category is required.")
 
     clean_new_sub = (new_subcategory_name or "").strip()
+    cat_candidates = [inst_cat_oid]
+    if inst_cat_doc and inst_cat_doc.get("source_id") is not None:
+        cat_candidates.append(inst_cat_doc["source_id"])
+
     if clean_new_sub:
-        cat_candidates = [inst_cat_oid]
-        if inst_cat_doc and inst_cat_doc.get("source_id") is not None:
-            cat_candidates.append(inst_cat_doc["source_id"])
         inst_sub_doc = await db[INSTANCE_SUBCATEGORIES].find_one(
             {
                 "app_instance_id": inst_oid,
@@ -1256,10 +1305,15 @@ async def _resolve_or_create_instance_only_folders(
     elif sub_category_id:
         s_oid = to_object_id(sub_category_id)
         inst_sub_doc = await db[INSTANCE_SUBCATEGORIES].find_one(
-            {"app_instance_id": inst_oid, "$or": [{"_id": s_oid}, {"source_id": s_oid}], "deleted_at": None}
+            {
+                "app_instance_id": inst_oid,
+                "category_id": {"$in": cat_candidates},
+                "$or": [{"_id": s_oid}, {"source_id": s_oid}],
+                "deleted_at": None,
+            }
         )
         if not inst_sub_doc:
-            raise ForbiddenError("Selected subcategory is not part of this App Instance.")
+            raise ForbiddenError("Selected subcategory is not part of this App Instance category.")
         inst_sub_oid = inst_sub_doc["_id"]
     else:
         raise ValidationError("Subcategory is required.")
@@ -1336,7 +1390,12 @@ async def create_instance_local_asset_for_instance(
             "deleted_at": None,
         }
         next_seq += 1
-        res = await db[INSTANCE_ASSETS].insert_one(doc)
+        try:
+            res = await db[INSTANCE_ASSETS].insert_one(doc)
+        except DuplicateKeyError:
+            raise ConflictError(
+                f"Asset '{asset_name}' conflicts with an existing item in this app folder."
+            )
         return str(res.inserted_id)
 
     names_list_raw = payload.get("names_list")

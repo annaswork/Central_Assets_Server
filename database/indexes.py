@@ -215,8 +215,23 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
         await db[INSTANCE_ASSETS].drop_index("uniq_instance_asset_source")
     except Exception:
         pass
+
+    expected_partial = {"source_id": {"$type": "objectId"}}
+    expected_key = [
+        ("app_instance_id", 1),
+        ("category_id", 1),
+        ("sub_category_id", 1),
+        ("source_id", 1),
+    ]
     try:
-        await db[INSTANCE_ASSETS].drop_index("uniq_instance_asset_hierarchy_source")
+        existing_asset_indexes = await db[INSTANCE_ASSETS].index_information()
+        legacy_idx = existing_asset_indexes.get("uniq_instance_asset_hierarchy_source")
+        if legacy_idx and (
+            legacy_idx.get("partialFilterExpression") != expected_partial
+            or list(legacy_idx.get("key", [])) != expected_key
+            or not legacy_idx.get("unique")
+        ):
+            await db[INSTANCE_ASSETS].drop_index("uniq_instance_asset_hierarchy_source")
     except Exception:
         pass
 
@@ -230,6 +245,7 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
                     ("source_id", ASCENDING),
                 ],
                 unique=True,
+                partialFilterExpression={"source_id": {"$type": "objectId"}},
                 name="uniq_instance_asset_hierarchy_source",
             ),
             IndexModel(

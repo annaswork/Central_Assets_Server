@@ -152,6 +152,10 @@ async def reset_overrides(
     doc = await instance_collection(db, col_name).find_one(query)
     if not doc:
         raise NotFoundError(f"Instance {item_type} reference not found")
+    if doc.get("source_id") is None:
+        raise ValidationError(
+            f"App-local {item_type} items have no Central Data defaults to reset to."
+        )
 
     if not fields:
         # Reset all overrides
