@@ -362,11 +362,12 @@ Requires `admin_session` cookie.
 | `DELETE` | `/admin/instances/{id}/subcategories/{subId}` | Detach subcategory folder from instance |
 | `DELETE` | `/admin/instances/{id}/assets/{assetId}` | Detach asset reference from instance |
 | `GET/POST` | `/admin/managers` | Approve/reject manager registrations, non-destructively delete managers (transferring apps & API keys to Admin), and assign instances |
+| `POST` | `/admin/managers/{id}/central-access` | Toggle a manager's `can_access_central_data` flag (`Allowed` / `Restricted`) to block/restore Central Data viewing & importing |
 | `GET/POST` | `/admin/messages` | Admin-manager messaging threads, central creation/update proposal diff review (`apply-proposal`, `dismiss-proposal`) |
 | `GET/POST` | `/admin/keys` | Generate, inspect (`POST /admin/keys/{id}/reveal` via Admin 2FA), and manage global & transferred API keys |
 
 ### 7.3 Manager Portal Endpoints (`/manager`)
-Requires `manager_session` cookie.
+Requires `manager_session` cookie. Central Data endpoints (`/super-categories`, `/categories`, `/subcategories`, `/assets`, `/instances/{id}/picker*`, `POST /{id}/references`, `POST /{id}/import`, `POST /{id}/folders/ensure-central`, central proposals) enforce `can_access_central_data` and return HTTP `403` when restricted by Admin (`templates/manager/central_restricted.html` or JSON).
 
 | Method | Path | Description |
 |---|---|---|
@@ -921,11 +922,13 @@ Requires `manager_session` cookie.
 8. **Cascading Detach:** Detaching a category folder must soft-delete its child subcategories and referenced assets within that specific app instance. Detaching a super category detaches its categories the same way.
 9. **Super Category Link Direction:** Only categories reference a super category (`super_category_id`). Never add super-category ids to subcategories, assets or storage paths.
 10. **Shared Workspace Logic Rule:** Never duplicate instance workspace/picker/folder/tier logic separately in `router/admin/instance_routes.py` vs `router/manager/instance_routes.py` or `instance_content.js` vs `manager_instance_content.js`. Put shared backend logic in `controller/instance_workspace_controller.py` / `controller/override_controller.py` and shared frontend logic in `templates/js/*.js` + `templates/partials/*.html`.
+11. **Manager Central Data Restriction Gate:** Each manager defaults to `can_access_central_data: True`. When Admin toggles it to `False` via `POST /admin/managers/{id}/central-access`, central browsing, picker, import/reference linking, central proposals, unlinked central previews/media (`/static/central_data/...`), and central upload dropdowns/similarity lookups must return `403` or scope strictly to the manager's accessible `APP_INSTANCES` (with local uploads/folders saved strictly to `INSTANCE_*` & `instance_overrides/<id>`).
 
 ### 10.3 Change Playbook ("Where to Define New Features & Updates")
 
 | Type of Change | Primary Source Files to Update | Tests / Checks to Run |
 |---|---|---|
+| **Manager Central Data Security Control** | `database/models/manager_user.py`, `controller/manager_controller.py`, `controller/admin_manager_controller.py`, `router/admin/manager_admin_routes.py`, `router/manager/{central_data,instance,dashboard,message,upload}_routes.py`, `middlewares/{authorization,notifications}_middleware.py`, `templates/admin/managers/list.html`, `templates/manager/{base,central_restricted}.html` | `.venv/bin/python tests/test_manager_central_access_control.py` |
 | **New Asset Media Format / `more_fields` Block Type** | 1. `config/constants.py` (extensions/MIME)<br>2. `database/models/more_fields.py` (`TypedBlock`)<br>3. `controller/asset_controller.py` (`ASSET_TYPE_RULES`, `enrich_more_fields_metadata`)<br>4. `templates/assets/form_single.html` (`DATA_TYPE_CONFIG`, `classifyFile`, `buildBlocks`) & `form_multi.html` (`normalizeBlock`, serialization) | `.venv/bin/python tests/test_asset_type_rules.py`<br>`.venv/bin/python tests/test_bulk_single_blocks.py` |
 | **Instance Working-Set / Picker / Folder Features (Admin + Manager)** | 1. `controller/instance_workspace_controller.py` (`build_instance_content`, `build_picker_page`, folder helpers)<br>2. `router/admin/instance_routes.py` & `router/manager/instance_routes.py` (thin route wrappers)<br>3. `templates/partials/*.html` + `templates/js/instance_content.js` / `manager_instance_content.js` | `.venv/bin/python tests/test_instance_workspace.py`<br>`.venv/bin/python tests/test_shared_subfolder.py`<br>`.venv/bin/python tests/test_instance_isolation.py` |
 | **Monetization, Folder Tags, or Tier Distribution Rules** | 1. `database/models/instance_content.py` (payload schemas)<br>2. `controller/override_controller.py` (`compute_tier_distribution`, `distribute_item_tiers`, `bulk_distribute_subcategory_assets`, `bulk_update_folder_tags`)<br>3. `controller/catalog_controller.py` (project persisted fields/settings)<br>4. `templates/partials/tier_distribution_modal.html` + `templates/js/tier_distribution.js`<br>5. `router/{admin,manager}/instance_routes.py` & `router/v1/instance_content_router.py` | `.venv/bin/python tests/test_tier_distribution.py`<br>`.venv/bin/python tests/test_bulk_folder_tags.py`<br>`node --check` on modified `templates/js/*.js` |

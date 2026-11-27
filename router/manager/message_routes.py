@@ -13,12 +13,13 @@ from controller.category_controller import list_categories
 from controller.manager_controller import (
     get_manager_by_id,
     get_manager_messages,
+    is_manager_central_data_allowed,
     send_manager_message,
 )
 from controller.media_controller import handle_upload
 from controller.subcategory_controller import list_subcategories
 from controller.super_category_controller import list_super_categories
-from router.deps import get_db
+from router.deps import get_db, manager_central_restricted_response
 from utils.datetimes import format_datetime_display
 from utils.errors import ValidationError
 
@@ -42,13 +43,30 @@ async def manager_messages_view(
 
     user_id = session["user_id"]
     manager = await get_manager_by_id(db, user_id)
+    can_access_central = is_manager_central_data_allowed(manager)
+    is_proposing = (propose == 1) or (action == "propose")
+    if is_proposing and not can_access_central:
+        return manager_central_restricted_response(
+            request,
+            templates,
+            session=session,
+            manager=manager,
+            active_tab="proposals",
+            detail="Proposing Central Data is disabled because Central Data access has been restricted by an Administrator.",
+        )
+
     messages = await get_manager_messages(db, user_id)
 
-    # Categories and subcategories for the structured proposal submission modal
-    categories_res = await list_categories(db, page=1, page_size=200)
-    subcategories_res = await list_subcategories(db, page=1, page_size=500)
+    # Categories and subcategories for the structured proposal submission modal (restricted managers receive empty lists)
+    if can_access_central:
+        categories_res = await list_categories(db, page=1, page_size=200)
+        subcategories_res = await list_subcategories(db, page=1, page_size=500)
+        super_categories = await list_super_categories(db)
+    else:
+        categories_res = {"items": []}
+        subcategories_res = {"items": []}
+        super_categories = []
 
-    is_proposing = (propose == 1) or (action == "propose")
     active_tab = "proposals" if is_proposing else "messages"
 
     return templates.TemplateResponse(
@@ -57,12 +75,13 @@ async def manager_messages_view(
         context={
             "session": session,
             "manager": manager,
+            "can_access_central_data": can_access_central,
             "messages": messages,
             "categories": categories_res.get("items", []),
             "subcategories": subcategories_res.get("items", []),
-            "super_categories": await list_super_categories(db),
+            "super_categories": super_categories,
             "active_tab": active_tab,
-            "auto_open_proposal": is_proposing,
+            "auto_open_proposal": is_proposing and can_access_central,
         },
     )
 
@@ -90,6 +109,17 @@ async def manager_send_message(
 
     user_id = session["user_id"]
     manager = await get_manager_by_id(db, user_id)
+
+    clean_payload_type = (payload_type or "").strip()
+    if clean_payload_type and clean_payload_type != "none" and not is_manager_central_data_allowed(manager):
+        return manager_central_restricted_response(
+            request,
+            templates,
+            session=session,
+            manager=manager,
+            active_tab="messages",
+            detail="Submitting Central Data proposals is restricted by an Administrator.",
+        )
 
     parsed_payload: dict | None = None
     if data_payload_json and data_payload_json.strip():

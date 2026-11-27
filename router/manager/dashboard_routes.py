@@ -8,7 +8,11 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from authorization.manager_session import get_current_manager_session
 from config.paths import TEMPLATES_DIR
 from controller.asset_preview_controller import get_asset_preview_details
-from controller.manager_controller import get_manager_by_id, get_manager_dashboard_counts
+from controller.manager_controller import (
+    get_manager_by_id,
+    get_manager_dashboard_counts,
+    manager_can_access_asset,
+)
 from router.deps import get_db
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -52,6 +56,16 @@ async def manager_get_asset_preview_api(
     session = get_current_manager_session(request)
     if not session:
         return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    if not await manager_can_access_asset(db, session["user_id"], asset_id):
+        return JSONResponse(
+            status_code=403,
+            content={
+                "success": False,
+                "detail": "Central Data access has been restricted for your account by an Administrator.",
+                "message": "Central Data access has been restricted for your account by an Administrator.",
+            },
+        )
 
     data = await get_asset_preview_details(db=db, asset_id=asset_id)
     return JSONResponse(content=data)

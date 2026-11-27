@@ -41,7 +41,7 @@ from database.models.category import CategoryCreate
 from database.models.subcategory import SubcategoryCreate
 from utils.csv_utils import parse_lines_list
 from utils.datetimes import utc_now
-from utils.errors import ConflictError, NotFoundError, ValidationError
+from utils.errors import ConflictError, ForbiddenError, NotFoundError, ValidationError
 from utils.ids import to_object_id
 from utils.slugify import slugify
 
@@ -268,12 +268,47 @@ async def resolve_or_create_central_subcategory(
 
 
 async def list_upload_categories_for_instance(
-    db: AsyncIOMotorDatabase, app_instance_id: str
+    db: AsyncIOMotorDatabase, app_instance_id: str, *, include_central: bool = True
 ) -> list[dict[str, Any]]:
-    """Return all Central Categories plus any native-only Instance Categories so upload dropdowns cover everything."""
+    """Return Central Categories + native Instance Categories (or only instance categories when restricted)."""
+    inst_oid = to_object_id(app_instance_id)
+    if not include_central:
+        inst_cats = (
+            await db[INSTANCE_CATEGORIES]
+            .find({"app_instance_id": inst_oid, "deleted_at": None})
+            .sort("sequence", 1)
+            .to_list(length=500)
+        )
+        source_oids = [c["source_id"] for c in inst_cats if c.get("source_id") is not None]
+        central_map: dict[str, dict[str, Any]] = {}
+        if source_oids:
+            c_docs = await db[CATEGORIES].find(
+                {"_id": {"$in": source_oids}, "deleted_at": None}
+            ).to_list(length=500)
+            central_map = {str(cd["_id"]): cd for cd in c_docs}
+
+        scoped_items: list[dict[str, Any]] = []
+        for ic in inst_cats:
+            ov = ic.get("overrides") or {}
+            src_doc = central_map.get(str(ic.get("source_id") or ""))
+            name = (
+                ov.get("name")
+                or ic.get("name")
+                or (src_doc.get("name") if src_doc else None)
+                or "Unnamed Category"
+            )
+            scoped_items.append(
+                {
+                    "id": str(ic["_id"]),
+                    "name": name,
+                    "raw_name": name,
+                    "is_native_instance_folder": ic.get("source_id") is None,
+                }
+            )
+        return scoped_items
+
     central_res = await list_categories(db, page=1, page_size=500)
     items = list(central_res.get("items", []))
-    inst_oid = to_object_id(app_instance_id)
     native_cats = (
         await db[INSTANCE_CATEGORIES]
         .find({"app_instance_id": inst_oid, "source_id": None, "deleted_at": None})
@@ -297,15 +332,71 @@ async def list_upload_categories_for_instance(
 
 
 async def list_upload_subcategories_for_instance(
-    db: AsyncIOMotorDatabase, app_instance_id: str, category_id: str
+    db: AsyncIOMotorDatabase,
+    app_instance_id: str,
+    category_id: str,
+    *,
+    include_central: bool = True,
 ) -> list[dict[str, Any]]:
-    """Return matching Central Subcategories plus any native-only Instance Subcategories for a category selection."""
+    """Return matching Central Subcategories + native Instance Subcategories (or only instance subcategories when restricted)."""
     clean_cat = (category_id or "").strip()
     if not clean_cat:
         return []
 
     inst_oid = to_object_id(app_instance_id)
     c_oid = to_object_id(clean_cat)
+    if not include_central:
+        inst_cat = await db[INSTANCE_CATEGORIES].find_one(
+            {
+                "app_instance_id": inst_oid,
+                "$or": [{"_id": c_oid}, {"source_id": c_oid}],
+                "deleted_at": None,
+            }
+        )
+        if not inst_cat:
+            return []
+        cat_candidates = [inst_cat["_id"]]
+        if inst_cat.get("source_id") is not None:
+            cat_candidates.append(inst_cat["source_id"])
+        inst_subs = (
+            await db[INSTANCE_SUBCATEGORIES]
+            .find(
+                {
+                    "app_instance_id": inst_oid,
+                    "category_id": {"$in": cat_candidates},
+                    "deleted_at": None,
+                }
+            )
+            .sort("sequence", 1)
+            .to_list(length=500)
+        )
+        sub_source_oids = [s["source_id"] for s in inst_subs if s.get("source_id") is not None]
+        central_sub_map: dict[str, dict[str, Any]] = {}
+        if sub_source_oids:
+            s_docs = await db[SUBCATEGORIES].find(
+                {"_id": {"$in": sub_source_oids}, "deleted_at": None}
+            ).to_list(length=500)
+            central_sub_map = {str(sd["_id"]): sd for sd in s_docs}
+
+        scoped_subs: list[dict[str, Any]] = []
+        for isub in inst_subs:
+            ov = isub.get("overrides") or {}
+            src_doc = central_sub_map.get(str(isub.get("source_id") or ""))
+            name = (
+                ov.get("name")
+                or isub.get("name")
+                or (src_doc.get("name") if src_doc else None)
+                or "Unnamed Subcategory"
+            )
+            scoped_subs.append(
+                {
+                    "id": str(isub["_id"]),
+                    "name": name,
+                    "category_id": str(inst_cat["_id"]),
+                }
+            )
+        return scoped_subs
+
     central_cat_id: str | None = None
     inst_cat_oid: Any = None
 
@@ -953,4 +1044,335 @@ async def apply_frame_editor_save(
             if msg_sent
             else "Frame placeholders saved at app level."
         ),
+    }
+
+
+async def check_instance_asset_name_availability(
+    db: AsyncIOMotorDatabase,
+    app_instance_id: str,
+    name: str,
+    *,
+    category_id: str | None = None,
+    sub_category_id: str | None = None,
+    asset_id: str | None = None,
+) -> dict[str, Any]:
+    """Check asset name conflicts strictly within `app_instance_id` without querying Central Data."""
+    clean_name = (name or "").strip()
+    if not clean_name:
+        return {"available": True, "exists": False}
+
+    inst_oid = to_object_id(app_instance_id)
+    match: dict[str, Any] = {"app_instance_id": inst_oid, "deleted_at": None}
+    if sub_category_id:
+        try:
+            s_oid = to_object_id(sub_category_id)
+            sub_doc = await db[INSTANCE_SUBCATEGORIES].find_one(
+                {"app_instance_id": inst_oid, "$or": [{"_id": s_oid}, {"source_id": s_oid}], "deleted_at": None}
+            )
+            sub_candidates = [s_oid]
+            if sub_doc:
+                sub_candidates = [sub_doc["_id"]]
+                if sub_doc.get("source_id") is not None:
+                    sub_candidates.append(sub_doc["source_id"])
+            match["sub_category_id"] = {"$in": sub_candidates}
+        except Exception:
+            pass
+    elif category_id:
+        try:
+            c_oid = to_object_id(category_id)
+            cat_doc = await db[INSTANCE_CATEGORIES].find_one(
+                {"app_instance_id": inst_oid, "$or": [{"_id": c_oid}, {"source_id": c_oid}], "deleted_at": None}
+            )
+            cat_candidates = [c_oid]
+            if cat_doc:
+                cat_candidates = [cat_doc["_id"]]
+                if cat_doc.get("source_id") is not None:
+                    cat_candidates.append(cat_doc["source_id"])
+            match["category_id"] = {"$in": cat_candidates}
+        except Exception:
+            pass
+
+    rows = await db[INSTANCE_ASSETS].find(match, {"_id": 1, "name": 1, "overrides": 1, "source_id": 1}).to_list(length=1000)
+    target_lower = clean_name.lower()
+    exclude_id = str(asset_id or "").strip()
+
+    linked_src_ids = [r["source_id"] for r in rows if r.get("source_id") is not None]
+    src_names: dict[str, str] = {}
+    if linked_src_ids:
+        for ad in await db[ASSETS].find({"_id": {"$in": linked_src_ids}, "deleted_at": None}, {"name": 1}).to_list(length=1000):
+            src_names[str(ad["_id"])] = str(ad.get("name") or "")
+
+    for row in rows:
+        if exclude_id and str(row["_id"]) == exclude_id:
+            continue
+        ov = row.get("overrides") or {}
+        eff_name = str(ov.get("name") or row.get("name") or src_names.get(str(row.get("source_id") or ""), "")).strip()
+        if eff_name.lower() == target_lower:
+            return {
+                "available": False,
+                "exists": True,
+                "message": f"An asset named '{clean_name}' already exists in this app folder.",
+            }
+    return {"available": True, "exists": False}
+
+
+async def check_instance_media_similarity(
+    db: AsyncIOMotorDatabase,
+    app_instance_id: str,
+    filenames: list[str],
+    *,
+    existing_staged: list[str] | None = None,
+    asset_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Compare candidate upload filenames strictly against staged items and this instance's own media."""
+    import os
+    from difflib import SequenceMatcher
+    from config.paths import CENTRAL_DATA_DIR
+
+    inst_oid = to_object_id(app_instance_id)
+    exclude_id = str(asset_id or "").strip()
+
+    known_files: list[str] = []
+    for staged in (existing_staged or []):
+        if staged:
+            known_files.append(os.path.basename(str(staged)).strip().lower())
+
+    rows = await db[INSTANCE_ASSETS].find(
+        {"app_instance_id": inst_oid, "deleted_at": None},
+        {"_id": 1, "thumbnail_url": 1, "overrides": 1, "source_id": 1},
+    ).to_list(length=1000)
+    for row in rows:
+        if exclude_id and str(row["_id"]) == exclude_id:
+            continue
+        ov = row.get("overrides") or {}
+        for url in (ov.get("thumbnail_url"), row.get("thumbnail_url")):
+            if url:
+                known_files.append(os.path.basename(str(url).split("?")[0]).lower())
+
+    override_dir = CENTRAL_DATA_DIR / "instance_overrides" / str(app_instance_id)
+    if override_dir.exists():
+        for p in override_dir.rglob("*"):
+            if p.is_file():
+                known_files.append(p.name.lower())
+
+    known_unique = sorted({k for k in known_files if k})
+    results: list[dict[str, Any]] = []
+    for fn in filenames:
+        base = os.path.basename(str(fn or "")).strip()
+        stem = os.path.splitext(base)[0].lower()
+        base_low = base.lower()
+        similar: list[dict[str, Any]] = []
+        exact = False
+        for kf in known_unique:
+            kstem = os.path.splitext(kf)[0].lower()
+            if kf == base_low:
+                exact = True
+                similar.append({"filename": kf, "score": 1.0, "exact": True})
+            elif stem and kstem:
+                ratio = SequenceMatcher(None, stem, kstem).ratio()
+                if ratio >= 0.85:
+                    similar.append({"filename": kf, "score": round(ratio, 2), "exact": False})
+        results.append(
+            {
+                "filename": base,
+                "has_conflict": exact or bool(similar),
+                "exact_match": exact,
+                "similar_files": similar[:5],
+            }
+        )
+    return results
+
+
+async def _resolve_or_create_instance_only_folders(
+    db: AsyncIOMotorDatabase,
+    app_instance_id: str,
+    *,
+    category_id: str | None = None,
+    sub_category_id: str | None = None,
+    new_category_name: str | None = None,
+    new_subcategory_name: str | None = None,
+) -> tuple[Any, Any]:
+    """Resolve existing app-instance folders or create native app-local folders without touching Central Data."""
+    from controller.instance_workspace_controller import create_instance_folder
+
+    inst_oid = to_object_id(app_instance_id)
+    clean_new_cat = (new_category_name or "").strip()
+    inst_cat_doc = None
+
+    if clean_new_cat:
+        inst_cat_doc = await db[INSTANCE_CATEGORIES].find_one(
+            {
+                "app_instance_id": inst_oid,
+                "$or": [
+                    {"name": {"$regex": f"^{re.escape(clean_new_cat)}$", "$options": "i"}},
+                    {"overrides.name": {"$regex": f"^{re.escape(clean_new_cat)}$", "$options": "i"}},
+                ],
+                "deleted_at": None,
+            }
+        )
+        if not inst_cat_doc:
+            created = await create_instance_folder(
+                db, app_instance_id, {"folder_type": "category", "name": clean_new_cat}
+            )
+            inst_cat_oid = to_object_id(created["id"])
+        else:
+            inst_cat_oid = inst_cat_doc["_id"]
+    elif category_id:
+        c_oid = to_object_id(category_id)
+        inst_cat_doc = await db[INSTANCE_CATEGORIES].find_one(
+            {"app_instance_id": inst_oid, "$or": [{"_id": c_oid}, {"source_id": c_oid}], "deleted_at": None}
+        )
+        if not inst_cat_doc:
+            raise ForbiddenError("Selected category is not part of this App Instance.")
+        inst_cat_oid = inst_cat_doc["_id"]
+    else:
+        raise ValidationError("Category is required.")
+
+    clean_new_sub = (new_subcategory_name or "").strip()
+    if clean_new_sub:
+        cat_candidates = [inst_cat_oid]
+        if inst_cat_doc and inst_cat_doc.get("source_id") is not None:
+            cat_candidates.append(inst_cat_doc["source_id"])
+        inst_sub_doc = await db[INSTANCE_SUBCATEGORIES].find_one(
+            {
+                "app_instance_id": inst_oid,
+                "category_id": {"$in": cat_candidates},
+                "$or": [
+                    {"name": {"$regex": f"^{re.escape(clean_new_sub)}$", "$options": "i"}},
+                    {"overrides.name": {"$regex": f"^{re.escape(clean_new_sub)}$", "$options": "i"}},
+                ],
+                "deleted_at": None,
+            }
+        )
+        if not inst_sub_doc:
+            created_sub = await create_instance_folder(
+                db,
+                app_instance_id,
+                {"folder_type": "subcategory", "name": clean_new_sub, "parent_category_id": str(inst_cat_oid)},
+            )
+            inst_sub_oid = to_object_id(created_sub["id"])
+        else:
+            inst_sub_oid = inst_sub_doc["_id"]
+    elif sub_category_id:
+        s_oid = to_object_id(sub_category_id)
+        inst_sub_doc = await db[INSTANCE_SUBCATEGORIES].find_one(
+            {"app_instance_id": inst_oid, "$or": [{"_id": s_oid}, {"source_id": s_oid}], "deleted_at": None}
+        )
+        if not inst_sub_doc:
+            raise ForbiddenError("Selected subcategory is not part of this App Instance.")
+        inst_sub_oid = inst_sub_doc["_id"]
+    else:
+        raise ValidationError("Subcategory is required.")
+
+    return inst_cat_oid, inst_sub_oid
+
+
+async def create_instance_local_asset_for_instance(
+    db: AsyncIOMotorDatabase,
+    app_instance_id: str,
+    payload: dict[str, Any],
+    manager_user: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Create app-only asset(s) inside `instance_assets` without reading or writing Central Library."""
+    inst_oid = to_object_id(app_instance_id)
+    cat_id = payload.get("category_id") or payload.get("categoryId")
+    sub_id = payload.get("sub_category_id") or payload.get("subCategoryId")
+    inst_cat_oid, inst_sub_oid = await _resolve_or_create_instance_only_folders(
+        db,
+        app_instance_id,
+        category_id=cat_id,
+        sub_category_id=sub_id,
+        new_category_name=payload.get("new_category_name") or payload.get("newCategoryName"),
+        new_subcategory_name=payload.get("new_subcategory_name") or payload.get("newSubcategoryName"),
+    )
+
+    last_row = await db[INSTANCE_ASSETS].find_one(
+        {"app_instance_id": inst_oid, "deleted_at": None},
+        sort=[("sequence", -1)],
+    )
+    next_seq = (int(last_row.get("sequence", 0)) if last_row else 0) + 1
+    now = utc_now()
+    description = str(payload.get("description") or "").strip()
+
+    async def _insert_one(
+        asset_name: str,
+        thumb_url: str | None = None,
+        mf: dict[str, Any] | None = None,
+    ) -> str:
+        nonlocal next_seq
+        avail = await check_instance_asset_name_availability(
+            db, app_instance_id, asset_name, sub_category_id=str(inst_sub_oid)
+        )
+        if not avail.get("available", True):
+            raise ConflictError(avail.get("message") or f"Asset '{asset_name}' already exists.")
+        enriched_mf = enrich_more_fields_metadata(mf or {}) if mf else {}
+        doc = {
+            "app_instance_id": inst_oid,
+            "source_id": None,
+            "category_id": inst_cat_oid,
+            "sub_category_id": inst_sub_oid,
+            "name": asset_name,
+            "description": description,
+            "thumbnail_url": thumb_url,
+            "more_fields": enriched_mf,
+            "is_enabled": True,
+            "is_premium": False,
+            "is_rewarded": False,
+            "is_priced": False,
+            "rewarded_credits": 5,
+            "sequence": next_seq,
+            "views": 0,
+            "downloads": 0,
+            "overrides": {
+                "name": asset_name,
+                "description": description,
+                "thumbnail_url": thumb_url,
+                "more_fields": enriched_mf,
+            },
+            "created_by_role": "manager",
+            "created_by_username": (manager_user or {}).get("username"),
+            "created_at": now,
+            "updated_at": now,
+            "deleted_at": None,
+        }
+        next_seq += 1
+        res = await db[INSTANCE_ASSETS].insert_one(doc)
+        return str(res.inserted_id)
+
+    names_list_raw = payload.get("names_list")
+    names = parse_lines_list(names_list_raw or "") if names_list_raw else []
+    if names:
+        created_items: list[dict[str, Any]] = []
+        errors: list[dict[str, Any]] = []
+        for n in names:
+            try:
+                new_id = await _insert_one(n)
+                created_items.append({"id": new_id, "name": n})
+            except ConflictError as exc:
+                errors.append({"name": n, "error": exc.message})
+        return {
+            "success": True,
+            "bulk_text": True,
+            "created_count": len(created_items),
+            "created": created_items,
+            "errors": errors,
+        }
+
+    more_fields = payload.get("more_fields") if payload.get("more_fields") is not None else payload.get("moreFields")
+    if not isinstance(more_fields, dict):
+        more_fields = {}
+    raw_thumb = payload.get("thumbnail_url") if payload.get("thumbnail_url") is not None else payload.get("thumbnailUrl")
+    clean_thumb = str(raw_thumb).strip() if raw_thumb and str(raw_thumb).strip() else None
+    raw_name = payload.get("name")
+    clean_name = str(raw_name).strip() if raw_name and str(raw_name).strip() else ""
+    if not clean_name:
+        clean_name = derive_asset_name(clean_thumb, more_fields)
+
+    new_inst_id = await _insert_one(clean_name, clean_thumb, more_fields)
+    return {
+        "success": True,
+        "id": new_inst_id,
+        "instance_asset_id": new_inst_id,
+        "name": clean_name,
+        "app_local_only": True,
     }

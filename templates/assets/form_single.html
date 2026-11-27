@@ -71,7 +71,11 @@
   </p>
   {% if portal_mode == 'manager_create' and instance %}
   <div style="margin-top:0.75rem; padding:0.75rem 1rem; border-radius:10px; background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.35); font-size:0.86rem; line-height:1.45;">
+    {% if central_access_restricted %}
+    🔒 <strong>App-Local Upload ({{ instance.name }}):</strong> Central Data access is restricted for your account. Uploaded assets are stored strictly inside <strong>{{ instance.name }}</strong> only.
+    {% else %}
     🔄 <strong>Direct Upload to {{ instance.name }}:</strong> Uploaded assets and any newly created Categories / Subcategories are automatically saved to <strong>Central Data</strong> and attached to your app. Removing an item from your app later only detaches it without deleting Central Data.
+    {% endif %}
   </div>
   {% endif %}
 </div>

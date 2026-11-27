@@ -37,7 +37,10 @@ from controller.manager_controller import (
     create_instance_creation_request,
     get_manager_accessible_instance_ids,
     get_manager_by_id,
+    is_manager_central_data_allowed,
     list_manager_access_requests,
+    manager_can_access_asset,
+    verify_manager_central_data_access,
     verify_manager_instance_access,
 )
 from controller.override_controller import (
@@ -54,7 +57,7 @@ from database.models.instance_content import (
     BulkDistributeSubcategoryAssetsPayload,
     DistributeTiersPayload,
 )
-from router.deps import get_db
+from router.deps import get_db, manager_central_restricted_response
 from utils.datetimes import format_datetime_display, utc_now
 from utils.errors import ForbiddenError, NotFoundError, ValidationError
 from utils.ids import to_object_id
@@ -260,6 +263,7 @@ async def manager_instance_content(
             **ctx,
             "session": session,
             "manager": manager,
+            "can_access_central_data": is_manager_central_data_allowed(manager),
             "instance": instance,
             "is_owner": is_owner,
             "active_section": active_section,
@@ -283,6 +287,11 @@ async def manager_import_references(
 
     user_id = session["user_id"]
     await verify_manager_instance_access(db, user_id, instance_id)
+
+    try:
+        await verify_manager_central_data_access(db, user_id)
+    except ForbiddenError as err:
+        return JSONResponse(status_code=403, content={"success": False, "error": err.message, "detail": err.message})
 
     body = await request.json()
     category_ids = body.get("category_ids") or []
@@ -405,6 +414,16 @@ async def manager_get_asset_preview_api(
     session = get_current_manager_session(request)
     if not session:
         return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
+
+    if not await manager_can_access_asset(db, session["user_id"], asset_id):
+        return JSONResponse(
+            status_code=403,
+            content={
+                "success": False,
+                "detail": "Central Data access has been restricted for your account by an Administrator.",
+                "message": "Central Data access has been restricted for your account by an Administrator.",
+            },
+        )
 
     data = await get_asset_preview_details(db=db, asset_id=asset_id)
     return JSONResponse(content=data)
@@ -734,6 +753,11 @@ async def manager_instance_reorder(
     user_id = session["user_id"]
     await verify_manager_instance_access(db, user_id, instance_id)
 
+    try:
+        await verify_manager_central_data_access(db, user_id)
+    except ForbiddenError as err:
+        return JSONResponse(status_code=403, content={"success": False, "error": err.message, "detail": err.message})
+
     body = await request.json()
     item_type = body.get("type", "asset")
     ordered_ids = body.get("ordered_ids", [])
@@ -771,6 +795,12 @@ async def manager_instance_picker(
 
     instance = await get_app_instance(db, instance_id=instance_id)
     manager = await get_manager_by_id(db, user_id)
+    try:
+        await verify_manager_central_data_access(db, user_id)
+    except ForbiddenError as err:
+        return manager_central_restricted_response(
+            request, templates, session=session, manager=manager, active_tab="instances", detail=err.message
+        )
     ctx = await build_picker_page(db, instance_id, target_category_id, target_sub_category_id, target_super_category_id)
     return templates.TemplateResponse(
         request=request,
@@ -791,6 +821,10 @@ async def manager_instance_picker_categories(
         return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
 
     await verify_manager_instance_access(db, session["user_id"], instance_id)
+    try:
+        await verify_manager_central_data_access(db, session["user_id"])
+    except ForbiddenError as err:
+        return JSONResponse(status_code=403, content={"success": False, "detail": err.message, "message": err.message})
     items = await picker_categories(db, instance_id, q)
     return JSONResponse(status_code=200, content={"success": True, "items": items})
 
@@ -809,6 +843,10 @@ async def manager_instance_picker_subcategories(
         return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
 
     await verify_manager_instance_access(db, session["user_id"], instance_id)
+    try:
+        await verify_manager_central_data_access(db, session["user_id"])
+    except ForbiddenError as err:
+        return JSONResponse(status_code=403, content={"success": False, "detail": err.message, "message": err.message})
     items = await picker_subcategories(db, instance_id, categoryId, q, target_category_id)
     return JSONResponse(status_code=200, content={"success": True, "items": items})
 
@@ -832,6 +870,10 @@ async def manager_instance_picker_assets(
         return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
 
     await verify_manager_instance_access(db, session["user_id"], instance_id)
+    try:
+        await verify_manager_central_data_access(db, session["user_id"])
+    except ForbiddenError as err:
+        return JSONResponse(status_code=403, content={"success": False, "detail": err.message, "message": err.message})
     res = await picker_assets(db, instance_id, categoryId, subCategoryId, q, target_sub_category_id, page, page_size, superCategoryId)
     return JSONResponse(status_code=200, content={"success": True, **res})
 
@@ -848,6 +890,10 @@ async def manager_instance_add_references(
         return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
 
     await verify_manager_instance_access(db, session["user_id"], instance_id)
+    try:
+        await verify_manager_central_data_access(db, session["user_id"])
+    except ForbiddenError as err:
+        return JSONResponse(status_code=403, content={"success": False, "detail": err.message, "message": err.message})
 
     try:
         data = await request.json()
@@ -877,9 +923,13 @@ async def manager_instance_create_folder(
         data = {}
 
     try:
-        res = await create_manager_folder_with_central_sync(
-            db, app_instance_id=instance_id, data=data, manager_user=session
-        )
+        manager = await get_manager_by_id(db, session["user_id"])
+        if is_manager_central_data_allowed(manager):
+            res = await create_manager_folder_with_central_sync(
+                db, app_instance_id=instance_id, data=data, manager_user=session
+            )
+        else:
+            res = await create_instance_folder(db, instance_id, data)
         return JSONResponse(status_code=200, content=res)
     except ValidationError as err:
         return JSONResponse(status_code=400, content={"success": False, "message": err.message})

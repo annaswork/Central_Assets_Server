@@ -58,6 +58,8 @@
             </a>
           </li>
 
+          {% set _allow_central = (not request.state.current_user) or request.state.current_user.get('can_access_central_data', True) %}
+          {% if _allow_central %}
           <li class="nav-section-header" style="padding:0.5rem 1rem 0.25rem; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--md-sys-color-on-surface-variant); opacity:0.75;">
             Central Data (Read-Only)
           </li>
@@ -91,6 +93,7 @@
               <span class="nav-text">Propose Central Data</span>
             </a>
           </li>
+          {% endif %}
 
           <li class="nav-section-header" style="padding:0.5rem 1rem 0.25rem; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--md-sys-color-on-surface-variant); opacity:0.75;">
             My Workspace
@@ -195,11 +198,14 @@
         {% endif %}
 
         <a href="/manager/dashboard" title="Dashboard" class="nav-link {% if active_tab == 'dashboard' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📊</a>
+        {% set _allow_central_rail = (not request.state.current_user) or request.state.current_user.get('can_access_central_data', True) %}
+        {% if _allow_central_rail %}
         <a href="/manager/super-categories" title="Super Categories" class="nav-link {% if active_tab == 'super_categories' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">⭐</a>
         <a href="/manager/categories" title="Categories" class="nav-link {% if active_tab == 'categories' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📁</a>
         <a href="/manager/subcategories" title="Subcategories" class="nav-link {% if active_tab == 'subcategories' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📂</a>
         <a href="/manager/assets" title="Assets" class="nav-link {% if active_tab == 'assets' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">🖼️</a>
         <a href="/manager/messages?propose=1" title="Propose Central Data" class="nav-link {% if active_tab == 'proposals' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">💡</a>
+        {% endif %}
         <a href="/manager/instances" title="App Instances" class="nav-link {% if active_tab == 'instances' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📱</a>
         <a href="/manager/keys" title="API Keys" class="nav-link {% if active_tab == 'keys' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">🔑</a>
         <a href="/manager/api-usage" title="API Usage Method" class="nav-link {% if active_tab == 'api_usage' %}active{% endif %}" style="padding:0.75rem; justify-content:center;">📘</a>

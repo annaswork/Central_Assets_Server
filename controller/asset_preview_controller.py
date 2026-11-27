@@ -9,7 +9,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from config.constants import ALLOWED_AUDIO_EXTENSIONS, DEFAULT_AUDIO_THUMBNAIL_URL
 from controller.base_controller import serialize_mongo_doc
-from database.collections import ASSETS, CATEGORIES, INSTANCE_ASSETS, SUBCATEGORIES
+from database.collections import ASSETS, CATEGORIES, INSTANCE_ASSETS, INSTANCE_CATEGORIES, INSTANCE_SUBCATEGORIES, SUBCATEGORIES
 from utils.datetimes import format_datetime_display, utc_now
 from utils.errors import NotFoundError
 from utils.ids import to_object_id
@@ -78,21 +78,25 @@ async def get_asset_preview_details(db: AsyncIOMotorDatabase, asset_id: str) -> 
     subcategory_name = ""
     if doc.get("category_id"):
         try:
-            cat_doc = await db[CATEGORIES].find_one(
-                {"_id": to_object_id(doc["category_id"]), "deleted_at": None}
-            )
+            cat_oid = to_object_id(doc["category_id"])
+            cat_doc = await db[CATEGORIES].find_one({"_id": cat_oid, "deleted_at": None})
+            if not cat_doc:
+                cat_doc = await db[INSTANCE_CATEGORIES].find_one({"_id": cat_oid, "deleted_at": None})
             if cat_doc:
-                category_name = cat_doc.get("name", "")
+                ov_c = cat_doc.get("overrides") or {}
+                category_name = ov_c.get("name") or cat_doc.get("name", "")
         except Exception:
             pass
 
     if doc.get("sub_category_id"):
         try:
-            sub_doc = await db[SUBCATEGORIES].find_one(
-                {"_id": to_object_id(doc["sub_category_id"]), "deleted_at": None}
-            )
+            sub_oid = to_object_id(doc["sub_category_id"])
+            sub_doc = await db[SUBCATEGORIES].find_one({"_id": sub_oid, "deleted_at": None})
+            if not sub_doc:
+                sub_doc = await db[INSTANCE_SUBCATEGORIES].find_one({"_id": sub_oid, "deleted_at": None})
             if sub_doc:
-                subcategory_name = sub_doc.get("name", "")
+                ov_s = sub_doc.get("overrides") or {}
+                subcategory_name = ov_s.get("name") or sub_doc.get("name", "")
         except Exception:
             pass
 

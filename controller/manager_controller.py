@@ -29,10 +29,15 @@ from database.collections import (
     APP_INSTANCE_ACCESS,
     APP_INSTANCE_ACCESS_REQUESTS,
     APP_INSTANCES,
+    ASSETS,
+    CATEGORIES,
     INSTANCE_ASSETS,
     INSTANCE_CATEGORIES,
     INSTANCE_SUBCATEGORIES,
+    INSTANCE_SUPER_CATEGORIES,
     MANAGERS,
+    SUBCATEGORIES,
+    SUPER_CATEGORIES,
     MESSAGES,
 )
 from database.models.api_key import ApiKeyCreate, ApiKeyOut
@@ -92,6 +97,7 @@ async def register_manager(db: AsyncIOMotorDatabase, data: ManagerUserCreate) ->
         "role": "manager",
         "status": "active",  # Default active per specification
         "is_active": True,
+        "can_access_central_data": True,
         "display_name": clean_username,
         "profile_picture": None,
         "is_2fa_enabled": False,
@@ -118,7 +124,9 @@ async def get_manager_by_id(db: AsyncIOMotorDatabase, manager_id: str) -> dict[s
     doc = await db[MANAGERS].find_one({"_id": oid})
     if not doc:
         raise NotFoundError("Manager account not found")
-    return serialize_mongo_doc(doc)  # type: ignore
+    serialized = serialize_mongo_doc(doc)  # type: ignore
+    serialized["can_access_central_data"] = bool(serialized.get("can_access_central_data", True))
+    return serialized
 
 
 # =========================================================================
@@ -367,6 +375,169 @@ async def verify_manager_instance_access(
         raise ForbiddenError("You do not have access to this app instance.")
 
     return instance
+
+
+def is_manager_central_data_allowed(manager_doc: dict[str, Any] | None) -> bool:
+    """Return True unless the manager account explicitly has Central Data access restricted."""
+    if not manager_doc:
+        return False
+    return bool(manager_doc.get("can_access_central_data", True))
+
+
+async def verify_manager_central_data_access(
+    db: AsyncIOMotorDatabase, manager_id: str
+) -> dict[str, Any]:
+    """Ensure the manager account is active and permitted by Admin to view/access Central Data."""
+    manager = await db[MANAGERS].find_one({"_id": to_object_id(manager_id)})
+    if not manager or not manager.get("is_active", True) or manager.get("status") != "active":
+        raise ForbiddenError("Manager account is not active.")
+    if not is_manager_central_data_allowed(manager):
+        raise ForbiddenError(
+            "Central Data access has been restricted for your account by an Administrator."
+        )
+    return manager
+
+
+async def manager_can_access_asset(
+    db: AsyncIOMotorDatabase,
+    manager_id: str,
+    asset_id: str,
+    *,
+    manager_doc: dict[str, Any] | None = None,
+) -> bool:
+    """Return True if the manager can access Central Data OR the asset is in their accessible instances."""
+    doc = manager_doc if manager_doc is not None else await db[MANAGERS].find_one({"_id": to_object_id(manager_id)})
+    if not doc or not doc.get("is_active", True) or doc.get("status") != "active":
+        return False
+    if is_manager_central_data_allowed(doc):
+        return True
+
+    match_vals = await _get_accessible_instance_match_values(db, manager_id)
+    if not match_vals:
+        return False
+    try:
+        asset_oid = to_object_id(asset_id)
+    except Exception:
+        return False
+
+    linked = await db[INSTANCE_ASSETS].find_one(
+        {
+            "app_instance_id": {"$in": match_vals},
+            "deleted_at": None,
+            "$or": [{"_id": asset_oid}, {"source_id": asset_oid}],
+        },
+        {"_id": 1},
+    )
+    return linked is not None
+
+
+async def manager_can_access_static_media_path(
+    db: AsyncIOMotorDatabase,
+    manager_id: str,
+    path: str,
+) -> bool:
+    """Authorize protected `/static/...` path requests for manager dashboard sessions.
+
+    Unrestricted managers can read protected central and instance media; managers with restricted
+    Central Data access can only load instance overrides for their apps or media referenced inside
+    their accessible instances.
+    """
+    manager = await db[MANAGERS].find_one({"_id": to_object_id(manager_id)})
+    if not manager or not manager.get("is_active", True) or manager.get("status") != "active":
+        return False
+    if is_manager_central_data_allowed(manager):
+        return True
+
+    clean_path = (path or "").split("?", 1)[0]
+    accessible_ids = await get_manager_accessible_instance_ids(db, manager_id)
+    if not accessible_ids:
+        return False
+
+    # App-level override / isolated asset media: restrict strictly to this manager's accessible apps
+    for prefix in ("/static/central_data/instance_overrides/", "/static/instance_overrides/"):
+        if clean_path.startswith(prefix):
+            rest = clean_path[len(prefix):]
+            inst_seg = rest.split("/", 1)[0]
+            return inst_seg in accessible_ids
+
+    match_vals = await _get_accessible_instance_match_values(db, manager_id)
+    candidates = [clean_path, clean_path.lstrip("/")]
+
+    # Check direct override/native URLs stored on accessible instance rows
+    for coll in (
+        INSTANCE_ASSETS,
+        INSTANCE_CATEGORIES,
+        INSTANCE_SUBCATEGORIES,
+        INSTANCE_SUPER_CATEGORIES,
+    ):
+        found = await db[coll].find_one(
+            {
+                "app_instance_id": {"$in": match_vals},
+                "deleted_at": None,
+                "$or": [
+                    {"thumbnail_url": {"$in": candidates}},
+                    {"image_url": {"$in": candidates}},
+                    {"overrides.thumbnail_url": {"$in": candidates}},
+                    {"overrides.image_url": {"$in": candidates}},
+                    {"overrides.more_fields.media_url": {"$in": candidates}},
+                    {"overrides.more_fields.image_url": {"$in": candidates}},
+                    {"overrides.more_fields.video_url": {"$in": candidates}},
+                    {"overrides.more_fields.audio_url": {"$in": candidates}},
+                    {"overrides.more_fields.file_url": {"$in": candidates}},
+                    {"overrides.more_fields.url": {"$in": candidates}},
+                    {"overrides.more_fields.thumbnail_url": {"$in": candidates}},
+                    {"overrides.more_fields.files.url": {"$in": candidates}},
+                ],
+            },
+            {"_id": 1},
+        )
+        if found:
+            return True
+
+    # Check central media referenced into this manager's accessible instances
+    linked_pairs = [
+        (INSTANCE_ASSETS, ASSETS),
+        (INSTANCE_CATEGORIES, CATEGORIES),
+        (INSTANCE_SUBCATEGORIES, SUBCATEGORIES),
+        (INSTANCE_SUPER_CATEGORIES, SUPER_CATEGORIES),
+    ]
+    for inst_coll, central_coll in linked_pairs:
+        src_ids = await db[inst_coll].distinct(
+            "source_id",
+            {
+                "app_instance_id": {"$in": match_vals},
+                "source_id": {"$ne": None},
+                "deleted_at": None,
+            },
+        )
+        if not src_ids:
+            continue
+        url_fields: list[dict[str, Any]] = [
+            {"thumbnail_url": {"$in": candidates}},
+            {"image_url": {"$in": candidates}},
+        ]
+        if central_coll == ASSETS:
+            url_fields.extend(
+                [
+                    {"more_fields.media_url": {"$in": candidates}},
+                    {"more_fields.image_url": {"$in": candidates}},
+                    {"more_fields.video_url": {"$in": candidates}},
+                    {"more_fields.audio_url": {"$in": candidates}},
+                    {"more_fields.file_url": {"$in": candidates}},
+                    {"more_fields.url": {"$in": candidates}},
+                    {"more_fields.thumbnail_url": {"$in": candidates}},
+                    {"more_fields.files.url": {"$in": candidates}},
+                    {"more_fields.variants.url": {"$in": candidates}},
+                ]
+            )
+        hit = await db[central_coll].find_one(
+            {"_id": {"$in": src_ids}, "deleted_at": None, "$or": url_fields},
+            {"_id": 1},
+        )
+        if hit:
+            return True
+
+    return False
 
 
 # =========================================================================

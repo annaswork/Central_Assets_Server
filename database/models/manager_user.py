@@ -20,6 +20,7 @@ class ManagerUserUpdate(BaseModel):
     profile_picture: str | None = None
     status: str | None = None
     is_active: bool | None = None
+    can_access_central_data: bool | None = None
 
 
 class ManagerProfileUpdate(BaseModel):
@@ -36,6 +37,7 @@ class ManagerUserOut(MongoModel):
     role: str = "manager"
     status: str = "active"
     is_active: bool = True
+    can_access_central_data: bool = True
     display_name: str | None = None
     profile_picture: str | None = None
     is_2fa_enabled: bool = False
@@ -56,4 +58,5 @@ class ManagerUserInDB(MongoInDBModel, TimestampMixin):
     is_2fa_enabled: bool = False
     totp_secret: str | None = None
     totp_temp_secret: str | None = None
+    can_access_central_data: bool = True
     backup_codes: list[str] = Field(default_factory=list)

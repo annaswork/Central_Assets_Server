@@ -37,11 +37,13 @@
       <button type="button" class="btn btn-outlined" onclick="openCreateFolderModal()">
         📁 + Create Folder
       </button>
+      {% if can_access_central_data is not sameas false %}
       <a href="/manager/instances/{{ instance.id }}/picker" class="btn btn-primary"
         style="display:inline-flex; align-items:center; gap:0.5rem;">
         <span>📥</span>
         <span>+ Add from Central Library</span>
       </a>
+      {% endif %}
     </div>
   </div>
 </div>
@@ -191,11 +193,13 @@
 
             <div class="instance-cat-primary-actions">
               {% include "partials/category_super_select.html" %}
+              {% if can_access_central_data is not sameas false %}
               <a href="/manager/instances/{{ instance.id }}/picker?target_category_id={{ cat.sourceId or cat.id }}&tab=subcategories"
                 class="btn btn-outlined btn-sm"
                 title="Import Central Items into this Folder">
                 📥 Import Central Data
               </a>
+              {% endif %}
               <a href="/manager/instances/{{ instance.id }}/assets/new-multi?categoryId={{ cat.sourceId or cat.id }}&return_url={{ (request.url.path ~ ('?' ~ request.url.query if request.url.query else '')) | urlencode }}"
                 class="btn btn-outlined btn-sm"
                 title="Upload New Asset directly into this Category (auto-syncs to Central Data)">
@@ -310,11 +314,13 @@
                     title="Distribute Normal, Premium, and Rewarded Tiers across Assets in this Sub-folder">
                     ⚡ Distribute
                   </button>
+                  {% if can_access_central_data is not sameas false %}
                   <a href="/manager/instances/{{ instance.id }}/picker?target_category_id={{ cat.sourceId or cat.id }}&target_sub_category_id={{ sub.sourceId or sub.id }}&tab=assets"
                     class="btn btn-outlined btn-xs"
                     title="Import into Sub-folder">
                     📥 Import
                   </a>
+                  {% endif %}
                   <a href="/manager/instances/{{ instance.id }}/assets/new-single?categoryId={{ cat.sourceId or cat.id }}&subCategoryId={{ sub.sourceId or sub.id }}&return_url={{ (request.url.path ~ ('?' ~ request.url.query if request.url.query else '')) | urlencode }}"
                     class="btn btn-outlined btn-xs"
                     title="Bulk Single-File Add into this Sub-folder">
@@ -385,11 +391,13 @@
       <button type="button" class="btn btn-outlined" onclick="openCreateFolderModal()">
         📁 Create Folder
       </button>
+      {% if can_access_central_data is not sameas false %}
       <a href="/manager/instances/{{ instance.id }}/picker" class="btn btn-primary"
         style="display:inline-flex; align-items:center; gap:0.5rem;">
         <span>📥</span>
         <span>Import Central Folders</span>
       </a>
+      {% endif %}
     </div>
   </div>
   {% endif %}
@@ -795,9 +803,11 @@
         <a href="/manager/instances/{{ instance.id }}/assets/new-multi?return_url={{ (request.url.path ~ ('?' ~ request.url.query if request.url.query else '')) | urlencode }}" class="btn btn-outlined btn-sm">
           🖼️ + Multi-File Asset
         </a>
+        {% if can_access_central_data is not sameas false %}
         <button type="button" class="btn btn-primary btn-sm" onclick="openImportModal()">
           📥 Import Central Assets
         </button>
+        {% endif %}
       </div>
     </div>
     {% endif %}

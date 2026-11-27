@@ -1,6 +1,9 @@
 """Shared FastAPI router dependencies."""
 
+from typing import Any
+
 from fastapi import Depends, Query, Request
+from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from database.connection import get_database
@@ -110,4 +113,39 @@ async def extract_2fa_code(request: Request) -> str:
         return str(form.get("code", "") or "").strip()
     except Exception:
         return ""
+
+
+def wants_json_response(request: Request) -> bool:
+    """Return True when the client expects a JSON response."""
+    accept = (request.headers.get("accept") or "").lower()
+    content_type = (request.headers.get("content-type") or "").lower()
+    return "application/json" in accept or "application/json" in content_type
+
+
+def manager_central_restricted_response(
+    request: Request,
+    templates_env: Any,
+    *,
+    session: dict[str, Any] | None = None,
+    manager: dict[str, Any] | None = None,
+    active_tab: str = "",
+    detail: str = "Central Data access has been restricted for your account by an Administrator.",
+) -> Any:
+    """Return a clean HTTP 403 JSON or HTML response when a manager's Central Data access is restricted."""
+    if wants_json_response(request):
+        return JSONResponse(
+            status_code=403,
+            content={"success": False, "detail": detail, "message": detail},
+        )
+    return templates_env.TemplateResponse(
+        request=request,
+        name="manager/central_restricted.html",
+        context={
+            "session": session or {},
+            "manager": manager,
+            "active_tab": active_tab,
+            "error_message": detail,
+        },
+        status_code=403,
+    )
 

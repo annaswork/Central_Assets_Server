@@ -22,7 +22,7 @@
           <th>Status</th>
           <th>Granted App Access</th>
           <th style="width:160px;">Registered</th>
-          <th style="width:280px; text-align:right;">Actions</th>
+          <th style="width:360px; text-align:right;">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -48,13 +48,20 @@
                 </div>
               </td>
               <td>
-                {% if m.status == 'active' and m.is_active %}
-                  <span class="badge badge-success">Active</span>
-                {% elif m.status == 'pending' %}
-                  <span class="badge badge-warning">Pending</span>
-                {% else %}
-                  <span class="badge badge-error">Disabled</span>
-                {% endif %}
+                <div style="display:flex; flex-direction:column; gap:0.3rem; align-items:flex-start;">
+                  {% if m.status == 'active' and m.is_active %}
+                    <span class="badge badge-success">Active</span>
+                  {% elif m.status == 'pending' %}
+                    <span class="badge badge-warning">Pending</span>
+                  {% else %}
+                    <span class="badge badge-error">Disabled</span>
+                  {% endif %}
+                  {% if m.can_access_central_data is sameas false %}
+                    <span class="badge badge-warning" data-central-badge="{{ m.id }}" data-central-state="restricted" title="Blocked from viewing or importing Central Data">🔒 Central Restricted</span>
+                  {% else %}
+                    <span class="badge badge-secondary" data-central-badge="{{ m.id }}" data-central-state="allowed" title="Can view and import Central Data">🛡️ Central Allowed</span>
+                  {% endif %}
+                </div>
               </td>
               <td>
                 <div style="display:flex; flex-wrap:wrap; gap:0.35rem; align-items:center;">
@@ -80,7 +87,22 @@
                 {{ m.created_at|format_datetime }}
               </td>
               <td style="text-align:right;">
-                <div style="display:inline-flex; gap:0.4rem; align-items:center;">
+                <div style="display:inline-flex; gap:0.4rem; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
+                  <!-- Toggle Central Data Access -->
+                  <form method="POST" action="/admin/managers/{{ m.id }}/central-access" style="display:inline; margin:0;"
+                    onsubmit="return confirm('{% if m.can_access_central_data is sameas false %}Restore Central Data viewing and import access for manager {{ m.username }}?{% else %}Restrict manager {{ m.username }} from viewing or accessing Central Data? They will still manage their own App Instances.{% endif %}');">
+                    <input type="hidden" name="can_access" value="{{ 'true' if m.can_access_central_data is sameas false else 'false' }}">
+                    {% if m.can_access_central_data is sameas false %}
+                      <button type="submit" class="btn btn-primary btn-sm" data-central-toggle="{{ m.id }}" title="Restore Central Data access">
+                        🔓 Allow Central
+                      </button>
+                    {% else %}
+                      <button type="submit" class="btn btn-outlined btn-sm" data-central-toggle="{{ m.id }}" style="color:#b45309; border-color:rgba(217, 119, 6, 0.5);" title="Restrict Central Data viewing & import">
+                        🔒 Restrict Central
+                      </button>
+                    {% endif %}
+                  </form>
+
                   <!-- View Password (Requires 2FA) -->
                   <button type="button" class="btn btn-outlined btn-sm" onclick="openViewPasswordModal('{{ m.id }}', '{{ m.username }}')" title="View Manager Password via Admin 2FA" style="color:var(--md-sys-color-primary); border-color:var(--md-sys-color-outline-variant);">
                     🔑 Password

@@ -86,6 +86,17 @@
     </p>
   </a>
 
+  {% if manager and manager.can_access_central_data is sameas false %}
+  <div class="card" style="border:1px solid rgba(217, 119, 6, 0.35); background:rgba(217, 119, 6, 0.08);">
+    <div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.75rem;">
+      <span style="font-size:1.75rem;">🔒</span>
+      <h3 style="margin:0; font-size:1.15rem;">Central Library Restricted</h3>
+    </div>
+    <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.9rem; margin:0;">
+      Central Data viewing and importing have been restricted for your account by an Administrator.
+    </p>
+  </div>
+  {% else %}
   <a href="/manager/categories" class="card" style="text-decoration:none; color:inherit; transition:transform 0.2s, box-shadow 0.2s; cursor:pointer;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
     <div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.75rem;">
       <span style="font-size:1.75rem;">🎨</span>
@@ -95,6 +106,7 @@
       Explore read-only central creative assets, categories, and frames available for your apps.
     </p>
   </a>
+  {% endif %}
 
   <a href="/manager/keys" class="card" style="text-decoration:none; color:inherit; transition:transform 0.2s, box-shadow 0.2s; cursor:pointer;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
     <div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.75rem;">

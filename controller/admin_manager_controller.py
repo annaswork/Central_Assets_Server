@@ -94,6 +94,7 @@ async def list_managers(db: AsyncIOMotorDatabase) -> list[dict[str, Any]]:
         m["granted_instances"] = combined_instances
         m["granted_instances_count"] = len(combined_instances)
         m["owned_instances_count"] = len(owned_instances)
+        m["can_access_central_data"] = bool(m.get("can_access_central_data", True))
 
     return serialized
 
@@ -395,6 +396,28 @@ async def admin_reset_manager_password(
         "password": clean_new_pw,
         "message": f"Password for manager '{manager['username']}' updated successfully.",
     }
+
+
+async def set_manager_central_access(
+    db: AsyncIOMotorDatabase,
+    manager_id: str,
+    can_access: bool,
+) -> dict[str, Any]:
+    """Allow or restrict a manager's access to viewing and importing Central Data."""
+    m_oid = to_object_id(manager_id)
+    manager = await db[MANAGERS].find_one({"_id": m_oid})
+    if not manager:
+        raise NotFoundError("Manager account not found.")
+
+    allowed = bool(can_access)
+    await db[MANAGERS].update_one(
+        {"_id": m_oid},
+        {"$set": {"can_access_central_data": allowed, "updated_at": utc_now()}},
+    )
+    updated = await db[MANAGERS].find_one({"_id": m_oid}, {"password_hash": 0, "encrypted_password": 0, "totp_secret": 0, "backup_codes": 0})
+    doc = serialize_mongo_doc(updated)
+    doc["can_access_central_data"] = bool(doc.get("can_access_central_data", True))
+    return doc
 
 
 # =========================================================================

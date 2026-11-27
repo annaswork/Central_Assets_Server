@@ -8,6 +8,7 @@ from authorization.admin_session import get_current_admin_session
 from authorization.api_key import verify_api_key
 from authorization.manager_session import get_current_manager_session
 from config.constants import ALL_SCOPES
+from controller.manager_controller import manager_can_access_static_media_path
 from database.connection import get_database
 from utils.errors import UnauthorizedError
 from utils.responses import error_response
@@ -91,6 +92,18 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
 
             manager_session = get_current_manager_session(request)
             if manager_session:
+                db = get_database()
+                allowed = await manager_can_access_static_media_path(
+                    db, manager_session["user_id"], path
+                )
+                if not allowed:
+                    return JSONResponse(
+                        status_code=403,
+                        content=error_response(
+                            "FORBIDDEN",
+                            "Central Data access is restricted for your account by an Administrator.",
+                        ),
+                    )
                 return await call_next(request)
 
             # Protected media requires API key via X-API-Key header, query param (?api_key=...), or Authorization header

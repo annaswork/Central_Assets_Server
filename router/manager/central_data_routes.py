@@ -9,12 +9,13 @@ from authorization.manager_session import get_current_manager_session
 from config.paths import TEMPLATES_DIR
 from controller.asset_controller import list_assets
 from controller.category_controller import in_super_category, list_categories
-from controller.manager_controller import get_manager_by_id
+from controller.manager_controller import get_manager_by_id, verify_manager_central_data_access
 from controller.subcategory_controller import get_subcategory, list_subcategories
 from controller.super_category_controller import list_super_categories
 from database.collections import ASSETS, SUBCATEGORIES
-from router.deps import get_db
+from router.deps import get_db, manager_central_restricted_response
 from utils.datetimes import format_datetime_display
+from utils.errors import ForbiddenError
 from utils.ids import to_object_id
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -40,6 +41,13 @@ async def manager_categories(
     session = get_current_manager_session(request)
     if not session:
         return RedirectResponse(url="/manager/login", status_code=303)
+
+    try:
+        await verify_manager_central_data_access(db, session["user_id"])
+    except ForbiddenError as err:
+        return manager_central_restricted_response(
+            request, templates, session=session, active_tab="categories", detail=err.message
+        )
 
     effective_page_size = pageSize or limit or page_size or 20
     effective_page_size = max(1, min(effective_page_size, 500))
@@ -117,6 +125,13 @@ async def manager_super_categories(
     if not session:
         return RedirectResponse(url="/manager/login", status_code=303)
 
+    try:
+        await verify_manager_central_data_access(db, session["user_id"])
+    except ForbiddenError as err:
+        return manager_central_restricted_response(
+            request, templates, session=session, active_tab="super_categories", detail=err.message
+        )
+
     return templates.TemplateResponse(
         request=request,
         name="super_categories/list.html",
@@ -150,6 +165,13 @@ async def manager_subcategories(
     session = get_current_manager_session(request)
     if not session:
         return RedirectResponse(url="/manager/login", status_code=303)
+
+    try:
+        await verify_manager_central_data_access(db, session["user_id"])
+    except ForbiddenError as err:
+        return manager_central_restricted_response(
+            request, templates, session=session, active_tab="subcategories", detail=err.message
+        )
 
     effective_page_size = pageSize or limit or page_size or 20
     effective_page_size = max(1, min(effective_page_size, 500))
@@ -261,6 +283,13 @@ async def manager_assets(
     session = get_current_manager_session(request)
     if not session:
         return RedirectResponse(url="/manager/login", status_code=303)
+
+    try:
+        await verify_manager_central_data_access(db, session["user_id"])
+    except ForbiddenError as err:
+        return manager_central_restricted_response(
+            request, templates, session=session, active_tab="assets", detail=err.message
+        )
 
     effective_page_size = pageSize or limit or page_size or 20
     effective_page_size = max(1, min(effective_page_size, 500))

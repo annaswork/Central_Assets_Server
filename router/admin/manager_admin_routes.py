@@ -14,6 +14,7 @@ from controller.admin_manager_controller import (
     grant_instance_access,
     list_managers,
     revoke_instance_access,
+    set_manager_central_access,
 )
 from controller.app_instance_controller import list_app_instances
 from database.collections import ADMIN_USERS
@@ -146,6 +147,73 @@ async def admin_view_manager_password(
         return JSONResponse(status_code=500, content={"success": False, "detail": f"Unexpected error: {str(e)}"})
 
 
+def _parse_bool_flag(raw: object) -> bool:
+    if isinstance(raw, bool):
+        return raw
+    s = str(raw or "").strip().lower()
+    if s in {"1", "true", "yes", "on", "allow", "allowed"}:
+        return True
+    if s in {"0", "false", "no", "off", "restrict", "restricted", "deny", "denied"}:
+        return False
+    return True
+
+
+@router.post("/{manager_id}/central-access")
+async def admin_set_manager_central_access(
+    manager_id: str,
+    request: Request,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Allow or restrict a manager account from viewing or accessing Central Data."""
+    session = get_current_admin_session(request)
+    is_json_request = "application/json" in request.headers.get("content-type", "").lower() or (
+        "application/json" in request.headers.get("accept", "").lower()
+    )
+    if not session:
+        if is_json_request:
+            return JSONResponse(status_code=401, content={"success": False, "detail": "Unauthorized"})
+        return RedirectResponse(url="/admin/login", status_code=303)
+
+    can_access_raw: object = True
+    try:
+        if "application/json" in request.headers.get("content-type", "").lower():
+            data = await request.json()
+            can_access_raw = data.get("can_access_central_data", data.get("can_access", False))
+        else:
+            form = await request.form()
+            can_access_raw = form.get("can_access_central_data") or form.get("can_access") or "false"
+    except Exception:
+        can_access_raw = False
+
+    can_access = _parse_bool_flag(can_access_raw)
+
+    try:
+        updated = await set_manager_central_access(db, manager_id=manager_id, can_access=can_access)
+    except NotFoundError as e:
+        if is_json_request:
+            return JSONResponse(status_code=404, content={"success": False, "detail": e.message})
+        msg = quote_plus(e.message)
+        return RedirectResponse(url=f"/admin/managers?msg={msg}&msg_type=error", status_code=303)
+
+    status_label = "allowed" if updated["can_access_central_data"] else "restricted"
+    message = f"Central Data access for '{updated['username']}' is now {status_label}."
+    if is_json_request:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "manager_id": updated["id"],
+                "username": updated["username"],
+                "can_access_central_data": updated["can_access_central_data"],
+                "message": message,
+            },
+        )
+    return RedirectResponse(
+        url=f"/admin/managers?msg={quote_plus(message)}&msg_type=success",
+        status_code=303,
+    )
+
+
 @router.post("/{manager_id}/reset-password")
 async def admin_reset_manager_password_route(
     manager_id: str,
@@ -185,4 +253,71 @@ async def admin_reset_manager_password_route(
         return JSONResponse(status_code=e.status_code, content={"success": False, "detail": e.message})
     except Exception as e:
         return JSONResponse(status_code=500, content={"success": False, "detail": f"Unexpected error: {str(e)}"})
+
+
+def _parse_bool_flag(raw: object) -> bool:
+    if isinstance(raw, bool):
+        return raw
+    s = str(raw or "").strip().lower()
+    if s in {"1", "true", "yes", "on", "allow", "allowed"}:
+        return True
+    if s in {"0", "false", "no", "off", "restrict", "restricted", "deny", "denied"}:
+        return False
+    return True
+
+
+@router.post("/{manager_id}/central-access")
+async def admin_set_manager_central_access(
+    manager_id: str,
+    request: Request,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Response:
+    """Allow or restrict a manager account from viewing or accessing Central Data."""
+    session = get_current_admin_session(request)
+    is_json_request = "application/json" in request.headers.get("content-type", "").lower() or (
+        "application/json" in request.headers.get("accept", "").lower()
+    )
+    if not session:
+        if is_json_request:
+            return JSONResponse(status_code=401, content={"success": False, "detail": "Unauthorized"})
+        return RedirectResponse(url="/admin/login", status_code=303)
+
+    can_access_raw: object = True
+    try:
+        if "application/json" in request.headers.get("content-type", "").lower():
+            data = await request.json()
+            can_access_raw = data.get("can_access_central_data", data.get("can_access", False))
+        else:
+            form = await request.form()
+            can_access_raw = form.get("can_access_central_data") or form.get("can_access") or "false"
+    except Exception:
+        can_access_raw = False
+
+    can_access = _parse_bool_flag(can_access_raw)
+
+    try:
+        updated = await set_manager_central_access(db, manager_id=manager_id, can_access=can_access)
+    except NotFoundError as e:
+        if is_json_request:
+            return JSONResponse(status_code=404, content={"success": False, "detail": e.message})
+        msg = quote_plus(e.message)
+        return RedirectResponse(url=f"/admin/managers?msg={msg}&msg_type=error", status_code=303)
+
+    status_label = "allowed" if updated["can_access_central_data"] else "restricted"
+    message = f"Central Data access for '{updated['username']}' is now {status_label}."
+    if is_json_request:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "manager_id": updated["id"],
+                "username": updated["username"],
+                "can_access_central_data": updated["can_access_central_data"],
+                "message": message,
+            },
+        )
+    return RedirectResponse(
+        url=f"/admin/managers?msg={quote_plus(message)}&msg_type=success",
+        status_code=303,
+    )
 

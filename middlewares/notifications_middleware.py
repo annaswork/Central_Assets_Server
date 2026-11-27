@@ -111,6 +111,9 @@ class NotificationsMiddleware(BaseHTTPMiddleware):
                             "profile_picture": manager_user.get("profile_picture"),
                             "role": "manager",
                             "initial": initial,
+                            "can_access_central_data": bool(
+                                manager_user.get("can_access_central_data", True)
+                            ),
                         }
                 except Exception:
                     pass

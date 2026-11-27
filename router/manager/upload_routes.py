@@ -16,10 +16,18 @@ from controller.asset_controller import check_asset_name_availability
 from controller.catalog_controller import get_resolved_single_asset
 from controller.crop_controller import process_media_crop
 from controller.frame_controller import detect_placeholders
-from controller.manager_controller import verify_manager_instance_access
+from controller.manager_controller import (
+    get_manager_by_id,
+    is_manager_central_data_allowed,
+    manager_can_access_static_media_path,
+    verify_manager_instance_access,
+)
 from controller.manager_upload_controller import (
     apply_frame_editor_save,
+    check_instance_asset_name_availability,
+    check_instance_media_similarity,
     create_central_asset_for_instance,
+    create_instance_local_asset_for_instance,
     create_manager_folder_with_central_sync,
     find_frame_block_key,
     list_upload_categories_for_instance,
@@ -67,7 +75,11 @@ async def _require_manager_for_instance(
             return JSONResponse(status_code=401, content={"success": False, "message": "Unauthorized"})
         return RedirectResponse(url="/manager/login", status_code=303)
     await verify_manager_instance_access(db, session["user_id"], instance_id)
-    return session
+    manager = await get_manager_by_id(db, session["user_id"])
+    return {
+        **session,
+        "can_access_central_data": is_manager_central_data_allowed(manager),
+    }
 
 
 @router.get("/{instance_id}/assets/new-single")
@@ -87,20 +99,28 @@ async def manager_new_single_asset_page(
         return auth
 
     instance = await get_app_instance(db, instance_id)
+    allow_central = bool(auth.get("can_access_central_data", True))
     raw_cat = categoryId or category_id or ""
     raw_sub = subCategoryId or sub_category_id or ""
-    c_cat_id, c_sub_id, _, _ = await resolve_central_folders_for_upload(db, instance_id, raw_cat or None, raw_sub or None)
-    selected_cat = c_cat_id or raw_cat
-    selected_sub = c_sub_id or raw_sub
+    if allow_central:
+        c_cat_id, c_sub_id, _, _ = await resolve_central_folders_for_upload(db, instance_id, raw_cat or None, raw_sub or None)
+        selected_cat = c_cat_id or raw_cat
+        selected_sub = c_sub_id or raw_sub
+    else:
+        selected_cat = raw_cat
+        selected_sub = raw_sub
 
-    categories = await list_upload_categories_for_instance(db, instance_id)
+    categories = await list_upload_categories_for_instance(db, instance_id, include_central=allow_central)
     subcategories = (
-        await list_upload_subcategories_for_instance(db, instance_id, selected_cat)
+        await list_upload_subcategories_for_instance(db, instance_id, selected_cat, include_central=allow_central)
         if selected_cat
         else []
     )
     default_return = f"/manager/instances/{instance_id}/content"
     safe_return = safe_redirect_url(return_url, default_return)
+    urls = _manager_endpoint_urls(instance_id, scope="central" if allow_central else "override")
+    if not allow_central:
+        urls["ensure_folder_url"] = ""
 
     return templates.TemplateResponse(
         request=request,
@@ -109,6 +129,7 @@ async def manager_new_single_asset_page(
             "session": auth,
             "layout_template": "manager/base.html",
             "portal_mode": "manager_create",
+            "central_access_restricted": not allow_central,
             "instance": instance,
             "categories": categories,
             "subcategories": subcategories,
@@ -116,7 +137,7 @@ async def manager_new_single_asset_page(
             "selected_sub": selected_sub,
             "active_tab": "instances",
             "return_url": safe_return,
-            **_manager_endpoint_urls(instance_id, scope="central"),
+            **urls,
         },
     )
 
@@ -138,20 +159,28 @@ async def manager_new_multi_asset_page(
         return auth
 
     instance = await get_app_instance(db, instance_id)
+    allow_central = bool(auth.get("can_access_central_data", True))
     raw_cat = categoryId or category_id or ""
     raw_sub = subCategoryId or sub_category_id or ""
-    c_cat_id, c_sub_id, _, _ = await resolve_central_folders_for_upload(db, instance_id, raw_cat or None, raw_sub or None)
-    selected_cat = c_cat_id or raw_cat
-    selected_sub = c_sub_id or raw_sub
+    if allow_central:
+        c_cat_id, c_sub_id, _, _ = await resolve_central_folders_for_upload(db, instance_id, raw_cat or None, raw_sub or None)
+        selected_cat = c_cat_id or raw_cat
+        selected_sub = c_sub_id or raw_sub
+    else:
+        selected_cat = raw_cat
+        selected_sub = raw_sub
 
-    categories = await list_upload_categories_for_instance(db, instance_id)
+    categories = await list_upload_categories_for_instance(db, instance_id, include_central=allow_central)
     subcategories = (
-        await list_upload_subcategories_for_instance(db, instance_id, selected_cat)
+        await list_upload_subcategories_for_instance(db, instance_id, selected_cat, include_central=allow_central)
         if selected_cat
         else []
     )
     default_return = f"/manager/instances/{instance_id}/content"
     safe_return = safe_redirect_url(return_url, default_return)
+    urls = _manager_endpoint_urls(instance_id, scope="central" if allow_central else "override")
+    if not allow_central:
+        urls["ensure_folder_url"] = ""
 
     return templates.TemplateResponse(
         request=request,
@@ -161,6 +190,7 @@ async def manager_new_multi_asset_page(
             "layout_template": "manager/base.html",
             "portal_mode": "manager_create",
             "form_mode": "manager_create",
+            "central_access_restricted": not allow_central,
             "instance": instance,
             "asset": None,
             "categories": categories,
@@ -169,7 +199,7 @@ async def manager_new_multi_asset_page(
             "selected_sub": selected_sub,
             "active_tab": "instances",
             "return_url": safe_return,
-            **_manager_endpoint_urls(instance_id, scope="central"),
+            **urls,
         },
     )
 
@@ -386,7 +416,12 @@ async def manager_upload_subcategories_list(
     if isinstance(auth, Response):
         return auth
 
-    items = await list_upload_subcategories_for_instance(db, instance_id, categoryId)
+    items = await list_upload_subcategories_for_instance(
+        db,
+        instance_id,
+        categoryId,
+        include_central=bool(auth.get("can_access_central_data", True)),
+    )
     return JSONResponse(content={"items": items})
 
 
@@ -400,6 +435,16 @@ async def manager_ensure_central_folder(
     auth = await _require_manager_for_instance(request, db, instance_id, json_mode=True)
     if isinstance(auth, Response):
         return auth
+
+    if not auth.get("can_access_central_data", True):
+        return JSONResponse(
+            status_code=403,
+            content={
+                "success": False,
+                "detail": "Central Data access has been restricted for your account by an Administrator.",
+                "message": "Central Data access has been restricted for your account by an Administrator.",
+            },
+        )
 
     try:
         data = await request.json()
@@ -429,10 +474,21 @@ async def manager_check_asset_name(
     assetId: str | None = None,
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Response:
-    """Check whether asset name is available in central subcategory."""
+    """Check whether asset name is available in central subcategory (or app instance when restricted)."""
     auth = await _require_manager_for_instance(request, db, instance_id, json_mode=True)
     if isinstance(auth, Response):
         return auth
+
+    if not auth.get("can_access_central_data", True):
+        res = await check_instance_asset_name_availability(
+            db,
+            instance_id,
+            name,
+            category_id=categoryId,
+            sub_category_id=subCategoryId,
+            asset_id=assetId,
+        )
+        return JSONResponse(content=res)
 
     c_cat_id, c_sub_id, _, _ = await resolve_central_folders_for_upload(
         db, instance_id, categoryId, subCategoryId
@@ -465,6 +521,22 @@ async def manager_check_similarity_post(
     filenames = payload.get("filenames") or []
     if not filenames:
         return JSONResponse(content={"success": True, "has_conflict": False, "matches": []})
+
+    if not auth.get("can_access_central_data", True):
+        matches = await check_instance_media_similarity(
+            db,
+            instance_id,
+            filenames,
+            existing_staged=payload.get("existingStaged") or payload.get("existing_staged") or [],
+            asset_id=payload.get("assetId") or payload.get("asset_id"),
+        )
+        return JSONResponse(
+            content={
+                "success": True,
+                "has_conflict": any(m.get("has_conflict", False) for m in matches),
+                "matches": matches,
+            }
+        )
 
     cat_id = payload.get("categoryId") or payload.get("category_id")
     sub_id = payload.get("subCategoryId") or payload.get("sub_category_id")
@@ -510,6 +582,22 @@ async def manager_check_similarity_get(
     auth = await _require_manager_for_instance(request, db, instance_id, json_mode=True)
     if isinstance(auth, Response):
         return auth
+
+    if not auth.get("can_access_central_data", True):
+        matches = await check_instance_media_similarity(
+            db,
+            instance_id,
+            [filename],
+            existing_staged=existingStaged,
+            asset_id=assetId or asset_id,
+        )
+        return JSONResponse(
+            content={
+                "success": True,
+                "has_conflict": any(m.get("has_conflict", False) for m in matches),
+                "matches": matches,
+            }
+        )
 
     cat_id = categoryId or category_id
     sub_id = subCategoryId or sub_category_id
@@ -563,7 +651,15 @@ async def manager_detect_frames_get(
     if isinstance(auth, Response):
         return auth
 
-    return JSONResponse(content=await _detect_frames_response(target_url=imageUrl or image_url))
+    target_url = imageUrl or image_url
+    if target_url and str(target_url).strip().startswith("/static") and not auth.get("can_access_central_data", True):
+        if not await manager_can_access_static_media_path(db, auth["user_id"], str(target_url).strip()):
+            return JSONResponse(
+                status_code=403,
+                content={"success": False, "detail": "Central Data access is restricted for your account."},
+            )
+
+    return JSONResponse(content=await _detect_frames_response(target_url=target_url))
 
 
 @router.post("/{instance_id}/media/detect-frames")
@@ -590,6 +686,12 @@ async def manager_detect_frames_post(
                     target_url = body.get("imageUrl") or body.get("image_url")
             except Exception:
                 pass
+    if target_url and str(target_url).strip().startswith("/static") and not auth.get("can_access_central_data", True):
+        if not await manager_can_access_static_media_path(db, auth["user_id"], str(target_url).strip()):
+            return JSONResponse(
+                status_code=403,
+                content={"success": False, "detail": "Central Data access is restricted for your account."},
+            )
     return JSONResponse(content=await _detect_frames_response(file_bytes=content, target_url=target_url))
 
 
@@ -635,7 +737,9 @@ async def manager_media_upload(
     if filesize is not None:
         client_hints["filesize"] = filesize
 
-    is_override = (scope or "").strip().lower() == "override"
+    is_override = ((scope or "").strip().lower() == "override") or (
+        not auth.get("can_access_central_data", True)
+    )
     category_folder: str | None = None
     subcategory_folder: str | None = None
     asset_folder_name: str | None = None
@@ -749,9 +853,14 @@ async def manager_create_asset_json(
         payload = {}
 
     try:
-        res = await create_central_asset_for_instance(
-            db, app_instance_id=instance_id, payload=payload, manager_user=auth
-        )
+        if auth.get("can_access_central_data", True):
+            res = await create_central_asset_for_instance(
+                db, app_instance_id=instance_id, payload=payload, manager_user=auth
+            )
+        else:
+            res = await create_instance_local_asset_for_instance(
+                db, app_instance_id=instance_id, payload=payload, manager_user=auth
+            )
         return JSONResponse(status_code=201, content=res)
     except AppError as err:
         return JSONResponse(
@@ -793,35 +902,55 @@ async def manager_save_multi_asset(
     default_return = f"/manager/instances/{instance_id}/content"
     safe_return = safe_redirect_url(return_url, default_return)
 
+    allow_central = bool(auth.get("can_access_central_data", True))
+    asset_payload = {
+        "name": name,
+        "description": description,
+        "category_id": category_id or None,
+        "sub_category_id": sub_category_id or None,
+        "new_category_name": new_category_name,
+        "new_subcategory_name": new_subcategory_name,
+        "thumbnail_url": thumbnail_url,
+        "more_fields": more_fields,
+        "names_list": names_list,
+    }
+
     try:
-        await create_central_asset_for_instance(
-            db,
-            app_instance_id=instance_id,
-            payload={
-                "name": name,
-                "description": description,
-                "category_id": category_id or None,
-                "sub_category_id": sub_category_id or None,
-                "new_category_name": new_category_name,
-                "new_subcategory_name": new_subcategory_name,
-                "thumbnail_url": thumbnail_url,
-                "more_fields": more_fields,
-                "names_list": names_list,
-            },
-            manager_user=auth,
-        )
+        if allow_central:
+            await create_central_asset_for_instance(
+                db,
+                app_instance_id=instance_id,
+                payload=asset_payload,
+                manager_user=auth,
+            )
+            saved_msg = "Asset created in Central Library & added to app."
+        else:
+            await create_instance_local_asset_for_instance(
+                db,
+                app_instance_id=instance_id,
+                payload=asset_payload,
+                manager_user=auth,
+            )
+            saved_msg = "Asset created strictly inside your App Instance."
         return RedirectResponse(
-            url=append_query_params(safe_return, {"msg": "Asset created in Central Library & added to app."}),
+            url=append_query_params(safe_return, {"msg": saved_msg}),
             status_code=303,
         )
-    except (ConflictError, ValidationError, NotFoundError) as err:
+    except (ConflictError, ValidationError, NotFoundError, ForbiddenError) as err:
         instance = await get_app_instance(db, instance_id)
-        categories = await list_upload_categories_for_instance(db, instance_id)
+        categories = await list_upload_categories_for_instance(
+            db, instance_id, include_central=allow_central
+        )
         subcategories = (
-            await list_upload_subcategories_for_instance(db, instance_id, category_id)
+            await list_upload_subcategories_for_instance(
+                db, instance_id, category_id, include_central=allow_central
+            )
             if category_id
             else []
         )
+        urls = _manager_endpoint_urls(instance_id, scope="central" if allow_central else "override")
+        if not allow_central:
+            urls["ensure_folder_url"] = ""
         return templates.TemplateResponse(
             request=request,
             name="assets/form_multi.html",
@@ -830,6 +959,7 @@ async def manager_save_multi_asset(
                 "layout_template": "manager/base.html",
                 "portal_mode": "manager_create",
                 "form_mode": "manager_create",
+                "central_access_restricted": not allow_central,
                 "instance": instance,
                 "asset": {
                     "id": None,
@@ -849,7 +979,7 @@ async def manager_save_multi_asset(
                 "error": f"{err.message} Please choose a different name or retry.",
                 "active_tab": "instances",
                 "return_url": safe_return,
-                **_manager_endpoint_urls(instance_id, scope="central"),
+                **urls,
             },
             status_code=err.status_code,
         )
